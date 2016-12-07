@@ -1,0 +1,38 @@
+<html>
+  <head>
+    <title>Background task example</title>
+  </head>
+  <body>
+    <h2>Background taks example</h2>
+    {% for message in get_flashed_messages() %}
+    <p style="color: red;">{{ message }}</p>
+    {% endfor %}
+    <form method="POST">
+      <div>
+        Weight:
+        <select name="weight" required>
+          <option value="slow">Slow</option>
+          <option value="fast">Fast</option>
+        </select>
+        &nbsp;        
+        |
+        &nbsp;
+        Experiment:
+        <select name="experiment" required>
+          <option value="alice">ALICE</option>
+          <option value="atlas">ATLAS</option>
+          <option value="cms">CMS</option>
+          <option value="lhcb">LHCb</option>
+          <option value="recast">Recast</option>
+        </select>
+      </div>
+      <div>
+        <p>Copy the input file here:</p>
+        <textarea name="input-file" rows="25" cols="113" required></textarea>
+      </div>
+      <div>
+        <input type="submit" value="Execute">
+      </div>
+    </form>
+  </body>
+</html>
