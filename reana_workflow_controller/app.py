@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import base64
 import traceback
-from flask import (Flask, abort, flash, redirect, render_template,
+from flask import (Flask, abort, flash, redirect, render_template, jsonify,
                    request, url_for)
 from tasks import fibonacci
 from tasks import run_yadage_workflow
@@ -84,28 +84,23 @@ def fibonacci_endpoint():
             traceback.print_exc()
             abort(400)
 
-
 @app.route('/yadage', methods=['GET', 'POST'])
 def yadage_endpoint():
     if request.method == 'POST':
         try:
             if request.json:
-                toplevel = request.json['toplevel']
-                workflow = request.json['workflow']
-                parameters = request.json['parameters']
                 queue = experiment_to_queue[request.json['experiment']]
-
-                run_yadage_workflow.apply_async(
-                    args=[toplevel, workflow, parameters],
+                resultobject = run_yadage_workflow.apply_async(
+                    args = [request.json],
                     queue='yadage-{}'.format(queue)
                 )
-
-                return 'Workflow successfully launched'
+            if 'redirect' in request.args:
+                return redirect('{}/{}'.format(os.environ['YADAGE_MONITOR_URL']),resultobject.id)
+            return jsonify({'msg':'Workflow successfully launched', 'job_id': resultobject.id})
 
         except (KeyError, ValueError):
             traceback.print_exc()
             abort(400)
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000,
