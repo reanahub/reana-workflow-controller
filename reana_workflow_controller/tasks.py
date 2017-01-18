@@ -7,7 +7,7 @@ import requests
 
 
 celery = Celery('tasks',
-                broker='amqp://test:1234@workflow-broker//')
+                broker='amqp://test:1234@message-broker//')
 
 celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
                    CELERY_TASK_SERIALIZER='json')
