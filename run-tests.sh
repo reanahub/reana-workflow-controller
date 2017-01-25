@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/bin/sh
 #
 # This file is part of REANA.
 # Copyright (C) 2017 CERN.
@@ -20,21 +20,9 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-from __future__ import absolute_import
-
-import json
-import os
-import requests
-
-from celery import Celery
-
-
-celery = Celery('tasks',
-                broker='amqp://test:1234@message-broker//')
-
-celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
-                   CELERY_TASK_SERIALIZER='json')
-
-
-fibonacci = celery.signature('tasks.fibonacci')
-run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
+#pydocstyle reana_workflow_controller && \
+isort -rc -c -df **/*.py && \
+check-manifest --ignore ".travis-*" && \
+sphinx-build -qnNW docs docs/_build/html && \
+python setup.py test && \
+sphinx-build -qnNW -b doctest docs docs/_build/doctest

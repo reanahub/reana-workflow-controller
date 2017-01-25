@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # This file is part of REANA.
 # Copyright (C) 2017 CERN.
 #
@@ -20,21 +18,28 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-from __future__ import absolute_import
+notifications:
+  email: false
 
-import json
-import os
-import requests
+sudo: true
 
-from celery import Celery
+language: python
 
+cache:
+  - pip
 
-celery = Celery('tasks',
-                broker='amqp://test:1234@message-broker//')
+python:
+  - "3.5"
 
-celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
-                   CELERY_TASK_SERIALIZER='json')
+before_install:
+  - travis_retry pip install --upgrade pip setuptools py
+  - travis_retry pip install twine wheel coveralls
 
+install:
+  - travis_retry pip install -e .[all]
 
-fibonacci = celery.signature('tasks.fibonacci')
-run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
+script:
+  - ./run-tests.sh
+
+after_success:
+  - coveralls

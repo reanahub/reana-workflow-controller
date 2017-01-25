@@ -20,21 +20,12 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-from __future__ import absolute_import
+"""REANA-Workflow-Controller tests."""
 
-import json
-import os
-import requests
-
-from celery import Celery
+from __future__ import absolute_import, print_function
 
 
-celery = Celery('tasks',
-                broker='amqp://test:1234@message-broker//')
-
-celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
-                   CELERY_TASK_SERIALIZER='json')
-
-
-fibonacci = celery.signature('tasks.fibonacci')
-run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
+def test_version():
+    """Test version import."""
+    from reana_workflow_controller import __version__
+    assert __version__
