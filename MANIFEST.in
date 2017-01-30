@@ -22,7 +22,6 @@ include Dockerfile
 include COPYING
 include *.rst
 include *.sh
-include *.txt
 include pytest.ini
 recursive-include docs *.py
 recursive-include docs *.png

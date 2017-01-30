@@ -61,6 +61,12 @@ setup_requires = [
     'pytest-runner>=2.7',
 ]
 
+install_requires = [
+    'celery==3.1.17',
+    'Flask==0.10.1',
+    'requests==2.11.1',
+]
+
 packages = find_packages()
 
 
@@ -82,6 +88,7 @@ setup(
     packages=['reana_workflow_controller', ],
     zip_safe=False,
     extras_require=extras_require,
+    install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=tests_require,
     classifiers=[
