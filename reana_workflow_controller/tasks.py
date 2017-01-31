@@ -30,7 +30,8 @@ from celery import Celery
 
 
 celery = Celery('tasks',
-                broker='amqp://test:1234@message-broker//')
+                broker='amqp://test:1234@'
+                       'message-broker.default.svc.cluster.local//')
 
 celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
                    CELERY_TASK_SERIALIZER='json')
