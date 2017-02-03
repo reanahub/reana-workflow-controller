@@ -4,7 +4,9 @@
    :numbered:
    :maxdepth: 2
 
-   usage
+   introduction
+   gettingstarted
+   contributing
    changes
    license
    authors
