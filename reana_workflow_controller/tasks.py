@@ -37,5 +37,4 @@ celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
                    CELERY_TASK_SERIALIZER='json')
 
 
-fibonacci = celery.signature('tasks.fibonacci')
 run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
