@@ -20,6 +20,8 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
+"""Rest API endpoint for workflow management."""
+
 from __future__ import absolute_import
 
 import os
@@ -40,8 +42,51 @@ experiment_to_queue = {
 }
 
 
-@app.route('/yadage', methods=['GET', 'POST'])
+@app.route('/yadage', methods=['POST'])
 def yadage_endpoint():
+    """Create a new job.
+
+    .. http:post:: /yadage
+
+        This resource is expecting JSON data with all the necessary
+        information to run a yadage workflow.
+
+        **Request**:
+
+        .. sourcecode:: http
+
+            POST /yadage HTTP/1.1
+            Content-Type: application/json
+            Host: localhost:5000
+
+            {
+                "experiment": "atlas",
+                "toplevel": "from-github/testing/scriptflow",
+                "workflow": "workflow.yml",
+                "nparallel": "100",
+                "preset_pars": {}
+            }
+
+        :reqheader Content-Type: application/json
+        :json body: JSON with the information of the yadage workflow.
+
+        **Responses**:
+
+        .. sourcecode:: http
+
+            HTTP/1.0 200 OK
+            Content-Length: 80
+            Content-Type: application/json
+
+            {
+              "msg", "Workflow successfully launched",
+              "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+            }
+
+        :resheader Content-Type: application/json
+        :statuscode 200: no error - the workflow was created
+        :statuscode 400: invalid request - problably a malformed JSON
+    """
     if request.method == 'POST':
         try:
             if request.json:
@@ -55,7 +100,7 @@ def yadage_endpoint():
                     os.environ['YADAGE_MONITOR_URL']),
                                 resultobject.id)
             return jsonify({'msg': 'Workflow successfully launched',
-                            'job_id': resultobject.id})
+                            'workflow_id': resultobject.id})
 
         except (KeyError, ValueError):
             traceback.print_exc()
