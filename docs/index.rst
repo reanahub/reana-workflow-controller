@@ -6,6 +6,7 @@
 
    introduction
    gettingstarted
+   restapi
    contributing
    changes
    license

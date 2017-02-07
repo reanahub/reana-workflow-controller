@@ -28,7 +28,7 @@ import os
 import traceback
 
 from flask import Flask, abort, jsonify, redirect, request
-from tasks import run_yadage_workflow
+from .tasks import run_yadage_workflow
 
 app = Flask(__name__)
 app.secret_key = "super secret key"
