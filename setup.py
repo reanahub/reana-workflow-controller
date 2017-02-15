@@ -64,7 +64,7 @@ setup_requires = [
 
 install_requires = [
     'celery==3.1.17',
-    'Flask==0.10.1',
+    'Flask>=0.12',
     'requests==2.11.1',
 ]
 

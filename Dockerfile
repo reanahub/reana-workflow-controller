@@ -26,4 +26,5 @@ RUN adduser --uid 1000 --disabled-password --gecos '' reanauser && \
     chown -R reanauser:reanauser /code
 USER reanauser
 EXPOSE 5000
-CMD ["python", "reana_workflow_controller/app.py"]
+ENV FLASK_APP reana_workflow_controller/app.py
+CMD ["flask", "run"]
