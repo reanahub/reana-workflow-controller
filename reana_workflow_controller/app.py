@@ -42,6 +42,46 @@ experiment_to_queue = {
 }
 
 
+@app.route('/workflows', methods=['GET'])
+def get_workflows():
+    """Get all workflows.
+
+    .. http:get:: /workflows
+
+        Returns a JSON list with all the workflows.
+
+        .. warning::
+            Not implemented, just a mock that can be used e.g. to quickly
+            check if reana-workflow-controller is running.
+
+        **Request**:
+
+        .. sourcecode:: http
+
+            GET /workflows HTTP/1.1
+            Content-Type: application/json
+            Host: localhost:5000
+
+        :reqheader Content-Type: application/json
+
+        **Responses**:
+
+        .. sourcecode:: http
+
+            HTTP/1.1 200 OK
+            Content-Length: 22
+            Content-Type: application/json
+
+            {
+              "workflows": {}
+            }
+
+        :resheader Content-Type: application/json
+        :statuscode 200: no error - the list has been returned.
+    """
+    return jsonify({"workflows": {}}), 200
+
+
 @app.route('/yadage', methods=['POST'])
 def yadage_endpoint():
     """Create a new job.
