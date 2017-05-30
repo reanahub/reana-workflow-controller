@@ -18,7 +18,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-FROM python:2.7
+FROM python:3.5
 ADD . /code
 WORKDIR /code
 RUN pip install -e .[all]
