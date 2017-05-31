@@ -28,9 +28,12 @@ import os
 import traceback
 
 from flask import Flask, abort, jsonify, redirect, request
+
+from .fsdb import Organization, get_all_workflows
 from .tasks import run_yadage_workflow
 
 app = Flask(__name__)
+app.config.from_object('reana_workflow_controller.config')
 app.secret_key = "super secret key"
 
 experiment_to_queue = {
@@ -49,10 +52,6 @@ def get_workflows():
     .. http:get:: /workflows
 
         Returns a JSON list with all the workflows.
-
-        .. warning::
-            Not implemented, just a mock that can be used e.g. to quickly
-            check if reana-workflow-controller is running.
 
         **Request**:
 
@@ -73,13 +72,43 @@ def get_workflows():
             Content-Type: application/json
 
             {
-              "workflows": {}
+              "workflows": [
+                {
+                  "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                  "organization": "default_org",
+                  "status": "running",
+                  "tenant": "default_tenant"
+                },
+                {
+                  "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
+                  "organization": "default_org",
+                  "status": "finished",
+                  "tenant": "default_tenant"
+                },
+                {
+                  "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
+                  "organization": "default_org",
+                  "status": "waiting",
+                  "tenant": "default_tenant"
+                },
+                {
+                  "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
+                  "organization": "default_org",
+                  "status": "waiting",
+                  "tenant": "default_tenant"
+                }
+              ]
             }
 
         :resheader Content-Type: application/json
         :statuscode 200: no error - the list has been returned.
     """
-    return jsonify({"workflows": {}}), 200
+    workflows = []
+    tenant = 'default_tenant'
+    for org in Organization:
+        workflows.extend(get_all_workflows(org, tenant))
+
+    return jsonify({"workflows": workflows}), 200
 
 
 @app.route('/yadage', methods=['POST'])
