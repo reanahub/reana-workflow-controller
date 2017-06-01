@@ -26,10 +26,9 @@ from __future__ import absolute_import
 
 import json
 import os
+
 import requests
-
 from celery import Celery
-
 
 celery = Celery('tasks',
                 broker='amqp://test:1234@'

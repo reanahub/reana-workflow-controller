@@ -25,6 +25,7 @@ from enum import Enum
 
 from flask import current_app as app
 from fs import open_fs, path
+from fs.errors import CreateFailed, ResourceNotFound
 
 
 class REANAFS(object):
@@ -67,25 +68,32 @@ def get_all_workflows(org, tenant, status=None):
     :param status: Filter workflows by status. If not provided no filter
         is applyied.
     :return: List of dictionaries containing the workflow data.
+    :raises fs.errors.CreateFailed: Probably the configured path doesn't exist.
+    :raises fs.errors.ResourceNotFound: Probably either org or tenant doesn't
+        exist.
     """
-    reana_fs = REANAFS()
-    workflows = []
-    tenant_analyses_dir = path.join(org.name, tenant, 'analyses')
-    if not reana_fs.exists(tenant_analyses_dir):
-        raise Exception('Tenant {0} does not exist.'.format(tenant))
+    try:
+        reana_fs = REANAFS()
+        workflows = []
+        tenant_analyses_dir = path.join(org.name, tenant, 'analyses')
 
-    for name in reana_fs.walk.files(
-            tenant_analyses_dir,
-            filter=['.status.{0}'.format(status.name)] if status else [],
-            exclude_dirs=[
-                'workspace',
-            ]):
-        # /:org/:tenant/analyses/:workflow_uuid/.status.WorkflowStatus
-        # /atlas/default_tenant/analyses/256b25f4-4cfb-4684-b7a8-73872ef455a1/.status.waiting
-        path_data = name.split('/')
-        uuid = path_data[4]
-        status = path_data[-1].split('.')[-1]
-        workflows.append({'id': uuid, 'status': status,
-                          'organization': org.name, 'tenant': tenant})
+        for name in reana_fs.walk.files(
+                tenant_analyses_dir,
+                filter=['.status.{0}'.format(status.name)] if status else [],
+                exclude_dirs=[
+                    'workspace',
+                ]):
+            # /:org/:tenant/analyses/:workflow_uuid/.status.WorkflowStatus
+            # /atlas/default_tenant/analyses/256b25f4-4cfb-4684-b7a8-73872ef455a1/.status.waiting
+            path_data = name.split('/')
+            uuid = path_data[4]
+            status = path_data[-1].split('.')[-1]
+            workflows.append({'id': uuid, 'status': status,
+                              'organization': org.name, 'tenant': tenant})
 
-    return workflows
+        return workflows
+
+    except CreateFailed:
+        raise Exception("Couldn't load database.")
+    except ResourceNotFound:
+        raise Exception("Either org or tenant doesn't exist.")

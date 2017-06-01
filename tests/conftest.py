@@ -24,4 +24,44 @@
 
 from __future__ import absolute_import, print_function
 
+import shutil
+import tempfile
+from os.path import dirname, join
+
 import pytest
+
+from reana_workflow_controller.app import app as reana_workflow_controller_app
+
+
+@pytest.fixture
+def tmp_fsdb_path(request):
+    """Fixture data for XrootDPyFS."""
+    path = tempfile.mkdtemp()
+    shutil.copytree(join(dirname(__file__), "data"), join(path, "reana"))
+
+    def cleanup():
+        shutil.rmtree(path)
+
+    request.addfinalizer(cleanup)
+    return join(path, "reana")
+
+
+@pytest.fixture()
+def base_app(tmp_fsdb_path):
+    """Flask application fixture."""
+    app_ = reana_workflow_controller_app
+    app_.config.from_object('reana_workflow_controller.config')
+    app_.config['SHARED_VOLUME_PATH'] = tmp_fsdb_path
+    app_.config.update(
+        SERVER_NAME='localhost:5000',
+        SECRET_KEY='SECRET_KEY',
+        TESTING=True,
+    )
+    return app_
+
+
+@pytest.yield_fixture()
+def app(base_app):
+    """Flask application fixture."""
+    with base_app.app_context():
+        yield base_app

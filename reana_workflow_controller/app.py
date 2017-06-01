@@ -102,13 +102,29 @@ def get_workflows():
 
         :resheader Content-Type: application/json
         :statuscode 200: no error - the list has been returned.
+
+        .. sourcecode:: http
+
+            HTTP/1.1 500 Internal Error
+            Content-Length: 22
+            Content-Type: application/json
+
+            {
+              "msg": "Either organization or tenant doesn't exist."
+            }
+
+        :resheader Content-Type: application/json
+        :statuscode 500: error - the list couldn't be returned.
     """
     workflows = []
     tenant = 'default_tenant'
-    for org in Organization:
-        workflows.extend(get_all_workflows(org, tenant))
+    try:
+        for org in Organization:
+            workflows.extend(get_all_workflows(org, tenant))
 
-    return jsonify({"workflows": workflows}), 200
+        return jsonify({"workflows": workflows}), 200
+    except Exception as e:
+        return jsonify({"msg": str(e)}), 500
 
 
 @app.route('/yadage', methods=['POST'])
