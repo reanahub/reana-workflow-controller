@@ -28,34 +28,23 @@ import json
 from flask import url_for
 
 
-def test_get_workflows(app):
+def test_get_workflows(app, default_tenant):
     """Test listing all workflows."""
     with app.test_client() as client:
-        res = client.get(url_for('get_workflows'))
+        res = client.get(url_for('get_workflows'),
+                         query_string={"tenant":
+                                       default_tenant.id_})
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
         expected_data = {
-            "workflows": [{
-                "id": "6f6cd692-0eb2-439d-82bf-2f26ae992672",
-                "organization": "alice",
-                "status": "running",
-                "tenant": "default_tenant"
-            }, {
-                "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
-                "organization": "atlas",
-                "status": "waiting",
-                "tenant": "default_tenant"
-            }, {
-                "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
-                "organization": "cms",
-                "status": "finished",
-                "tenant": "default_tenant"
-            }, {
-                "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
-                "organization": "lhcb",
-                "status": "finished",
-                "tenant": "default_tenant"
-            }]
+            "workflows": [
+                {
+                    "id": "3fd74dc6-6307-4d22-9853-cc1895610080",
+                    "organization": "default",
+                    "status": "running",
+                    "tenant": "00000000-0000-0000-0000-000000000000"
+                }
+            ]
         }
 
         assert response_data == expected_data

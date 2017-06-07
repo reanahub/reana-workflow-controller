@@ -29,12 +29,21 @@ import traceback
 
 from flask import Flask, abort, jsonify, redirect, request
 
-from .fsdb import Organization, get_all_workflows
+from .fsdb import get_all_workflows
+from .multiorganization import MultiOrganizationSQLAlchemy
 from .tasks import run_yadage_workflow
 
 app = Flask(__name__)
 app.config.from_object('reana_workflow_controller.config')
 app.secret_key = "super secret key"
+
+# Initialize DB
+db = MultiOrganizationSQLAlchemy(app)
+
+# Import models so that they are registered with SQLAlchemy
+from .models import Tenant  # isort:skip # noqa
+
+db.initialize_dbs()
 
 experiment_to_queue = {
     'alice': 'alice-queue',
@@ -43,6 +52,14 @@ experiment_to_queue = {
     'cms': 'cms-queue',
     'recast': 'recast-queue'
 }
+
+
+@app.before_request
+def before_request():
+    """Retrieve organization from request."""
+    org = request.args.get('organization')
+    if org:
+        db.choose_organization(org)
 
 
 @app.route('/workflows', methods=['GET'])
@@ -62,6 +79,10 @@ def get_workflows():
             Host: localhost:5000
 
         :reqheader Content-Type: application/json
+        :query organization: organization name. It finds workflows
+                                    inside a given organization.
+        :query tenant: tenant uuid. It finds workflows inside a given
+                              organization owned by tenant.
 
         **Responses**:
 
@@ -116,13 +137,13 @@ def get_workflows():
         :resheader Content-Type: application/json
         :statuscode 500: error - the list couldn't be returned.
     """
-    workflows = []
-    tenant = 'default_tenant'
+    org = request.args.get('organization', 'default')
+    tenant = request.args['tenant']
     try:
-        for org in Organization:
-            workflows.extend(get_all_workflows(org, tenant))
+        if Tenant.query.filter(Tenant.id_ == tenant).count() < 1:
+            return jsonify({'msg': 'Tenant {} does not exist'.format(tenant)})
 
-        return jsonify({"workflows": workflows}), 200
+        return jsonify({"workflows": get_all_workflows(org, tenant)}), 200
     except Exception as e:
         return jsonify({"msg": str(e)}), 500
 

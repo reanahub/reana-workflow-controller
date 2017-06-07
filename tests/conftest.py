@@ -31,6 +31,9 @@ from os.path import dirname, join
 import pytest
 
 from reana_workflow_controller.app import app as reana_workflow_controller_app
+from reana_workflow_controller.models import Tenant
+from reana_workflow_controller.multiorganization import \
+    MultiOrganizationSQLAlchemy
 
 
 @pytest.fixture
@@ -65,3 +68,25 @@ def app(base_app):
     """Flask application fixture."""
     with base_app.app_context():
         yield base_app
+
+
+@pytest.yield_fixture()
+def db(app):
+    db = MultiOrganizationSQLAlchemy(app)
+
+    # Import models so that they are registered with SQLAlchemy
+    from reana_workflow_controller.models import Tenant  # isort:skip # noqa
+
+    db.initialize_dbs()
+    yield db
+
+
+@pytest.yield_fixture()
+def default_tenant(db):
+    """Create users."""
+    default_tenant = Tenant('00000000-0000-0000-0000-000000000000',
+                            'default@reana.io',
+                            'secretkey')
+    db.session.add(default_tenant)
+    db.session.commit()
+    return default_tenant

@@ -51,15 +51,6 @@ class WorkflowStatus(Enum):
     paused = 4
 
 
-class Organization(Enum):
-    """Organization enumeration."""
-
-    alice = 0
-    atlas = 1
-    cms = 2
-    lhcb = 3
-
-
 def get_all_workflows(org, tenant, status=None):
     """Get workflows from file system.
 
@@ -75,7 +66,7 @@ def get_all_workflows(org, tenant, status=None):
     try:
         reana_fs = REANAFS()
         workflows = []
-        tenant_analyses_dir = path.join(org.name, tenant, 'analyses')
+        tenant_analyses_dir = path.join(org, tenant, 'analyses')
 
         for name in reana_fs.walk.files(
                 tenant_analyses_dir,
@@ -89,7 +80,7 @@ def get_all_workflows(org, tenant, status=None):
             uuid = path_data[4]
             status = path_data[-1].split('.')[-1]
             workflows.append({'id': uuid, 'status': status,
-                              'organization': org.name, 'tenant': tenant})
+                              'organization': org, 'tenant': tenant})
 
         return workflows
 

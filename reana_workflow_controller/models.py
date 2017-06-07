@@ -20,27 +20,36 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""REANA Workflow Controller flask configuration."""
+"""Models for REANA Workflow Controller."""
 
-import os
+from __future__ import absolute_import
 
-SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
-"""Path to the mounted REANA shared volume."""
+import uuid
 
-SQLALCHEMY_DATABASE_URI = 'sqlite:////reana/default/default.db'
-"""SQLAlchemy database location"""
+from sqlalchemy.orm import validates
 
-SQLALCHEMY_BINDS = {
-    'alice': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'alice/alice.db')),
-    'atlas': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'atlas/atlas.db')),
-    'cms': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'cms/cms.db')),
-    'lhcb': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'lhcb/lhcb.db')),
-}
-"""Organization databases"""
+from .app import db
 
-SQLALCHEMY_TRACK_MODIFICATIONS = False
-"""Track modifications flag."""
+
+class Tenant(db.Model):
+    """Tenant model."""
+
+    id_ = db.Column(db.String(36), primary_key=True)
+    email = db.Column(db.String(120), unique=True)
+    api_key = db.Column(db.String(120), unique=True)
+
+    def __init__(self, id_, email, api_key):
+        """Initialize tenant model."""
+        self.id_ = id_
+        self.email = email
+        self.api_key = api_key
+
+    def __repr__(self):
+        """Tenant string represetantion."""
+        return '<User %r>' % self.id_
+
+    @validates('id_')
+    def validate_uuid(self, key, id_):
+        """Validate tenant id_."""
+        uuid.UUID(id_)
+        return id_
