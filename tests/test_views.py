@@ -31,7 +31,7 @@ from flask import url_for
 def test_get_workflows(app, default_tenant):
     """Test listing all workflows."""
     with app.test_client() as client:
-        res = client.get(url_for('get_workflows'),
+        res = client.get(url_for('api.get_workflows'),
                          query_string={"tenant":
                                        default_tenant.id_})
         assert res.status_code == 200

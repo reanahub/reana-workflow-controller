@@ -20,30 +20,32 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""Models for REANA Workflow Controller."""
+"""Rest API endpoint for workflow management."""
 
 from __future__ import absolute_import
 
-from sqlalchemy_utils.types import UUIDType
+from flask import Flask
 
-from .factory import db
+from .multiorganization import MultiOrganizationSQLAlchemy
+
+# Initialize DB
+db = MultiOrganizationSQLAlchemy()
+
+from .models import Tenant  # isort:skip  # noqa
 
 
-class Tenant(db.Model):
-    """Tenant model."""
+def create_app():
+    """REANA Workflow Controller application factory."""
+    app = Flask(__name__)
+    app.config.from_object('reana_workflow_controller.config')
+    app.secret_key = "super secret key"
 
-    id_ = db.Column(UUIDType, primary_key=True)
-    api_key = db.Column(db.String(120))
-    create_date = db.Column(db.DateTime, default=db.func.now())
-    email = db.Column(db.String(255), unique=True)
-    last_active_date = db.Column(db.DateTime)
+    # Initialize flask extensions
+    db.init_app(app)
+    # Register API routes
+    from .rest import restapi_blueprint  # noqa
+    app.register_blueprint(restapi_blueprint, url_prefix='/api')
+    with app.app_context():
+        db.initialize_dbs()
 
-    def __init__(self, id_, email, api_key):
-        """Initialize tenant model."""
-        self.id_ = id_
-        self.email = email
-        self.api_key = api_key
-
-    def __repr__(self):
-        """Tenant string represetantion."""
-        return '<User %r>' % self.id_
+    return app

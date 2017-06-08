@@ -27,20 +27,13 @@ import os
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
 """Path to the mounted REANA shared volume."""
 
-SQLALCHEMY_DATABASE_URI = 'sqlite:////reana/default/default.db'
+SQLALCHEMY_DATABASE_URI = 'sqlite:///{path}'.format(
+        path=os.path.join(SHARED_VOLUME_PATH, 'default/reana.db'))
 """SQLAlchemy database location"""
 
-SQLALCHEMY_BINDS = {
-    'alice': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'alice/alice.db')),
-    'atlas': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'atlas/atlas.db')),
-    'cms': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'cms/cms.db')),
-    'lhcb': 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'lhcb/lhcb.db')),
-}
-"""Organization databases"""
+ORGANIZATIONS = os.getenv('ORGANIZATIONS').split(',') \
+                if os.getenv('ORGANIZATIONS') else []
+"""Organizations."""
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""

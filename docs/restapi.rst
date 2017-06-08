@@ -1,15 +1,15 @@
 REST API
 ========
 
-GET /workflows
---------------
+GET /api/workflows
+------------------
 
-.. autofunction:: reana_workflow_controller.app.get_workflows
+.. autofunction:: reana_workflow_controller.rest.get_workflows
 
 
-POST /yadage
-------------
+POST /api/yadage
+----------------
 
-.. autofunction:: reana_workflow_controller.app.yadage_endpoint
+.. autofunction:: reana_workflow_controller.rest.yadage_endpoint
 
 

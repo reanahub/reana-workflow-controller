@@ -24,43 +24,43 @@
 
 from __future__ import absolute_import, print_function
 
+import os
 import shutil
 import tempfile
-from os.path import dirname, join
 
 import pytest
 
-from reana_workflow_controller.app import app as reana_workflow_controller_app
+from reana_workflow_controller.factory import create_app, db
 from reana_workflow_controller.models import Tenant
-from reana_workflow_controller.multiorganization import \
-    MultiOrganizationSQLAlchemy
 
 
 @pytest.fixture
 def tmp_fsdb_path(request):
-    """Fixture data for XrootDPyFS."""
+    """Fixture temporary file system database."""
     path = tempfile.mkdtemp()
-    shutil.copytree(join(dirname(__file__), "data"), join(path, "reana"))
+    shutil.copytree(os.path.join(os.path.dirname(__file__), "data"),
+                    os.path.join(path, "reana"))
 
     def cleanup():
         shutil.rmtree(path)
 
     request.addfinalizer(cleanup)
-    return join(path, "reana")
+    return os.path.join(path, "reana")
 
 
-@pytest.fixture()
+@pytest.yield_fixture()
 def base_app(tmp_fsdb_path):
     """Flask application fixture."""
-    app_ = reana_workflow_controller_app
+    os.environ['SHARED_VOLUME_PATH'] = tmp_fsdb_path
+    app_ = create_app()
     app_.config.from_object('reana_workflow_controller.config')
-    app_.config['SHARED_VOLUME_PATH'] = tmp_fsdb_path
     app_.config.update(
         SERVER_NAME='localhost:5000',
         SECRET_KEY='SECRET_KEY',
         TESTING=True,
     )
-    return app_
+    yield app_
+    del os.environ['SHARED_VOLUME_PATH']
 
 
 @pytest.yield_fixture()
@@ -71,22 +71,11 @@ def app(base_app):
 
 
 @pytest.yield_fixture()
-def db(app):
-    db = MultiOrganizationSQLAlchemy(app)
-
-    # Import models so that they are registered with SQLAlchemy
-    from reana_workflow_controller.models import Tenant  # isort:skip # noqa
-
-    db.initialize_dbs()
-    yield db
-
-
-@pytest.yield_fixture()
-def default_tenant(db):
+def default_tenant(app):
     """Create users."""
-    default_tenant = Tenant('00000000-0000-0000-0000-000000000000',
-                            'default@reana.io',
-                            'secretkey')
+    default_tenant = Tenant(id_='00000000-0000-0000-0000-000000000000',
+                            email='info@reana.io',
+                            api_key='secretkey')
     db.session.add(default_tenant)
     db.session.commit()
     return default_tenant

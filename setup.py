@@ -68,6 +68,7 @@ install_requires = [
     'Flask>=0.12',
     'Flask-SQLAlchemy>=2.2',
     'requests==2.11.1',
+    'sqlalchemy-utils>=0.31.0',
 ]
 
 packages = find_packages()

@@ -22,9 +22,6 @@ FROM python:3.5
 ADD . /code
 WORKDIR /code
 RUN pip install -e .[all]
-RUN adduser --uid 1000 --disabled-password --gecos '' reanauser && \
-    chown -R reanauser:reanauser /code
-USER reanauser
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
 CMD ["flask", "run", "--host=0.0.0.0"]

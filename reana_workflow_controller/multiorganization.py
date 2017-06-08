@@ -24,19 +24,29 @@
 
 from __future__ import absolute_import
 
-from flask import g
+from flask import current_app, g
 from flask_sqlalchemy import SQLAlchemy
 
 
 class MultiOrganizationSQLAlchemy(SQLAlchemy):
     """Multiorganization support for SQLAlchemy."""
 
+    def _initialize_binds(self):
+        """Initialize binds from configuration if necessary."""
+        current_app.config['SQLALCHEMY_BINDS'] = {}
+        for org in current_app.config.get('ORGANIZATIONS'):
+            current_app.config['SQLALCHEMY_BINDS'][org] = current_app\
+                       .config['SQLALCHEMY_DATABASE_URI'].replace(
+                           'default/reana.db',
+                           '{organization}/reana.db'.format(organization=org))
+
     def initialize_dbs(self):
         """Initialize all organizations dbs."""
-        with self.app.app_context():
+        with current_app.app_context():
             # Default organization DB
             self.create_all()
-            for bind in self.app.config['SQLALCHEMY_BINDS'].keys():
+            self._initialize_binds()
+            for bind in current_app.config.get('SQLALCHEMY_BINDS').keys():
                 self.choose_organization(bind)
                 self.create_all()
 
