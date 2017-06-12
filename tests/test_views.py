@@ -32,8 +32,9 @@ def test_get_workflows(app, default_user):
     """Test listing all workflows."""
     with app.test_client() as client:
         res = client.get(url_for('api.get_workflows'),
-                         query_string={"user":
-                                       default_user.id_})
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": 'default'})
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
         expected_data = {

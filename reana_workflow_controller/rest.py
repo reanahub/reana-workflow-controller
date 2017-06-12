@@ -46,9 +46,10 @@ restapi_blueprint = Blueprint('api', __name__)
 @restapi_blueprint.before_request
 def before_request():
     """Retrieve organization from request."""
-    org = request.args.get('organization')
-    if org:
-        db.choose_organization(org)
+    if request.args.get('organization'):
+        db.choose_organization(request.args.get('organization'))
+    else:
+        return jsonify({"msg": "An organization should be provided"}), 400
 
 
 @restapi_blueprint.route('/workflows', methods=['GET'])

@@ -52,14 +52,15 @@ def tmp_fsdb_path(request):
 def base_app(tmp_fsdb_path):
     """Flask application fixture."""
     os.environ['SHARED_VOLUME_PATH'] = tmp_fsdb_path
+    os.environ['ORGANIZATIONS'] = 'default'
     app_ = create_app()
-    app_.config.from_object('reana_workflow_controller.config')
     app_.config.update(
         SERVER_NAME='localhost:5000',
         SECRET_KEY='SECRET_KEY',
         TESTING=True,
     )
     yield app_
+    del os.environ['ORGANIZATIONS']
     del os.environ['SHARED_VOLUME_PATH']
 
 
@@ -73,6 +74,7 @@ def app(base_app):
 @pytest.yield_fixture()
 def default_user(app):
     """Create users."""
+    db.choose_organization('default')
     user = User(id_='00000000-0000-0000-0000-000000000000',
                 email='info@reana.io', api_key='secretkey')
     db.session.add(user)

@@ -24,4 +24,5 @@ WORKDIR /code
 RUN pip install -e .[all]
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
-CMD ["flask", "run", "--host=0.0.0.0"]
+CMD flask users create info@reana.io &&\
+    flask run --host=0.0.0.0

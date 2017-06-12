@@ -91,6 +91,11 @@ setup(
     url='https://github.com/reanahub/reana-workflow-controller',
     packages=['reana_workflow_controller', ],
     zip_safe=False,
+    entry_points={
+        'flask.commands': [
+            'users = reana_workflow_controller.cli:users',
+        ]
+    },
     extras_require=extras_require,
     install_requires=install_requires,
     setup_requires=setup_requires,

@@ -27,8 +27,8 @@ import os
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
 """Path to the mounted REANA shared volume."""
 
-SQLALCHEMY_DATABASE_URI = 'sqlite:///{path}'.format(
-        path=os.path.join(SHARED_VOLUME_PATH, 'default/reana.db'))
+SQLALCHEMY_DATABASE_URI_TEMPLATE = 'sqlite:///{path}'.format(
+    path=os.path.join(SHARED_VOLUME_PATH, 'default/reana.db'))
 """SQLAlchemy database location"""
 
 ORGANIZATIONS = os.getenv('ORGANIZATIONS').split(',') \

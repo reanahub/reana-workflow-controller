@@ -36,15 +36,13 @@ class MultiOrganizationSQLAlchemy(SQLAlchemy):
         current_app.config['SQLALCHEMY_BINDS'] = {}
         for org in current_app.config.get('ORGANIZATIONS'):
             current_app.config['SQLALCHEMY_BINDS'][org] = current_app\
-                       .config['SQLALCHEMY_DATABASE_URI'].replace(
+                       .config['SQLALCHEMY_DATABASE_URI_TEMPLATE'].replace(
                            'default/reana.db',
                            '{organization}/reana.db'.format(organization=org))
 
     def initialize_dbs(self):
         """Initialize all organizations dbs."""
         with current_app.app_context():
-            # Default organization DB
-            self.create_all()
             self._initialize_binds()
             for bind in current_app.config.get('SQLALCHEMY_BINDS').keys():
                 self.choose_organization(bind)
@@ -58,7 +56,7 @@ class MultiOrganizationSQLAlchemy(SQLAlchemy):
     def get_engine(self, app=None, bind=None):
         """Get engine depending on current bind."""
         if bind is None:
-            if not hasattr(g, 'organization'):
-                return super().get_engine(app=app)
             bind = g.organization
-        return super().get_engine(app=app, bind=bind)
+
+        return super(MultiOrganizationSQLAlchemy, self).get_engine(app=app,
+                                                                   bind=bind)

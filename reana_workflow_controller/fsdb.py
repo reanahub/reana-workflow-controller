@@ -88,3 +88,11 @@ def get_all_workflows(org, user, status=None):
         raise Exception("Couldn't load database.")
     except ResourceNotFound:
         raise Exception("Either org or user doesn't exist.")
+
+
+def create_user_space(user_id, org):
+    """Create analyses directory for `user_id`."""
+    reana_fs = REANAFS()
+    user_analyses_dir = path.join(org, user_id, 'analyses')
+    if not reana_fs.exists(user_analyses_dir):
+        reana_fs.makedirs(user_analyses_dir)
