@@ -29,8 +29,8 @@ from sqlalchemy_utils.types import UUIDType
 from .factory import db
 
 
-class Tenant(db.Model):
-    """Tenant model."""
+class User(db.Model):
+    """User model."""
 
     id_ = db.Column(UUIDType, primary_key=True)
     api_key = db.Column(db.String(120))
@@ -39,11 +39,11 @@ class Tenant(db.Model):
     last_active_date = db.Column(db.DateTime)
 
     def __init__(self, id_, email, api_key):
-        """Initialize tenant model."""
+        """Initialize user model."""
         self.id_ = id_
         self.email = email
         self.api_key = api_key
 
     def __repr__(self):
-        """Tenant string represetantion."""
+        """User string represetantion."""
         return '<User %r>' % self.id_

@@ -31,7 +31,7 @@ import tempfile
 import pytest
 
 from reana_workflow_controller.factory import create_app, db
-from reana_workflow_controller.models import Tenant
+from reana_workflow_controller.models import User
 
 
 @pytest.fixture
@@ -71,11 +71,10 @@ def app(base_app):
 
 
 @pytest.yield_fixture()
-def default_tenant(app):
+def default_user(app):
     """Create users."""
-    default_tenant = Tenant(id_='00000000-0000-0000-0000-000000000000',
-                            email='info@reana.io',
-                            api_key='secretkey')
-    db.session.add(default_tenant)
+    user = User(id_='00000000-0000-0000-0000-000000000000',
+                email='info@reana.io', api_key='secretkey')
+    db.session.add(user)
     db.session.commit()
-    return default_tenant
+    return user

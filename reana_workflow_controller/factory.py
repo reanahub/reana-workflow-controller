@@ -31,7 +31,7 @@ from .multiorganization import MultiOrganizationSQLAlchemy
 # Initialize DB
 db = MultiOrganizationSQLAlchemy()
 
-from .models import Tenant  # isort:skip  # noqa
+from .models import User  # isort:skip  # noqa
 
 
 def create_app():

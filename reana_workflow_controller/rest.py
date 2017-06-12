@@ -29,7 +29,7 @@ from flask import Blueprint, abort, jsonify, redirect, request
 
 from .factory import db
 from .fsdb import get_all_workflows
-from .models import Tenant
+from .models import User
 from .tasks import run_yadage_workflow
 
 experiment_to_queue = {
@@ -70,8 +70,8 @@ def get_workflows():
         :reqheader Content-Type: apilication/json
         :query organization: organization name. It finds workflows
                                     inside a given organization.
-        :query tenant: tenant uuid. It finds workflows inside a given
-                              organization owned by tenant.
+        :query user: user uuid. It finds workflows inside a given
+                              organization owned by user.
 
         **Responses**:
 
@@ -87,25 +87,25 @@ def get_workflows():
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "organization": "default_org",
                   "status": "running",
-                  "tenant": "default_tenant"
+                  "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "organization": "default_org",
                   "status": "finished",
-                  "tenant": "default_tenant"
+                  "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "organization": "default_org",
                   "status": "waiting",
-                  "tenant": "default_tenant"
+                  "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "organization": "default_org",
                   "status": "waiting",
-                  "tenant": "default_tenant"
+                  "user": "00000000-0000-0000-0000-000000000000"
                 }
               ]
             }
@@ -120,19 +120,19 @@ def get_workflows():
             Content-Type: apilication/json
 
             {
-              "msg": "Either organization or tenant doesn't exist."
+              "msg": "Either organization or user doesn't exist."
             }
 
         :resheader Content-Type: apilication/json
         :statuscode 500: error - the list couldn't be returned.
     """
     org = request.args.get('organization', 'default')
-    tenant = request.args['tenant']
+    user = request.args['user']
     try:
-        if Tenant.query.filter(Tenant.id_ == tenant).count() < 1:
-            return jsonify({'msg': 'Tenant {} does not exist'.format(tenant)})
+        if User.query.filter(User.id_ == user).count() < 1:
+            return jsonify({'msg': 'User {} does not exist'.format(user)})
 
-        return jsonify({"workflows": get_all_workflows(org, tenant)}), 200
+        return jsonify({"workflows": get_all_workflows(org, user)}), 200
     except Exception as e:
         return jsonify({"msg": str(e)}), 500
 

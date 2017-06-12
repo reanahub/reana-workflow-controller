@@ -28,12 +28,12 @@ import json
 from flask import url_for
 
 
-def test_get_workflows(app, default_tenant):
+def test_get_workflows(app, default_user):
     """Test listing all workflows."""
     with app.test_client() as client:
         res = client.get(url_for('api.get_workflows'),
-                         query_string={"tenant":
-                                       default_tenant.id_})
+                         query_string={"user":
+                                       default_user.id_})
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
         expected_data = {
@@ -42,7 +42,7 @@ def test_get_workflows(app, default_tenant):
                     "id": "3fd74dc6-6307-4d22-9853-cc1895610080",
                     "organization": "default",
                     "status": "running",
-                    "tenant": "00000000-0000-0000-0000-000000000000"
+                    "user": "00000000-0000-0000-0000-000000000000"
                 }
             ]
         }
