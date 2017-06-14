@@ -37,7 +37,7 @@ experiment_to_queue = {
     'atlas': 'atlas-queue',
     'lhcb': 'lhcb-queue',
     'cms': 'cms-queue',
-    'recast': 'recast-queue'
+    'default': 'default-queue'
 }
 
 restapi_blueprint = Blueprint('api', __name__)
