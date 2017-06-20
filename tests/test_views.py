@@ -37,15 +37,13 @@ def test_get_workflows(app, default_user):
                              "organization": 'default'})
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
-        expected_data = {
-            "workflows": [
-                {
-                    "id": "3fd74dc6-6307-4d22-9853-cc1895610080",
-                    "organization": "default",
-                    "status": "running",
-                    "user": "00000000-0000-0000-0000-000000000000"
-                }
-            ]
-        }
+        expected_data = [
+            {
+                "id": "3fd74dc6-6307-4d22-9853-cc1895610080",
+                "organization": "default",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+            }
+        ]
 
         assert response_data == expected_data

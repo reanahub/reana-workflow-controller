@@ -22,17 +22,16 @@
 
 """REANA Workflow Controller REST API."""
 
-import os
 import traceback
 
-from flask import Blueprint, abort, jsonify, redirect, request
+from flask import Blueprint, abort, jsonify, request
 
 from .factory import db
 from .fsdb import get_all_workflows
 from .models import User
 from .tasks import run_yadage_workflow
 
-experiment_to_queue = {
+organization_to_queue = {
     'alice': 'alice-queue',
     'atlas': 'atlas-queue',
     'lhcb': 'lhcb-queue',
@@ -49,41 +48,55 @@ def before_request():
     if request.args.get('organization'):
         db.choose_organization(request.args.get('organization'))
     else:
-        return jsonify({"msg": "An organization should be provided"}), 400
+        return jsonify({"message": "An organization should be provided"}), 400
 
 
 @restapi_blueprint.route('/workflows', methods=['GET'])
-def get_workflows():
-    """Get all workflows.
+def get_workflows():  # noqa
+    r"""Get all workflows.
 
-    .. http:get:: /api/workflows
-
-        Returns a JSON list with all the workflows.
-
-        **Request**:
-
-        .. sourcecode:: http
-
-            GET /api/workflows HTTP/1.1
-            Content-Type: apilication/json
-            Host: localhost:5000
-
-        :reqheader Content-Type: apilication/json
-        :query organization: organization name. It finds workflows
-                                    inside a given organization.
-        :query user: user uuid. It finds workflows inside a given
-                              organization owned by user.
-
-        **Responses**:
-
-        .. sourcecode:: http
-
-            HTTP/1.1 200 OK
-            Content-Length: 22
-            Content-Type: apilication/json
-
-            {
-              "workflows": [
+    ---
+    get:
+      summary: Returns all workflows.
+      description: >-
+        This resource is expecting an organization name and an user UUID. The
+        information related to all workflows for a given user will be served
+        as JSON
+      operationId: get_workflows
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The response contains the current workflows
+            for a given user and organization.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                organization:
+                  type: string
+                status:
+                  type: string
+                user:
+                  type: string
+          examples:
+            application/json:
+              [
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "organization": "default_org",
@@ -109,95 +122,104 @@ def get_workflows():
                   "user": "00000000-0000-0000-0000-000000000000"
                 }
               ]
-            }
-
-        :resheader Content-Type: apilication/json
-        :statuscode 200: no error - the list has been returned.
-
-        .. sourcecode:: http
-
-            HTTP/1.1 500 Internal Error
-            Content-Length: 22
-            Content-Type: apilication/json
-
-            {
-              "msg": "Either organization or user doesn't exist."
-            }
-
-        :resheader Content-Type: apilication/json
-        :statuscode 500: error - the list couldn't be returned.
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
     """
     org = request.args.get('organization', 'default')
-    user = request.args['user']
     try:
+        user = request.args['user']
         if User.query.filter(User.id_ == user).count() < 1:
-            return jsonify({'msg': 'User {} does not exist'.format(user)})
+            return jsonify({'message': 'User {} does not exist'.format(user)})
 
-        return jsonify({"workflows": get_all_workflows(org, user)}), 200
+        return jsonify(get_all_workflows(org, user)), 200
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
     except Exception as e:
-        return jsonify({"msg": str(e)}), 500
+        return jsonify({"message": str(e)}), 500
 
 
 @restapi_blueprint.route('/yadage', methods=['POST'])
-def yadage_endpoint():
-    """Create a new job.
+def yadage_endpoint():  # noqa
+    r"""Create a new yadage workflow.
 
-    .. http:post:: /api/yadage
-
+    ---
+    post:
+      summary: Creates a new yadage workflow.
+      description: >-
         This resource is expecting JSON data with all the necessary
-        information to run a yadage workflow.
-
-        **Request**:
-
-        .. sourcecode:: http
-
-            POST /api/yadage HTTP/1.1
-            Content-Type: apilication/json
-            Host: localhost:5000
-
-            {
-                "experiment": "atlas",
-                "toplevel": "from-github/testing/scriptflow",
-                "workflow": "workflow.yml",
-                "nparallel": "100",
-                "preset_pars": {}
-            }
-
-        :reqheader Content-Type: apilication/json
-        :json body: JSON with the information of the yadage workflow.
-
-        **Responses**:
-
-        .. sourcecode:: http
-
-            HTTP/1.0 200 OK
-            Content-Length: 80
-            Content-Type: apilication/json
-
-            {
-              "msg", "Workflow successfully launched",
-              "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
-            }
-
-        :resheader Content-Type: apilication/json
-        :statuscode 200: no error - the workflow was created
-        :statuscode 400: invalid request - problably a malformed JSON
+        informations to instantiate a yadage workflow.
+      operationId: create_yadage_workflow
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: yadage_payload
+          in: body
+          description: Specification with necessary data to instantiate a
+            yadage workflow.
+          required: true
+          schema:
+            type: object
+            properties:
+              toplevel:
+                type: string
+              workflow:
+                type: string
+              nparallel:
+                type: integer
+              preset_pars:
+                type: object
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been instantiated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
     """
-    if request.method == 'POST':
-        try:
-            if request.json:
-                queue = experiment_to_queue[request.json['experiment']]
-                resultobject = run_yadage_workflow.apily_async(
-                    args=[request.json],
-                    queue='yadage-{}'.format(queue)
-                )
-            if 'redirect' in request.args:
-                return redirect('{}/{}'.format(
-                    os.environ['YADAGE_MONITOR_URL']),
-                                resultobject.id)
-            return jsonify({'msg': 'Workflow successfully launched',
-                            'workflow_id': resultobject.id})
+    try:
+        if request.json:
+            queue = organization_to_queue[request.args.get('organization')]
+            resultobject = run_yadage_workflow.apply_async(
+                args=[request.json],
+                queue='yadage-{}'.format(queue)
+            )
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': resultobject.id}), 200
 
-        except (KeyError, ValueError):
-            traceback.print_exc()
-            abort(400)
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)

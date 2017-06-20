@@ -22,8 +22,10 @@
 
 pydocstyle reana_workflow_controller && \
 isort -rc -c -df **/*.py && \
+FLASK_APP=reana_workflow_controller/app.py python ./scripts/generate_openapi_spec.py && \
+diff -q -w temp_openapi.json docs/openapi.json && \
 check-manifest --ignore ".travis-*" && \
-sphinx-build -qnNW docs docs/_build/html && \
+sphinx-build -qnN docs docs/_build/html && \
 python setup.py test && \
 sphinx-build -qnNW -b doctest docs docs/_build/doctest && \
 docker build -t reanahub/reana-workflow-controller .

@@ -33,14 +33,16 @@ readme = open('README.rst').read()
 history = open('CHANGES.rst').read()
 
 tests_require = [
+    'apispec>=0.21.0',
     'check-manifest>=0.25',
     'coverage>=4.0',
-    'isort>=4.2.9',
+    'isort>=4.2.15',
     'pydocstyle>=1.0.0',
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
     'pytest>=2.8.0',
+    'swagger_spec_validator>=2.1.0',
 ]
 
 extras_require = {
@@ -48,6 +50,7 @@ extras_require = {
         'Sphinx>=1.4.4',
         'sphinx-rtd-theme>=0.1.9',
         'sphinxcontrib-httpdomain>=1.5.0',
+        'sphinxcontrib-openapi>=0.3.0',
     ],
     'tests': tests_require,
 }
@@ -67,6 +70,7 @@ install_requires = [
     'fs>=2.0',
     'Flask>=0.12',
     'Flask-SQLAlchemy>=2.2',
+    'marshmallow>=2.13',
     'requests==2.11.1',
     'sqlalchemy-utils>=0.31.0',
 ]

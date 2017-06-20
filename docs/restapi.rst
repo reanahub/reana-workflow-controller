@@ -1,15 +1,7 @@
 REST API
 ========
 
-GET /api/workflows
-------------------
+The REANA Workflow Controller component offers a REST API for managing
+workflows.
 
-.. autofunction:: reana_workflow_controller.rest.get_workflows
-
-
-POST /api/yadage
-----------------
-
-.. autofunction:: reana_workflow_controller.rest.yadage_endpoint
-
-
+.. openapi:: openapi.json
