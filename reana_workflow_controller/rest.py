@@ -147,17 +147,17 @@ def get_workflows():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/yadage', methods=['POST'])
+@restapi_blueprint.route('/yadage_from_remote', methods=['POST'])
 def yadage_endpoint():  # noqa
-    r"""Create a new yadage workflow.
+    r"""Create a new yadage workflow from a remote repository.
 
     ---
     post:
-      summary: Creates a new yadage workflow.
+      summary: Creates a new yadage workflow from a remote repository.
       description: >-
-        This resource is expecting JSON data with all the necessary
-        informations to instantiate a yadage workflow.
-      operationId: create_yadage_workflow
+        This resource is expecting JSON data with all the necessary information
+        to instantiate a yadage workflow from a remote repository.
+      operationId: create_yadage_workflow_from_remote
       consumes:
         - application/json
       produces:
@@ -173,22 +173,31 @@ def yadage_endpoint():  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: yadage_payload
+        - name: workflow_data
           in: body
-          description: Specification with necessary data to instantiate a
-            yadage workflow.
+          description: >-
+            Workflow information in JSON format with all the necessary data to
+            instantiate a yadage workflow from a remote repository such as
+            GitHub.
           required: true
           schema:
             type: object
             properties:
               toplevel:
                 type: string
+                description: >-
+                  Yadage toplevel argument. It represents the remote repository
+                  where the workflow should be pulled from.
               workflow:
                 type: string
+                description: >-
+                  Yadage workflow parameter. It represents the name of the
+                  workflow spec file name inside the remote repository.
               nparallel:
                 type: integer
               preset_pars:
                 type: object
+                description: Workflow parameters.
       responses:
         200:
           description: >-
@@ -215,6 +224,94 @@ def yadage_endpoint():  # noqa
             queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_yadage_workflow.apply_async(
                 args=[request.json],
+                queue='yadage-{}'.format(queue)
+            )
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': resultobject.id}), 200
+
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
+
+
+@restapi_blueprint.route('/yadage_from_spec', methods=['POST'])
+def yadage_from_spec_endpoint():  # noqa
+    r"""Create a new yadage workflow.
+
+    ---
+    post:
+      summary: Creates a new yadage workflow from a specification file.
+      description: This resource is expecting a JSON yadage specification.
+      operationId: create_yadage_workflow_from_spec
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow
+          in: body
+          description: >-
+            JSON object including workflow parameters and workflow
+            specification in JSON format (`yadageschemas.load()` output)
+            with necessary data to instantiate a yadage workflow.
+          required: true
+          schema:
+            type: object
+            properties:
+              parameters:
+                type: object
+                properties:
+                  nparallel:
+                    type: integer
+                  preset_pars:
+                    type: object
+                    description: Workflow parameters.
+              workflow_spec:
+                type: object
+                description: >-
+                  Yadage specification in JSON format.
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been instantiated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        if request.json:
+            arguments = {
+                "nparallel": request.json['parameters']['nparallel'],
+                "workflow": request.json['workflow_spec'],
+                "toplevel": "",  # ignored when spec submited
+                "preset_pars": request.json['parameters']['preset_pars']
+            }
+            queue = organization_to_queue[request.args.get('organization')]
+            resultobject = run_yadage_workflow.apply_async(
+                args=[arguments],
                 queue='yadage-{}'.format(queue)
             )
             return jsonify({'message': 'Workflow successfully launched',
