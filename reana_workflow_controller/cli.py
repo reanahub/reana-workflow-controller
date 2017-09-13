@@ -48,17 +48,17 @@ def users():
 @with_appcontext
 def users_create_default(email, organization, id_, key):
     """Create new user."""
+    user_characteristics = {"id_": id_,
+                            "email": email,
+                            "api_key": key}
     try:
-        user = User(id_=id_, email=email, api_key=key)
         db.choose_organization(organization)
-        db.session.add(user)
-        db.session.commit()
+        user = db.session.query(User).filter_by(**user_characteristics).first()
+        if not user:
+            user = User(**user_characteristics)
+            db.session.add(user)
+            db.session.commit()
+            create_user_space(id_, organization)
         click.echo(user.id_)
-        create_user_space(id_, organization)
-    except exc.IntegrityError:
-        raise click.BadParameter(
-            'User with id={0} already exists.'.format(id_),
-            param_hint='id_',
-        )
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
