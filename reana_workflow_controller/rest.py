@@ -147,8 +147,8 @@ def get_workflows():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/yadage_from_remote', methods=['POST'])
-def yadage_endpoint():  # noqa
+@restapi_blueprint.route('/yadage/remote', methods=['POST'])
+def run_yadage_workflow_from_remote_endpoint():  # noqa
     r"""Create a new yadage workflow from a remote repository.
 
     ---
@@ -157,7 +157,7 @@ def yadage_endpoint():  # noqa
       description: >-
         This resource is expecting JSON data with all the necessary information
         to instantiate a yadage workflow from a remote repository.
-      operationId: create_yadage_workflow_from_remote
+      operationId: run_yadage_workflow_from_remote
       consumes:
         - application/json
       produces:
@@ -234,15 +234,15 @@ def yadage_endpoint():  # noqa
         abort(400)
 
 
-@restapi_blueprint.route('/yadage_from_spec', methods=['POST'])
-def yadage_from_spec_endpoint():  # noqa
+@restapi_blueprint.route('/yadage/spec', methods=['POST'])
+def run_yadage_workflow_from_spec_endpoint():  # noqa
     r"""Create a new yadage workflow.
 
     ---
     post:
       summary: Creates a new yadage workflow from a specification file.
       description: This resource is expecting a JSON yadage specification.
-      operationId: create_yadage_workflow_from_spec
+      operationId: run_yadage_workflow_from_spec
       consumes:
         - application/json
       produces:
@@ -270,12 +270,7 @@ def yadage_from_spec_endpoint():  # noqa
             properties:
               parameters:
                 type: object
-                properties:
-                  nparallel:
-                    type: integer
-                  preset_pars:
-                    type: object
-                    description: Workflow parameters.
+                description: Workflow parameters.
               workflow_spec:
                 type: object
                 description: >-
@@ -302,12 +297,14 @@ def yadage_from_spec_endpoint():  # noqa
             Request failed. The incoming data specification seems malformed
     """
     try:
+        # hardcoded until confirmation from `yadage`
+        nparallel = 10
         if request.json:
             arguments = {
-                "nparallel": request.json['parameters']['nparallel'],
+                "nparallel": nparallel,
                 "workflow": request.json['workflow_spec'],
                 "toplevel": "",  # ignored when spec submited
-                "preset_pars": request.json['parameters']['preset_pars']
+                "preset_pars": request.json['parameters']
             }
             queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_yadage_workflow.apply_async(

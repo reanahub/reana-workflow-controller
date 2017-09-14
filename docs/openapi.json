@@ -97,13 +97,13 @@
         "summary": "Returns all workflows."
       }
     },
-    "/api/yadage_from_remote": {
+    "/api/yadage/remote": {
       "post": {
         "consumes": [
           "application/json"
         ],
         "description": "This resource is expecting JSON data with all the necessary information to instantiate a yadage workflow from a remote repository.",
-        "operationId": "create_yadage_workflow_from_remote",
+        "operationId": "run_yadage_workflow_from_remote",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
@@ -177,13 +177,13 @@
         "summary": "Creates a new yadage workflow from a remote repository."
       }
     },
-    "/api/yadage_from_spec": {
+    "/api/yadage/spec": {
       "post": {
         "consumes": [
           "application/json"
         ],
         "description": "This resource is expecting a JSON yadage specification.",
-        "operationId": "create_yadage_workflow_from_spec",
+        "operationId": "run_yadage_workflow_from_spec",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
@@ -207,15 +207,7 @@
             "schema": {
               "properties": {
                 "parameters": {
-                  "properties": {
-                    "nparallel": {
-                      "type": "integer"
-                    },
-                    "preset_pars": {
-                      "description": "Workflow parameters.",
-                      "type": "object"
-                    }
-                  },
+                  "description": "Workflow parameters.",
                   "type": "object"
                 },
                 "workflow_spec": {
