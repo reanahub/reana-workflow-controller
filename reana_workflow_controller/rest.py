@@ -24,12 +24,13 @@
 
 import traceback
 
+import os
 from flask import Blueprint, abort, jsonify, request
 
 from .factory import db
 from .fsdb import get_all_workflows
 from .models import User
-from .tasks import run_yadage_workflow
+from .tasks import run_yadage_workflow, run_cwl_workflow
 
 organization_to_queue = {
     'alice': 'alice-queue',
@@ -234,6 +235,28 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
         abort(400)
 
 
+@restapi_blueprint.route('/seed', methods=['POST'])
+def seed():  # noqa
+    try:
+        if request.files:
+            file = request.files['file']
+            analysis_directory = os.path.join(
+                os.getenv('SHARED_VOLUME', '/data'),
+                '00000000-0000-0000-0000-000000000000',  # FIXME parameter from RWC
+                'analyses')
+
+            analysis_workspace = os.path.join(analysis_directory, 'workspace')
+
+            if not os.path.exists(analysis_workspace):
+                os.makedirs(analysis_workspace)
+            file.save(analysis_workspace)
+            return jsonify({'message': 'File saved'}), 200
+
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
+
+
 @restapi_blueprint.route('/yadage/spec', methods=['POST'])
 def run_yadage_workflow_from_spec_endpoint():  # noqa
     r"""Create a new yadage workflow.
@@ -310,6 +333,173 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
             resultobject = run_yadage_workflow.apply_async(
                 args=[arguments],
                 queue='yadage-{}'.format(queue)
+            )
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': resultobject.id}), 200
+
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)\
+        
+@restapi_blueprint.route('/cwl/remote', methods=['POST'])
+def run_cwl_workflow_from_remote_endpoint():  # noqa
+    r"""Create a new cwl workflow from a remote repository.
+
+    ---
+    post:
+      summary: Creates a new cwl workflow from a remote repository.
+      description: >-
+        This resource is expecting JSON data with all the necessary information
+        to instantiate a cwl workflow from a remote repository.
+      operationId: run_cwl_workflow_from_remote
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_data
+          in: body
+          description: >-
+            Workflow information in JSON format with all the necessary data to
+            instantiate a cwl workflow from a remote repository such as
+            GitHub.
+          required: true
+          schema:
+            type: object
+            properties:
+              toplevel:
+                type: string
+                description: >-
+                  cwl toplevel argument. It represents the remote repository
+                  where the workflow should be pulled from.
+              workflow:
+                type: string
+                description: >-
+                  cwl workflow parameter. It represents the name of the
+                  workflow spec file name inside the remote repository.
+              nparallel:
+                type: integer
+              preset_pars:
+                type: object
+                description: Workflow parameters.
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been instantiated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        if request.json:
+            queue = organization_to_queue[request.args.get('organization')]
+            resultobject = run_cwl_workflow.apply_async(
+                args=[request.json],
+                queue='cwl-{}'.format(queue)
+            )
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': resultobject.id}), 200
+
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
+
+
+@restapi_blueprint.route('/cwl/spec', methods=['POST'])
+def run_cwl_workflow_from_spec_endpoint():  # noqa
+    r"""Create a new cwl workflow.
+
+    ---
+    post:
+      summary: Creates a new cwl workflow from a specification file.
+      description: This resource is expecting a JSON cwl specification.
+      operationId: run_cwl_workflow_from_spec
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow
+          in: body
+          description: >-
+            JSON object including workflow parameters and workflow
+            specification in JSON format (`cwlschemas.load()` output)
+            with necessary data to instantiate a cwl workflow.
+          required: true
+          schema:
+            type: object
+            properties:
+              parameters:
+                type: object
+                description: Workflow parameters.
+              workflow_spec:
+                type: object
+                description: >-
+                  cwl specification in JSON format.
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been instantiated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        if request.json:
+            arguments = {
+                "workflow": request.json['workflow_spec'],
+                "inputs": request.json['parameters']
+            }
+            queue = organization_to_queue[request.args.get('organization')]
+            resultobject = run_cwl_workflow.apply_async(
+                args=[arguments],
+                queue='cwl-{}'.format(queue)
             )
             return jsonify({'message': 'Workflow successfully launched',
                             'workflow_id': resultobject.id}), 200
