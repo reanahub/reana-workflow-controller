@@ -38,9 +38,45 @@ class REANAFS(object):
         return REANAFS.__instance
 
 
+def get_user_analyses_dir(org, user):
+    """Build the analyses directory path for certain user and organization.
+
+    :param org: Organization which user is part of.
+    :param user: Working directory owner.
+    :return: Path to the user's analyses directory.
+    """
+    return path.join(org, user, 'analyses')
+
+
 def create_user_space(user_id, org):
     """Create analyses directory for `user_id`."""
     reana_fs = REANAFS()
-    user_analyses_dir = path.join(org, user_id, 'analyses')
+    user_analyses_dir = get_user_analyses_dir(org, user_id)
     if not reana_fs.exists(user_analyses_dir):
         reana_fs.makedirs(user_analyses_dir)
+
+
+def create_workflow_workspace(org, user, workflow_uuid):
+    """Create analysis and workflow workspaces.
+
+    A directory structure will be created where `/:analysis_uuid` represents
+    the analysis workspace and `/:analysis_uuid/workspace` the workflow
+    workspace.
+
+    :param org: Organization which user is part of.
+    :param user: Workspaces owner.
+    :param workflow_uuid: Analysis UUID.
+    :return: Workflow and analysis workspace path.
+    """
+    reana_fs = REANAFS()
+    analysis_workspace = path.join(get_user_analyses_dir(org, user),
+                                   workflow_uuid)
+
+    if not reana_fs.exists(analysis_workspace):
+        reana_fs.makedirs(analysis_workspace)
+
+    workflow_workspace = path.join(analysis_workspace, 'workspace')
+    if not reana_fs.exists(workflow_workspace):
+        reana_fs.makedirs(workflow_workspace)
+
+    return workflow_workspace, analysis_workspace

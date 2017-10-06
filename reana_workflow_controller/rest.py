@@ -22,13 +22,16 @@
 
 """REANA Workflow Controller REST API."""
 
+import os
 import traceback
+from uuid import uuid4
 
 from flask import Blueprint, abort, jsonify, request
 from werkzeug.utils import secure_filename
 
 from .factory import db
-from .models import User
+from .fsdb import create_workflow_workspace
+from .models import User, Workflow
 from .tasks import run_yadage_workflow
 
 organization_to_queue = {
@@ -169,6 +172,109 @@ def get_workflows():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@restapi_blueprint.route('/workflows', methods=['POST'])
+def create_workflow():  # noqa
+    r"""Create workflow and its workspace.
+
+    ---
+    post:
+      summary: Create workflow and its workspace.
+      description: >-
+        This resource expects a POST call to create a new workflow workspace.
+      operationId: create_workflow
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow
+          in: body
+          description: >-
+            JSON object including workflow parameters and workflow
+            specification in JSON format (`yadageschemas.load()` output)
+            with necessary data to instantiate a yadage workflow.
+          required: true
+          schema:
+            type: object
+            properties:
+              parameters:
+                type: object
+                description: Workflow parameters.
+              specification:
+                type: object
+                description: >-
+                  Yadage specification in JSON format.
+              type:
+                type: string
+                description: Workflow type.
+      responses:
+        200:
+          description: >-
+            Request succeeded. The file has been added to the workspace.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow workspace has been created.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+    """
+    try:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow_uuid = str(uuid4())
+        workflow_workspace, _ = create_workflow_workspace(
+            user_uuid,
+            organization,
+            workflow_uuid)
+        # add spec and params to DB as JSON
+        workflow = Workflow(id_=workflow_uuid,
+                            workspace_path=workflow_workspace,
+                            owner_id=request.args['user'],
+                            specification=request.json['specification'],
+                            parameters=request.json['parameters'],
+                            type_=request.json['type'])
+        db.session.add(workflow)
+        db.session.commit()
+        return jsonify({'message': 'Workflow workspace created',
+                        'workflow_id': workflow_uuid}), 201
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
 @restapi_blueprint.route('/workflows/<workflow_id>/workspace',
                          methods=['POST'])
 def seed_workflow_workspace(workflow_id):
@@ -225,18 +331,28 @@ def seed_workflow_workspace(workflow_id):
           examples:
             application/json:
               {
-                "message": "Workflow has been added to the workspace",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "message": "The file input.csv has been successfully
+                transferred.",
               }
         400:
           description: >-
             Request failed. The incoming data specification seems malformed
+        500:
+          description: >-
+            Request failed. Internal controller error.
     """
     try:
-        file_ = request.files['file_content'].stream.read()
+        file_ = request.files['file_content']
         file_name = secure_filename(request.args['file_name'])
+        if not file_name:
+            raise ValueError('The file transferred needs to have name.')
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        file_.save(os.path.join(workflow.workspace, file_name))
         return jsonify({'message': 'File successfully transferred'}), 200
     except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
@@ -316,9 +432,18 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
     """
     try:
         if request.json:
+            # get workflow UUID from client in order to retrieve its workspace
+            # from DB
+            workflow_workspace = ''
+            kwargs = {
+                "workflow_workspace": workflow_workspace,
+                "workflow": request.json['workflow'],
+                "toplevel": request.json['toplevel'],
+                "parameters": request.json['preset_pars']
+            }
             queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_yadage_workflow.apply_async(
-                args=[request.json],
+                kwargs=kwargs,
                 queue='yadage-{}'.format(queue)
             )
             return jsonify({'message': 'Workflow successfully launched',
@@ -393,17 +518,18 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
     """
     try:
         # hardcoded until confirmation from `yadage`
-        nparallel = 10
         if request.json:
-            arguments = {
-                "nparallel": nparallel,
-                "workflow": request.json['workflow_spec'],
-                "toplevel": "",  # ignored when spec submited
-                "preset_pars": request.json['parameters']
+            # get workflow UUID from client in order to retrieve its workspace
+            # from DB
+            workflow_workspace = ''
+            kwargs = {
+                "workflow_workspace": workflow_workspace,
+                "workflow_json": request.json['workflow_spec'],
+                "parameters": request.json['parameters']
             }
             queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_yadage_workflow.apply_async(
-                args=[arguments],
+                kwargs=kwargs,
                 queue='yadage-{}'.format(queue)
             )
             return jsonify({'message': 'Workflow successfully launched',

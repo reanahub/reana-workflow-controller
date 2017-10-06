@@ -34,7 +34,7 @@ from reana_workflow_controller.models import User
 
 
 @pytest.fixture
-def tmp_fsdb_path(tmpdir_factory):
+def tmp_shared_volume_path(tmpdir_factory):
     """Fixture temporary file system database."""
     temp_path = str(tmpdir_factory.mktemp('data').join('reana'))
     shutil.copytree(os.path.join(os.path.dirname(__file__), "data"),
@@ -45,15 +45,15 @@ def tmp_fsdb_path(tmpdir_factory):
 
 
 @pytest.fixture()
-def base_app(tmp_fsdb_path):
+def base_app(tmp_shared_volume_path):
     """Flask application fixture."""
     config_mapping = {
         'SERVER_NAME': 'localhost:5000',
         'SECRET_KEY': 'SECRET_KEY',
         'TESTING': True,
-        'SHARED_VOLUME_PATH': tmp_fsdb_path,
+        'SHARED_VOLUME_PATH': tmp_shared_volume_path,
         'SQLALCHEMY_DATABASE_URI_TEMPLATE':
-        'sqlite:///{0}/default/reana.db'.format(tmp_fsdb_path),
+        'sqlite:///{0}/default/reana.db'.format(tmp_shared_volume_path),
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
         'ORGANIZATIONS': ['default'],
     }
