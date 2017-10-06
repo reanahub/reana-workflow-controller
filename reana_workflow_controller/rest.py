@@ -25,6 +25,7 @@
 import traceback
 
 from flask import Blueprint, abort, jsonify, request
+from werkzeug.utils import secure_filename
 
 from .factory import db
 from .fsdb import get_all_workflows
@@ -143,6 +144,79 @@ def get_workflows():  # noqa
         return jsonify(get_all_workflows(org, user)), 200
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace',
+                         methods=['POST'])
+def seed_workflow_workspace(workflow_id):
+    r"""Seed workflow workspace.
+
+    ---
+    post:
+      summary: Adds a file to the workflow workspace.
+      description: >-
+        This resource is expecting a workflow UUID and a file to place in the
+        workflow workspace.
+      operationId: seed_workflow
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+        - name: file_content
+          in: formData
+          description: Required. File to add to the workflow workspace.
+          required: true
+          type: file
+        - name: file_name
+          in: query
+          description: Required. File name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The file has been added to the workspace.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow has been added to the workspace",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        file_ = request.files['file_content'].stream.read()
+        file_name = secure_filename(request.args['file_name'])
+        return jsonify({'message': 'File successfully transferred'}), 200
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
