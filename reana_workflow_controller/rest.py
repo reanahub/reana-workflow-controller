@@ -28,7 +28,6 @@ from flask import Blueprint, abort, jsonify, request
 from werkzeug.utils import secure_filename
 
 from .factory import db
-from .fsdb import get_all_workflows
 from .models import User
 from .tasks import run_yadage_workflow
 
@@ -135,13 +134,21 @@ def get_workflows():  # noqa
                 "message": "Either organization or user doesn't exist."
               }
     """
-    org = request.args.get('organization', 'default')
     try:
-        user = request.args['user']
-        if User.query.filter(User.id_ == user).count() < 1:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
             return jsonify({'message': 'User {} does not exist'.format(user)})
 
-        return jsonify(get_all_workflows(org, user)), 200
+        workflows = []
+        for workflow in user.workflows:
+            workflows.append({'id': workflow.id_,
+                              'status': workflow.status.name,
+                              'organization': organization,
+                              'user': user_uuid})
+
+        return jsonify(workflows), 200
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except Exception as e:

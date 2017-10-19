@@ -53,6 +53,8 @@ class User(db.Model):
 
 
 class WorkflowStatus(enum.Enum):
+    """Possible workflow status list enum."""
+
     created = 0
     running = 1
     finished = 2
@@ -68,10 +70,13 @@ class Workflow(db.Model):
     status = db.Column(db.Enum(WorkflowStatus), default=WorkflowStatus.created)
     owner_id = db.Column(UUIDType, db.ForeignKey('user.id_'), nullable=False)
 
-    def __init__(self, id_, workspace_path):
+    def __init__(self, id_, workspace_path, owner_id,
+                 status=WorkflowStatus.created):
         """Initialize workflow model."""
         self.id_ = id_
         self.workspace_path = workspace_path
+        self.owner_id = owner_id
+        self.status = status
 
     def __repr__(self):
         """Workflow string represetantion."""

@@ -24,13 +24,23 @@
 from __future__ import absolute_import, print_function
 
 import json
+import uuid
 
 from flask import url_for
 
+from reana_workflow_controller.models import User, Workflow, WorkflowStatus
 
-def test_get_workflows(app, default_user):
+
+def test_get_workflows(app, default_user, db_session):
     """Test listing all workflows."""
     with app.test_client() as client:
+        workflow_uuid = uuid.uuid4()
+        workflow = Workflow(id_=workflow_uuid,
+                            workspace_path='',
+                            status=WorkflowStatus.finished,
+                            owner_id=default_user.id_)
+        db_session.add(workflow)
+        db_session.commit()
         res = client.get(url_for('api.get_workflows'),
                          query_string={
                              "user": default_user.id_,
@@ -39,10 +49,10 @@ def test_get_workflows(app, default_user):
         response_data = json.loads(res.get_data(as_text=True))
         expected_data = [
             {
-                "id": "3fd74dc6-6307-4d22-9853-cc1895610080",
+                "id": str(workflow.id_),
                 "organization": "default",
-                "status": "running",
-                "user": "00000000-0000-0000-0000-000000000000"
+                "status": workflow.status.name,
+                "user": str(workflow.owner_id)
             }
         ]
 

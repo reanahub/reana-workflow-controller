@@ -80,3 +80,9 @@ def default_user(app):
     db.session.add(user)
     db.session.commit()
     return user
+
+
+@pytest.fixture()
+def db_session():
+    """DB fixture"""
+    return db.session
