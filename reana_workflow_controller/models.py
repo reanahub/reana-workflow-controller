@@ -24,6 +24,8 @@
 
 from __future__ import absolute_import
 
+import enum
+
 from sqlalchemy_utils.types import UUIDType
 
 from .factory import db
@@ -37,6 +39,7 @@ class User(db.Model):
     create_date = db.Column(db.DateTime, default=db.func.now())
     email = db.Column(db.String(255), unique=True)
     last_active_date = db.Column(db.DateTime)
+    workflows = db.relationship('Workflow', backref='user', lazy=True)
 
     def __init__(self, id_, email, api_key):
         """Initialize user model."""
@@ -47,3 +50,29 @@ class User(db.Model):
     def __repr__(self):
         """User string represetantion."""
         return '<User %r>' % self.id_
+
+
+class WorkflowStatus(enum.Enum):
+    created = 0
+    running = 1
+    finished = 2
+    failed = 3
+
+
+class Workflow(db.Model):
+    """Workflow model."""
+
+    id_ = db.Column(UUIDType, primary_key=True)
+    create_date = db.Column(db.DateTime, default=db.func.now())
+    workspace_path = db.Column(db.String(255))
+    status = db.Column(db.Enum(WorkflowStatus), default=WorkflowStatus.created)
+    owner_id = db.Column(UUIDType, db.ForeignKey('user.id_'), nullable=False)
+
+    def __init__(self, id_, workspace_path):
+        """Initialize workflow model."""
+        self.id_ = id_
+        self.workspace_path = workspace_path
+
+    def __repr__(self):
+        """Workflow string represetantion."""
+        return '<Workflow %r>' % self.id_
