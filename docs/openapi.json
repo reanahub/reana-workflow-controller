@@ -85,6 +85,14 @@
           "400": {
             "description": "Request failed. The incoming data specification seems malformed."
           },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          },
           "500": {
             "description": "Request failed. Internal controller error.",
             "examples": {

@@ -49,8 +49,16 @@ class MultiOrganizationSQLAlchemy(SQLAlchemy):
                 self.create_all()
 
     def choose_organization(self, bind_key):
-        """Select a different bind."""
+        """Select a different bind/organization.
+
+        :param bind_key: name of the bind/organization to use.
+
+        :raise: ValueError
+        """
         # Set organization
+        if bind_key not in current_app.config['ORGANIZATIONS']:
+            raise ValueError('Organization {0} doesn\'t exist'
+                             .format(bind_key))
         g.organization = bind_key
 
     def get_engine(self, app=None, bind=None):

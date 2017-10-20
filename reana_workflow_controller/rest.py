@@ -45,10 +45,14 @@ restapi_blueprint = Blueprint('api', __name__)
 @restapi_blueprint.before_request
 def before_request():
     """Retrieve organization from request."""
-    if request.args.get('organization'):
-        db.choose_organization(request.args.get('organization'))
-    else:
+    try:
+        db.choose_organization(request.args['organization'])
+    except KeyError as e:
         return jsonify({"message": "An organization should be provided"}), 400
+    except ValueError as e:
+        return jsonify({"message": str(e)}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
 
 
 @restapi_blueprint.route('/workflows', methods=['GET'])
@@ -125,6 +129,15 @@ def get_workflows():  # noqa
         400:
           description: >-
             Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -139,7 +152,8 @@ def get_workflows():  # noqa
         user_uuid = request.args['user']
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify({'message': 'User {} does not exist'.format(user)})
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
 
         workflows = []
         for workflow in user.workflows:

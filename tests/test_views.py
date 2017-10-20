@@ -28,7 +28,7 @@ import uuid
 
 from flask import url_for
 
-from reana_workflow_controller.models import User, Workflow, WorkflowStatus
+from reana_workflow_controller.models import Workflow, WorkflowStatus
 
 
 def test_get_workflows(app, default_user, db_session):
@@ -57,3 +57,41 @@ def test_get_workflows(app, default_user, db_session):
         ]
 
         assert response_data == expected_data
+
+
+def test_get_workflows_wrong_user(app):
+    """Test list of workflows for unknown user."""
+    with app.test_client() as client:
+        random_user_uuid = uuid.uuid4()
+        res = client.get(url_for('api.get_workflows'),
+                         query_string={
+                             "user": random_user_uuid,
+                             "organization": 'default'})
+        assert res.status_code == 404
+
+
+def test_get_workflows_missing_user(app):
+    """Test listing all workflows with missing user."""
+    with app.test_client() as client:
+        res = client.get(url_for('api.get_workflows'),
+                         query_string={"organization": 'default'})
+        assert res.status_code == 400
+
+
+def test_get_workflows_wrong_organization(app, default_user):
+    """Test list of workflows for unknown organization."""
+    with app.test_client() as client:
+        organization = 'wrong_organization'
+        res = client.get(url_for('api.get_workflows'),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization})
+        assert res.status_code == 404
+
+
+def test_get_workflows_missing_organization(app, default_user):
+    """Test listing all workflows with missing organization."""
+    with app.test_client() as client:
+        res = client.get(url_for('api.get_workflows'),
+                         query_string={"user": default_user.id_})
+        assert res.status_code == 400
