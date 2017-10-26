@@ -31,13 +31,16 @@ from .multiorganization import MultiOrganizationSQLAlchemy
 # Initialize DB
 db = MultiOrganizationSQLAlchemy()
 
-from .models import User  # isort:skip  # noqa
+from .models import User, Workflow  # isort:skip  # noqa
 
 
-def create_app():
+def create_app(config_mapping=None):
     """REANA Workflow Controller application factory."""
     app = Flask(__name__)
     app.config.from_object('reana_workflow_controller.config')
+    if config_mapping:
+        app.config.from_mapping(config_mapping)
+
     app.secret_key = "super secret key"
 
     # Initialize flask extensions

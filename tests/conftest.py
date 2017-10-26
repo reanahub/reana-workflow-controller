@@ -26,7 +26,6 @@ from __future__ import absolute_import, print_function
 
 import os
 import shutil
-import tempfile
 
 import pytest
 
@@ -35,43 +34,41 @@ from reana_workflow_controller.models import User
 
 
 @pytest.fixture
-def tmp_fsdb_path(request):
+def tmp_fsdb_path(tmpdir_factory):
     """Fixture temporary file system database."""
-    path = tempfile.mkdtemp()
+    temp_path = str(tmpdir_factory.mktemp('data').join('reana'))
     shutil.copytree(os.path.join(os.path.dirname(__file__), "data"),
-                    os.path.join(path, "reana"))
+                    temp_path)
 
-    def cleanup():
-        shutil.rmtree(path)
-
-    request.addfinalizer(cleanup)
-    return os.path.join(path, "reana")
+    yield temp_path
+    shutil.rmtree(temp_path)
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def base_app(tmp_fsdb_path):
     """Flask application fixture."""
-    os.environ['SHARED_VOLUME_PATH'] = tmp_fsdb_path
-    os.environ['ORGANIZATIONS'] = 'default'
-    app_ = create_app()
-    app_.config.update(
-        SERVER_NAME='localhost:5000',
-        SECRET_KEY='SECRET_KEY',
-        TESTING=True,
-    )
-    yield app_
-    del os.environ['ORGANIZATIONS']
-    del os.environ['SHARED_VOLUME_PATH']
+    config_mapping = {
+        'SERVER_NAME': 'localhost:5000',
+        'SECRET_KEY': 'SECRET_KEY',
+        'TESTING': True,
+        'SHARED_VOLUME_PATH': tmp_fsdb_path,
+        'SQLALCHEMY_DATABASE_URI_TEMPLATE':
+        'sqlite:///{0}/default/reana.db'.format(tmp_fsdb_path),
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'ORGANIZATIONS': ['default'],
+    }
+    app_ = create_app(config_mapping)
+    return app_
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def app(base_app):
     """Flask application fixture."""
     with base_app.app_context():
         yield base_app
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def default_user(app):
     """Create users."""
     db.choose_organization('default')
@@ -80,3 +77,10 @@ def default_user(app):
     db.session.add(user)
     db.session.commit()
     return user
+
+
+@pytest.fixture()
+def db_session():
+    """DB fixture"""
+    yield db.session
+    db.session.close()

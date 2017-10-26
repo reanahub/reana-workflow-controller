@@ -26,9 +26,9 @@ import traceback
 
 import os
 from flask import Blueprint, abort, jsonify, request
+from werkzeug.utils import secure_filename
 
 from .factory import db
-from .fsdb import get_all_workflows
 from .models import User
 from .tasks import run_yadage_workflow, run_cwl_workflow
 
@@ -46,10 +46,14 @@ restapi_blueprint = Blueprint('api', __name__)
 @restapi_blueprint.before_request
 def before_request():
     """Retrieve organization from request."""
-    if request.args.get('organization'):
-        db.choose_organization(request.args.get('organization'))
-    else:
+    try:
+        db.choose_organization(request.args['organization'])
+    except KeyError as e:
         return jsonify({"message": "An organization should be provided"}), 400
+    except ValueError as e:
+        return jsonify({"message": str(e)}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
 
 
 @restapi_blueprint.route('/workflows', methods=['GET'])
@@ -126,6 +130,15 @@ def get_workflows():  # noqa
         400:
           description: >-
             Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -135,15 +148,97 @@ def get_workflows():  # noqa
                 "message": "Either organization or user doesn't exist."
               }
     """
-    org = request.args.get('organization', 'default')
     try:
-        user = request.args['user']
-        if User.query.filter(User.id_ == user).count() < 1:
-            return jsonify({'message': 'User {} does not exist'.format(user)})
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
 
-        return jsonify(get_all_workflows(org, user)), 200
+        workflows = []
+        for workflow in user.workflows:
+            workflows.append({'id': workflow.id_,
+                              'status': workflow.status.name,
+                              'organization': organization,
+                              'user': user_uuid})
+
+        return jsonify(workflows), 200
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace',
+                         methods=['POST'])
+def seed_workflow_workspace(workflow_id):
+    r"""Seed workflow workspace.
+
+    ---
+    post:
+      summary: Adds a file to the workflow workspace.
+      description: >-
+        This resource is expecting a workflow UUID and a file to place in the
+        workflow workspace.
+      operationId: seed_workflow
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+        - name: file_content
+          in: formData
+          description: Required. File to add to the workflow workspace.
+          required: true
+          type: file
+        - name: file_name
+          in: query
+          description: Required. File name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The file has been added to the workspace.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow has been added to the workspace",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        file_ = request.files['file_content'].stream.read()
+        file_name = secure_filename(request.args['file_name'])
+        return jsonify({'message': 'File successfully transferred'}), 200
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
