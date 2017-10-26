@@ -22,15 +22,15 @@
 
 """REANA Workflow Controller REST API."""
 
+import os
 import traceback
 
-import os
 from flask import Blueprint, abort, jsonify, request
 from werkzeug.utils import secure_filename
 
 from .factory import db
 from .models import User
-from .tasks import run_yadage_workflow, run_cwl_workflow
+from .tasks import run_cwl_workflow, run_yadage_workflow
 
 organization_to_queue = {
     'alice': 'alice-queue',

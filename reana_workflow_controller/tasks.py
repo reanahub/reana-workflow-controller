@@ -24,11 +24,8 @@
 
 from __future__ import absolute_import
 
-import json
-import os
-
-import requests
 from celery import Celery
+
 from reana_workflow_controller.config import BROKER
 
 celery = Celery('tasks',
