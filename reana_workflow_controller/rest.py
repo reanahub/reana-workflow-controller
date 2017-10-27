@@ -255,8 +255,8 @@ def create_workflow():  # noqa
 
         workflow_uuid = str(uuid4())
         workflow_workspace, _ = create_workflow_workspace(
-            user_uuid,
             organization,
+            user_uuid,
             workflow_uuid)
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,

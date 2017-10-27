@@ -138,7 +138,8 @@ def test_create_workflow(app, default_user, db_session,
             organization, str(default_user.id_))
         workflow_workspace = os.path.join(
             tmp_shared_volume_path,
-            user_analyses_workspace)
+            user_analyses_workspace,
+            str(workflow.id_))
         assert os.path.exists(workflow_workspace)
 
 
