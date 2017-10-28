@@ -216,9 +216,10 @@ def create_workflow():  # noqa
                 type: string
                 description: Workflow type.
       responses:
-        200:
+        201:
           description: >-
-            Request succeeded. The file has been added to the workspace.
+            Request succeeded. The workflow has been created along
+            with its workspace
           schema:
             type: object
             properties:
