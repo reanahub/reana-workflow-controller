@@ -25,19 +25,6 @@ from flask import current_app as app
 from fs import open_fs, path
 
 
-class REANAFS(object):
-    """REANA file system object."""
-
-    __instance = None
-
-    def __new__(cls):
-        """REANA file system object creation."""
-        if REANAFS.__instance is None:
-            with app.app_context():
-                REANAFS.__instance = open_fs(app.config['SHARED_VOLUME_PATH'])
-        return REANAFS.__instance
-
-
 def get_user_analyses_dir(org, user):
     """Build the analyses directory path for certain user and organization.
 
@@ -50,7 +37,7 @@ def get_user_analyses_dir(org, user):
 
 def create_user_space(user_id, org):
     """Create analyses directory for `user_id`."""
-    reana_fs = REANAFS()
+    reana_fs = open_fs(app.config['SHARED_VOLUME_PATH'])
     user_analyses_dir = get_user_analyses_dir(org, user_id)
     if not reana_fs.exists(user_analyses_dir):
         reana_fs.makedirs(user_analyses_dir)
@@ -68,7 +55,7 @@ def create_workflow_workspace(org, user, workflow_uuid):
     :param workflow_uuid: Analysis UUID.
     :return: Workflow and analysis workspace path.
     """
-    reana_fs = REANAFS()
+    reana_fs = open_fs(app.config['SHARED_VOLUME_PATH'])
     analysis_workspace = path.join(get_user_analyses_dir(org, user),
                                    workflow_uuid)
 

@@ -26,7 +26,8 @@ import os
 import traceback
 from uuid import uuid4
 
-from flask import Blueprint, abort, jsonify, request
+from flask import (Blueprint, abort, current_app, jsonify, request,
+                   send_from_directory)
 from werkzeug.utils import secure_filename
 
 from .factory import db
@@ -356,6 +357,95 @@ def seed_workflow_workspace(workflow_id):
         return jsonify({"message": str(e)}), 400
     except ValueError as e:
         return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route(
+    '/workflows/<workflow_id>/workspace/outputs/<path:file_name>',
+    methods=['GET'])
+def get_workflow_outputs_file(workflow_id, file_name):  # noqa
+    r"""Get all workflows.
+
+    ---
+    get:
+      summary: Returns the requested file.
+      description: >-
+        This resource is expecting a workflow UUID and a filename to return
+        its content.
+      operationId: get_workflow_outputs_file
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+        - name: file_name
+          in: path
+          description: Required. Name (or path) of the file to be downloaded.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The file has been downloaded.
+          schema:
+            type: file
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        outputs_directory = os.path.join(
+            current_app.config['SHARED_VOLUME_PATH'],
+            workflow.workspace_path,
+            'outputs')
+        # fix, we don't know wich encoding is being used
+        # check how to add it to HTTP headers with `send_from_directory`
+        # or `send_file`
+        return send_from_directory(outputs_directory,
+                                   file_name,
+                                   mimetype='multipart/form-data',
+                                   as_attachment=True), 200
+
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 

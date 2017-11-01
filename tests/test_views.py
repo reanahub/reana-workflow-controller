@@ -28,6 +28,7 @@ import os
 import uuid
 
 from flask import url_for
+from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.fsdb import get_user_analyses_dir
 from reana_workflow_controller.models import Workflow, WorkflowStatus
@@ -173,3 +174,98 @@ def test_create_workflow_wrong_user(app, db_session, tmp_shared_volume_path):
             tmp_shared_volume_path,
             user_analyses_workspace)
         assert not os.path.exists(workflow_workspace)
+
+
+def test_get_workflow_outputs_file(app, db_session, default_user,
+                                   tmp_shared_volume_path):
+    """Test download output file."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        file_name = 'output name.csv'
+        file_binary_content = b'1,2,3,4\n5,6,7,8'
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+        # write file in the workflow workspace under `outputs` directory
+        file_path = os.path.join(absolute_path_workflow_workspace,
+                                 'outputs',
+                                 # we use `secure_filename` here because
+                                 # we use it in server side when adding
+                                 # files
+                                 file_name)
+        # because outputs directory doesn't exist by default
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'wb+') as f:
+            f.write(file_binary_content)
+        res = client.get(
+            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+                    file_name=file_name),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json',
+            data=json.dumps(data))
+        assert res.data == file_binary_content
+
+
+def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
+                                             tmp_shared_volume_path):
+    """Test download output file prepended with path."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        file_name = 'first/1991/output.csv'
+        file_binary_content = b'1,2,3,4\n5,6,7,8'
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+        # write file in the workflow workspace under `outputs` directory
+        file_path = os.path.join(absolute_path_workflow_workspace,
+                                 'outputs',
+                                 file_name)
+        # because outputs directory doesn't exist by default
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'wb+') as f:
+            f.write(file_binary_content)
+        res = client.get(
+            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+                    file_name=file_name),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json',
+            data=json.dumps(data))
+        assert res.data == file_binary_content
