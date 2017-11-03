@@ -318,3 +318,52 @@ def test_get_workflow_inputs_list(app, db_session, default_user,
             data=json.dumps(data))
         for file_ in json.loads(res.data.decode()):
             assert file_.get('name') in test_files
+
+
+def test_get_workflow_outputs_list(app, db_session, default_user,
+                                   tmp_shared_volume_path):
+    """Test get list of output files."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+        fs_ = fs.open_fs(absolute_path_workflow_workspace)
+        # from config
+        outputs_realative_path = app.config['OUTPUTS_RELATIVE_PATH']
+        fs_.makedirs(outputs_realative_path)
+        test_files = []
+        for i in range(5):
+            file_name = '{0}.csv'.format(i)
+            subdir_name = str(uuid.uuid4())
+            subdir = fs.path.join(outputs_realative_path, subdir_name)
+            fs_.makedirs(subdir)
+            fs_.touch('{0}/{1}'.format(subdir, file_name))
+            test_files.append(os.path.join(subdir_name, file_name))
+
+        res = client.get(
+            url_for('api.get_workflow_outputs', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json',
+            data=json.dumps(data))
+        for file_ in json.loads(res.data.decode()):
+            assert file_.get('name') in test_files

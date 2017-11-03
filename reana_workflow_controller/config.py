@@ -40,3 +40,6 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 INPUTS_RELATIVE_PATH = 'inputs'
 """Inputs directory name."""
+
+OUTPUTS_RELATIVE_PATH = 'outputs'
+"""Outputs directory name."""
