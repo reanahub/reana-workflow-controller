@@ -22,6 +22,8 @@
 
 """REANA Workflow Controller REST API."""
 
+from __future__ import print_function
+
 import os
 import traceback
 from uuid import uuid4
@@ -816,3 +818,133 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
     except (KeyError, ValueError):
         traceback.print_exc()
         abort(400)
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['GET'])
+def get_workflow_status(workflow_id):  # noqa
+    r"""Get workflow status.
+
+    ---
+    get:
+      summary: Get workflow status.
+      description: >-
+        This resource reports the status of workflow.
+      operationId: get_workflow_status
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the workflow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              organization:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            doesn't exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+
+    try:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user_uuid)}), 404
+
+        resp = None
+
+        # Make sure that user can access the workflow.
+        for workflow in user.workflows:
+            current_app.logger.debug(workflow_id,)
+            current_app.logger.debug(workflow.id_)
+            if workflow_id == str(workflow.id_):
+                resp = {'id': workflow.id_,
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}
+
+        if resp:
+            return jsonify(resp), 200
+        else:  # Check if workflow exists at all.
+            workflow = Workflow.query.filter(Workflow.id_ == workflow_id).\
+                first()
+
+            if not workflow:
+                return jsonify(
+                    {'message': 'Workflow {} does not exist'
+                        .format(workflow_id)}), 404
+            else:
+                return jsonify(
+                    {'message': 'User {} is not allowed to access workflow {}'
+                        .format(user_uuid, workflow_id)}), 403
+
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
