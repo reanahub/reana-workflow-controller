@@ -367,3 +367,59 @@ def test_get_workflow_outputs_list(app, db_session, default_user,
             data=json.dumps(data))
         for file_ in json.loads(res.data.decode()):
             assert file_.get('name') in test_files
+
+
+def test_get_workflow_status(app, db_session, default_user):
+    """Test get workflow status."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_created_uuid = response_data.get('workflow_id')
+        workflow_created = Workflow.query.filter(
+            Workflow.id_ == workflow_created_uuid).first()
+
+        res = client.get(url_for('api.get_workflow_status',
+                                 workflow_id=workflow_created_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(data))
+        json_response = json.loads(res.data.decode())
+        assert json_response.get('status') == workflow_created.status.name
+        # create second test workflow modifying status
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_finished_uuid = response_data.get('workflow_id')
+        workflow_finished = Workflow.query.filter(
+            Workflow.id_ == workflow_finished_uuid).first()
+        workflow_finished.status = WorkflowStatus.finished
+        db_session.commit()
+
+        res = client.get(url_for('api.get_workflow_status',
+                                 workflow_id=workflow_finished_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(data))
+        json_response = json.loads(res.data.decode())
+        assert json_response.get('status') == workflow_finished.status.name
