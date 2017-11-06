@@ -22,8 +22,6 @@
 
 """REANA Workflow Controller REST API."""
 
-from __future__ import print_function
-
 import os
 import traceback
 from uuid import uuid4
@@ -912,38 +910,19 @@ def get_workflow_status(workflow_id):  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        user = User.query.filter(User.id_ == user_uuid).first()
-        if not user:
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if not workflow:
+            return jsonify({'message': 'Workflow {} does not exist'.
+                            format(workflow_id)}), 404
+        if not str(workflow.owner_id) == user_uuid:
             return jsonify(
-                {'message': 'User {} does not exist'.format(user_uuid)}), 404
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id)}), 403
 
-        resp = None
-
-        # Make sure that user can access the workflow.
-        for workflow in user.workflows:
-            current_app.logger.debug(workflow_id,)
-            current_app.logger.debug(workflow.id_)
-            if workflow_id == str(workflow.id_):
-                resp = {'id': workflow.id_,
+        return jsonify({'id': workflow.id_,
                         'status': workflow.status.name,
                         'organization': organization,
-                        'user': user_uuid}
-
-        if resp:
-            return jsonify(resp), 200
-        else:  # Check if workflow exists at all.
-            workflow = Workflow.query.filter(Workflow.id_ == workflow_id).\
-                first()
-
-            if not workflow:
-                return jsonify(
-                    {'message': 'Workflow {} does not exist'
-                        .format(workflow_id)}), 404
-            else:
-                return jsonify(
-                    {'message': 'User {} is not allowed to access workflow {}'
-                        .format(user_uuid, workflow_id)}), 403
-
+                        'user': user_uuid}), 200
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:

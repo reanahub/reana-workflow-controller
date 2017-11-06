@@ -21,8 +21,6 @@
 # submit itself to any jurisdiction.
 """REANA-Workflow-Controller fsdb module tests."""
 
-from __future__ import absolute_import, print_function
-
 import json
 import os
 import uuid
@@ -423,3 +421,60 @@ def test_get_workflow_status(app, db_session, default_user):
                          data=json.dumps(data))
         json_response = json.loads(res.data.decode())
         assert json_response.get('status') == workflow_finished.status.name
+
+
+def test_get_workflow_status_unauthorized(app, default_user):
+    """Test get workflow status unauthorized."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_created_uuid = response_data.get('workflow_id')
+        random_user_uuid = uuid.uuid4()
+        res = client.get(url_for('api.get_workflow_status',
+                                 workflow_id=workflow_created_uuid),
+                         query_string={
+                             "user": random_user_uuid,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(data))
+        assert res.status_code == 403
+
+
+def test_get_workflow_status_unknown_workflow(app, default_user):
+    """Test get workflow status for unknown workflow."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+        random_workflow_uuid = uuid.uuid4()
+        res = client.get(url_for('api.get_workflow_status',
+                                 workflow_id=random_workflow_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(data))
+        assert res.status_code == 404
