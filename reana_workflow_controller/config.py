@@ -37,3 +37,6 @@ ORGANIZATIONS = os.getenv('ORGANIZATIONS').split(',') \
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
+
+INPUTS_RELATIVE_PATH = 'inputs'
+"""Inputs directory name."""

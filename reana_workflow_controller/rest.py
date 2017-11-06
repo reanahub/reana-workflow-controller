@@ -31,7 +31,7 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
 from werkzeug.utils import secure_filename
 
 from .factory import db
-from .fsdb import create_workflow_workspace
+from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow
 from .tasks import run_yadage_workflow
 
@@ -443,6 +443,99 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
                                    file_name,
                                    mimetype='multipart/form-data',
                                    as_attachment=True), 200
+
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace/inputs',
+                         methods=['GET'])
+def get_workflow_inputs(workflow_id):  # noqa
+    r"""List all workflow input files.
+
+    ---
+    get:
+      summary: Returns the list of input files for a specific workflow.
+      description: >-
+        This resource is expecting a workflow UUID and a filename to return
+        its list of input files.
+      operationId: get_workflow_inputs
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of input files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if workflow:
+            outputs_directory = os.path.join(
+                current_app.config['SHARED_VOLUME_PATH'],
+                workflow.workspace_path,
+                current_app.config['INPUTS_RELATIVE_PATH'])
+
+            outputs_list = list_directory_files(outputs_directory)
+            return jsonify(outputs_list), 200
+        else:
+            return jsonify({'message': 'The workflow {} doesn\'t exist'.
+                            format(str(workflow.id_))}), 404
 
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400

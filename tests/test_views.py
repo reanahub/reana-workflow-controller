@@ -27,8 +27,8 @@ import json
 import os
 import uuid
 
+import fs
 from flask import url_for
-from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.fsdb import get_user_analyses_dir
 from reana_workflow_controller.models import Workflow, WorkflowStatus
@@ -269,3 +269,52 @@ def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
             content_type='application/json',
             data=json.dumps(data))
         assert res.data == file_binary_content
+
+
+def test_get_workflow_inputs_list(app, db_session, default_user,
+                                  tmp_shared_volume_path):
+    """Test get list of input files."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+        fs_ = fs.open_fs(absolute_path_workflow_workspace)
+        # from config
+        inputs_relative_path = app.config['INPUTS_RELATIVE_PATH']
+        fs_.makedirs(inputs_relative_path)
+        test_files = []
+        for i in range(5):
+            file_name = '{0}.csv'.format(i)
+            subdir_name = str(uuid.uuid4())
+            subdir = fs.path.join(inputs_relative_path, subdir_name)
+            fs_.makedirs(subdir)
+            fs_.touch('{0}/{1}'.format(subdir, file_name))
+            test_files.append(os.path.join(subdir_name, file_name))
+
+        res = client.get(
+            url_for('api.get_workflow_inputs', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json',
+            data=json.dumps(data))
+        for file_ in json.loads(res.data.decode()):
+            assert file_.get('name') in test_files
