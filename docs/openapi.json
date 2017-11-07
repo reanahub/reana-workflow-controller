@@ -103,6 +103,176 @@
           }
         },
         "summary": "Returns all workflows."
+      },
+      "post": {
+        "description": "This resource expects a POST call to create a new workflow workspace.",
+        "operationId": "create_workflow",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "JSON object including workflow parameters and workflow specification in JSON format (`yadageschemas.load()` output) with necessary data to instantiate a yadage workflow.",
+            "in": "body",
+            "name": "workflow",
+            "required": true,
+            "schema": {
+              "properties": {
+                "parameters": {
+                  "description": "Workflow parameters.",
+                  "type": "object"
+                },
+                "specification": {
+                  "description": "Yadage specification in JSON format.",
+                  "type": "object"
+                },
+                "type": {
+                  "description": "Workflow type.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Request succeeded. The workflow has been created along with its workspace",
+            "examples": {
+              "application/json": {
+                "message": "Workflow workspace has been created.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed"
+          },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          }
+        },
+        "summary": "Create workflow and its workspace."
+      }
+    },
+    "/api/workflows/{workflow_id}/status": {
+      "get": {
+        "description": "This resource reports the status of workflow.",
+        "operationId": "get_workflow_status",
+        "parameters": [
+          {
+            "description": "Required. Organization which the workflow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about workflow, including the status is returned.",
+            "examples": {
+              "application/json": {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "schema": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "organization": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either User or Workflow doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get workflow status."
       }
     },
     "/api/workflows/{workflow_id}/workspace": {
@@ -157,8 +327,7 @@
             "description": "Request succeeded. The file has been added to the workspace.",
             "examples": {
               "application/json": {
-                "message": "Workflow has been added to the workspace",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "message": "The file input.csv has been successfully transferred."
               }
             },
             "schema": {
@@ -175,9 +344,229 @@
           },
           "400": {
             "description": "Request failed. The incoming data specification seems malformed"
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
           }
         },
         "summary": "Adds a file to the workflow workspace."
+      }
+    },
+    "/api/workflows/{workflow_id}/workspace/inputs": {
+      "get": {
+        "description": "This resource is expecting a workflow UUID and a filename to return its list of input files.",
+        "operationId": "get_workflow_inputs",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "multipart/form-data"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests succeeded. The list of input files has been retrieved.",
+            "schema": {
+              "items": {
+                "properties": {
+                  "last-modified": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed."
+          },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Either organization or user doesn't exist."
+              }
+            }
+          }
+        },
+        "summary": "Returns the list of input files for a specific workflow."
+      }
+    },
+    "/api/workflows/{workflow_id}/workspace/outputs": {
+      "get": {
+        "description": "This resource is expecting a workflow UUID and a filename to return its outputs.",
+        "operationId": "get_workflow_outputs",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "multipart/form-data"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests succeeded. The list of output files has been retrieved.",
+            "schema": {
+              "items": {
+                "properties": {
+                  "last-modified": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed."
+          },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Either organization or user doesn't exist."
+              }
+            }
+          }
+        },
+        "summary": "Returns the list of output files for a specific workflow."
+      }
+    },
+    "/api/workflows/{workflow_id}/workspace/outputs/{file_name}": {
+      "get": {
+        "description": "This resource is expecting a workflow UUID and a filename to return its content.",
+        "operationId": "get_workflow_outputs_file",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Name (or path) of the file to be downloaded.",
+            "in": "path",
+            "name": "file_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "multipart/form-data"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests succeeded. The file has been downloaded.",
+            "schema": {
+              "type": "file"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed."
+          },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Either organization or user doesn't exist."
+              }
+            }
+          }
+        },
+        "summary": "Returns the requested file."
       }
     },
     "/api/yadage/remote": {

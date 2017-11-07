@@ -21,26 +21,61 @@
 # submit itself to any jurisdiction.
 """Workflow persistence management."""
 
+import fs
 from flask import current_app as app
-from fs import open_fs, path
 
 
-class REANAFS(object):
-    """REANA file system object."""
+def get_user_analyses_dir(org, user):
+    """Build the analyses directory path for certain user and organization.
 
-    __instance = None
-
-    def __new__(cls):
-        """REANA file system object creation."""
-        if REANAFS.__instance is None:
-            with app.app_context():
-                REANAFS.__instance = open_fs(app.config['SHARED_VOLUME_PATH'])
-        return REANAFS.__instance
+    :param org: Organization which user is part of.
+    :param user: Working directory owner.
+    :return: Path to the user's analyses directory.
+    """
+    return fs.path.join(org, user, 'analyses')
 
 
 def create_user_space(user_id, org):
     """Create analyses directory for `user_id`."""
-    reana_fs = REANAFS()
-    user_analyses_dir = path.join(org, user_id, 'analyses')
+    reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
+    user_analyses_dir = get_user_analyses_dir(org, user_id)
     if not reana_fs.exists(user_analyses_dir):
         reana_fs.makedirs(user_analyses_dir)
+
+
+def create_workflow_workspace(org, user, workflow_uuid):
+    """Create analysis and workflow workspaces.
+
+    A directory structure will be created where `/:analysis_uuid` represents
+    the analysis workspace and `/:analysis_uuid/workspace` the workflow
+    workspace.
+
+    :param org: Organization which user is part of.
+    :param user: Workspaces owner.
+    :param workflow_uuid: Analysis UUID.
+    :return: Workflow and analysis workspace path.
+    """
+    reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
+    analysis_workspace = fs.path.join(get_user_analyses_dir(org, user),
+                                      workflow_uuid)
+
+    if not reana_fs.exists(analysis_workspace):
+        reana_fs.makedirs(analysis_workspace)
+
+    workflow_workspace = fs.path.join(analysis_workspace, 'workspace')
+    if not reana_fs.exists(workflow_workspace):
+        reana_fs.makedirs(workflow_workspace)
+
+    return workflow_workspace, analysis_workspace
+
+
+def list_directory_files(directory):
+    """Return a list of files contained in a directory."""
+    fs_ = fs.open_fs(directory)
+    file_list = []
+    for file_name in fs_.walk.files():
+        file_details = fs_.getinfo(file_name, namespaces=['details'])
+        file_list.append({'name': file_name.lstrip('/'),
+                          'last-modified': file_details.modified.isoformat(),
+                          'size': file_details.size})
+    return file_list

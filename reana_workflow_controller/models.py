@@ -26,7 +26,7 @@ from __future__ import absolute_import
 
 import enum
 
-from sqlalchemy_utils.types import UUIDType
+from sqlalchemy_utils.types import JSONType, UUIDType
 
 from .factory import db
 
@@ -69,13 +69,20 @@ class Workflow(db.Model):
     workspace_path = db.Column(db.String(255))
     status = db.Column(db.Enum(WorkflowStatus), default=WorkflowStatus.created)
     owner_id = db.Column(UUIDType, db.ForeignKey('user.id_'), nullable=False)
+    specification = db.Column(JSONType)
+    parameters = db.Column(JSONType)
+    type_ = db.Column(db.String(30))
 
     def __init__(self, id_, workspace_path, owner_id,
+                 specification, parameters, type_,
                  status=WorkflowStatus.created):
         """Initialize workflow model."""
         self.id_ = id_
         self.workspace_path = workspace_path
         self.owner_id = owner_id
+        self.specification = specification
+        self.parameters = parameters
+        self.type_ = type_
         self.status = status
 
     def __repr__(self):
