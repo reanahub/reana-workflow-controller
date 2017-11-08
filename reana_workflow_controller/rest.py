@@ -34,6 +34,10 @@ from .fsdb import create_workflow_workspace
 from .models import User, Workflow
 from .tasks import run_yadage_workflow
 
+START = 'start'
+STOP = 'stop'
+PAUSE = 'pause'
+
 organization_to_queue = {
     'alice': 'alice-queue',
     'atlas': 'atlas-queue',
@@ -540,3 +544,144 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
     except (KeyError, ValueError):
         traceback.print_exc()
         abort(400)
+
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['PUT'])
+def change_workflow_status(workflow_id):  # noqa
+    r"""Start workflow.
+
+    ---
+    put:
+      summary: Set workflow status.
+      description: >-
+        This resource sets the status of workflow.
+      operationId: set_workflow_status
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the workflow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+        - name: status
+          in: path
+          description: Required. New status.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              organization:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            doesn't exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+
+    try:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        status = request.args['status']
+        if not workflow:
+            return jsonify({'message': 'Workflow {} does not exist'.
+                            format(workflow_id)}), 404
+        if not str(workflow.owner_id) == user_uuid:
+            return jsonify(
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id)}), 403
+        if status == 'start':
+            return start_workflow(organization, user_uuid, workflow)
+        return jsonify({'id': workflow.id_,
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}), 200
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+def start_workflow(organization, user_uuid, workflow):
+    """Start a workflow."""
+    if workflow.type_ == 'yadage':
+        try:
+            kwargs = {
+                "workflow_workspace": workflow.workspace_path,
+                "workflow_json": workflow.specification,
+                "parameters": workflow.parameters
+            }
+            queue = organization_to_queue[organization]
+            resultobject = run_yadage_workflow.apply_async(
+                kwargs=kwargs,
+                queue='yadage-{}'.format(queue)
+            )
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': resultobject.id}), 200
+
+        except(KeyError, ValueError):
+            traceback.print_exc()
+            abort(400)
