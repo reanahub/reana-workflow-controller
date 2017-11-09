@@ -546,10 +546,9 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
         abort(400)
 
 
-
 @restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['PUT'])
-def change_workflow_status(workflow_id):  # noqa
-    r"""Start workflow.
+def set_workflow_status(workflow_id):  # noqa
+    r"""Set workflow status.
 
     ---
     put:
@@ -576,10 +575,11 @@ def change_workflow_status(workflow_id):  # noqa
           required: true
           type: string
         - name: status
-          in: path
+          in: body
           description: Required. New status.
           required: true
-          type: string
+          schema:
+            type: string
       responses:
         200:
           description: >-
@@ -645,7 +645,7 @@ def change_workflow_status(workflow_id):  # noqa
         organization = request.args['organization']
         user_uuid = request.args['user']
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        status = request.args['status']
+        status = request.json
         if not workflow:
             return jsonify({'message': 'Workflow {} does not exist'.
                             format(workflow_id)}), 404
