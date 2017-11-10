@@ -26,11 +26,12 @@ import os
 import traceback
 from uuid import uuid4
 
-from flask import Blueprint, abort, jsonify, request
+from flask import (Blueprint, abort, current_app, jsonify, request,
+                   send_from_directory)
 from werkzeug.utils import secure_filename
 
 from .factory import db
-from .fsdb import create_workflow_workspace
+from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow
 from .tasks import run_yadage_workflow
 
@@ -364,6 +365,281 @@ def seed_workflow_workspace(workflow_id):
         return jsonify({"message": str(e)}), 500
 
 
+@restapi_blueprint.route(
+    '/workflows/<workflow_id>/workspace/outputs/<path:file_name>',
+    methods=['GET'])
+def get_workflow_outputs_file(workflow_id, file_name):  # noqa
+    r"""Get all workflows.
+
+    ---
+    get:
+      summary: Returns the requested file.
+      description: >-
+        This resource is expecting a workflow UUID and a filename to return
+        its content.
+      operationId: get_workflow_outputs_file
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+        - name: file_name
+          in: path
+          description: Required. Name (or path) of the file to be downloaded.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The file has been downloaded.
+          schema:
+            type: file
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        outputs_directory = os.path.join(
+            current_app.config['SHARED_VOLUME_PATH'],
+            workflow.workspace_path,
+            'outputs')
+        # fix, we don't know wich encoding is being used
+        # check how to add it to HTTP headers with `send_from_directory`
+        # or `send_file`
+        return send_from_directory(outputs_directory,
+                                   file_name,
+                                   mimetype='multipart/form-data',
+                                   as_attachment=True), 200
+
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace/inputs',
+                         methods=['GET'])
+def get_workflow_inputs(workflow_id):  # noqa
+    r"""List all workflow input files.
+
+    ---
+    get:
+      summary: Returns the list of input files for a specific workflow.
+      description: >-
+        This resource is expecting a workflow UUID and a filename to return
+        its list of input files.
+      operationId: get_workflow_inputs
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of input files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if workflow:
+            outputs_directory = os.path.join(
+                current_app.config['SHARED_VOLUME_PATH'],
+                workflow.workspace_path,
+                current_app.config['INPUTS_RELATIVE_PATH'])
+
+            outputs_list = list_directory_files(outputs_directory)
+            return jsonify(outputs_list), 200
+        else:
+            return jsonify({'message': 'The workflow {} doesn\'t exist'.
+                            format(str(workflow.id_))}), 404
+
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace/outputs',
+                         methods=['GET'])
+def get_workflow_outputs(workflow_id):  # noqa
+    r"""List all workflow output files.
+
+    ---
+    get:
+      summary: Returns the list of output files for a specific workflow.
+      description: >-
+        This resource is expecting a workflow UUID and a filename to return
+        its outputs.
+      operationId: get_workflow_outputs
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of output files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if workflow:
+            outputs_directory = os.path.join(
+                current_app.config['SHARED_VOLUME_PATH'],
+                workflow.workspace_path,
+                current_app.config['OUTPUTS_RELATIVE_PATH'])
+
+            outputs_list = list_directory_files(outputs_directory)
+            return jsonify(outputs_list), 200
+        else:
+            return jsonify({'message': 'The workflow {} doesn\'t exist'.
+                            format(str(workflow.id_))}), 404
+
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
 @restapi_blueprint.route('/yadage/remote', methods=['POST'])
 def run_yadage_workflow_from_remote_endpoint():  # noqa
     r"""Create a new yadage workflow from a remote repository.
@@ -544,6 +820,115 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
     except (KeyError, ValueError):
         traceback.print_exc()
         abort(400)
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['GET'])
+def get_workflow_status(workflow_id):  # noqa
+    r"""Get workflow status.
+    ---
+    get:
+      summary: Get workflow status.
+      description: >-
+        This resource reports the status of workflow.
+      operationId: get_workflow_status
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the workflow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              organization:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            doesn't exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+
+    try:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if not workflow:
+            return jsonify({'message': 'Workflow {} does not exist'.
+                            format(workflow_id)}), 404
+        if not str(workflow.owner_id) == user_uuid:
+            return jsonify(
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id)}), 403
+        return jsonify({'id': workflow.id_,
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}), 200
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
 
 
 @restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['PUT'])
