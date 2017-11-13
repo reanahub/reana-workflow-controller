@@ -30,6 +30,7 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from werkzeug.utils import secure_filename
 
+from reana_workflow_controller.models import WorkflowStatus
 from .factory import db
 from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow
@@ -38,6 +39,7 @@ from .tasks import run_yadage_workflow
 START = 'start'
 STOP = 'stop'
 PAUSE = 'pause'
+STATUSES = {START, STOP, PAUSE}
 
 organization_to_queue = {
     'alice': 'alice-queue',
@@ -45,6 +47,10 @@ organization_to_queue = {
     'lhcb': 'lhcb-queue',
     'cms': 'cms-queue',
     'default': 'default-queue'
+}
+
+workflow_spec_to_task = {
+    "yadage": run_yadage_workflow
 }
 
 restapi_blueprint = Blueprint('api', __name__)
@@ -964,7 +970,8 @@ def set_workflow_status(workflow_id):  # noqa
           description: Required. New status.
           required: true
           schema:
-            type: string
+              type: string
+              description: Required. New status.
       responses:
         200:
           description: >-
@@ -973,7 +980,9 @@ def set_workflow_status(workflow_id):  # noqa
           schema:
             type: object
             properties:
-              id:
+              message:
+                type: string
+              workflow_id:
                 type: string
               organization:
                 type: string
@@ -984,7 +993,8 @@ def set_workflow_status(workflow_id):  # noqa
           examples:
             application/json:
               {
-                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "message": "Workflow successfully launched",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -1031,6 +1041,9 @@ def set_workflow_status(workflow_id):  # noqa
         user_uuid = request.args['user']
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         status = request.json
+        if not (status in STATUSES):
+            return jsonify({'message': 'Status {0} is not one of: {1}'.
+                            format(status, ", ".join(STATUSES))}), 400
         if not workflow:
             return jsonify({'message': 'Workflow {} does not exist'.
                             format(workflow_id)}), 404
@@ -1038,12 +1051,13 @@ def set_workflow_status(workflow_id):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id)}), 403
-        if status == 'start':
+        if status == START:
             return start_workflow(organization, user_uuid, workflow)
-        return jsonify({'id': workflow.id_,
-                        'status': workflow.status.name,
-                        'organization': organization,
-                        'user': user_uuid}), 200
+        elif status == STOP:
+            return stop_workflow(organization, user_uuid, workflow)
+        else:
+            raise NotImplemented("Status {} is not supported yet"
+                                 .format(status))
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -1052,21 +1066,47 @@ def set_workflow_status(workflow_id):  # noqa
 
 def start_workflow(organization, user_uuid, workflow):
     """Start a workflow."""
+    workflow.status = WorkflowStatus.running
+    db.session.commit()
     if workflow.type_ == 'yadage':
-        try:
-            kwargs = {
-                "workflow_workspace": workflow.workspace_path,
-                "workflow_json": workflow.specification,
-                "parameters": workflow.parameters
-            }
-            queue = organization_to_queue[organization]
+        return run_yadage_workflow_from_spec(organization,
+                                             user_uuid,
+                                             workflow)
+    elif workflow.type_ == 'cwl':
+        pass
+
+
+def stop_workflow(organization, user_uuid, workflow):
+    """Stop a workflow."""
+    workflow.status = WorkflowStatus.finished
+    db.session.commit()
+    return jsonify({'message': 'Workflow stopped',
+                    'workflow_id': workflow.id_,
+                    'status': workflow.status.name,
+                    'organization': organization,
+                    'user': user_uuid}), 200
+
+
+def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
+    """Run a yadage workflow."""
+    try:
+        kwargs = {
+            "workflow_workspace": workflow.workspace_path,
+            "workflow_json": workflow.specification,
+            "parameters": workflow.parameters
+        }
+        queue = organization_to_queue[organization]
+        if not os.environ.get("TESTS"):
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
                 queue='yadage-{}'.format(queue)
             )
-            return jsonify({'message': 'Workflow successfully launched',
-                            'workflow_id': resultobject.id}), 200
+        return jsonify({'message': 'Workflow successfully launched',
+                        'workflow_id': workflow.id_,
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}), 200
 
-        except(KeyError, ValueError):
-            traceback.print_exc()
-            abort(400)
+    except(KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
