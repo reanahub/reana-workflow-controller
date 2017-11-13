@@ -30,10 +30,9 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from werkzeug.utils import secure_filename
 
-from reana_workflow_controller.models import WorkflowStatus
 from .factory import db
 from .fsdb import create_workflow_workspace, list_directory_files
-from .models import User, Workflow
+from .models import User, Workflow, WorkflowStatus
 from .tasks import run_yadage_workflow
 
 START = 'start'
