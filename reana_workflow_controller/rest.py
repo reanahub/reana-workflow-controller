@@ -1090,6 +1090,7 @@ def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
     """Run a yadage workflow."""
     try:
         kwargs = {
+            "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.workspace_path,
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
