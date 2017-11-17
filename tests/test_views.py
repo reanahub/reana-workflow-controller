@@ -30,6 +30,12 @@ from flask import url_for
 
 from reana_workflow_controller.fsdb import get_user_analyses_dir
 from reana_workflow_controller.models import Workflow, WorkflowStatus
+from reana_workflow_controller.rest import START, STOP
+
+status_dict = {
+    START: WorkflowStatus.running,
+    STOP: WorkflowStatus.finished
+}
 
 
 def test_get_workflows(app, default_user, db_session):
@@ -477,4 +483,96 @@ def test_get_workflow_status_unknown_workflow(app, default_user):
                              "organization": organization},
                          content_type='application/json',
                          data=json.dumps(data))
+        assert res.status_code == 404
+
+
+def test_set_workflow_status(app, db_session, default_user):
+    """Test set workflow status "Start"."""
+    with app.test_client() as client:
+        os.environ["TESTS"] = "True"
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'input': 'job.json'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'yadage'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_created_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_created_uuid).first()
+        assert workflow.status == WorkflowStatus.created
+        payload = START
+        res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id=workflow_created_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(payload))
+        json_response = json.loads(res.data.decode())
+        assert json_response.get('status') == status_dict[payload].name
+
+
+def test_set_workflow_status_unauthorized(app, default_user):
+    """Test set workflow status unauthorized."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'input': 'job.json'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'yadage'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_created_uuid = response_data.get('workflow_id')
+        random_user_uuid = uuid.uuid4()
+        payload = START
+        res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id=workflow_created_uuid),
+                         query_string={
+                             "user": random_user_uuid,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(payload))
+        assert res.status_code == 403
+
+
+def test_set_workflow_status_unknown_workflow(app, default_user):
+    """Test set workflow status for unknown workflow."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'yadage'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+        random_workflow_uuid = uuid.uuid4()
+        payload = START
+        res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id=random_workflow_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(payload))
         assert res.status_code == 404
