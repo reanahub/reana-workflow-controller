@@ -30,10 +30,17 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from werkzeug.utils import secure_filename
 
+from reana_workflow_controller.config import SHARED_VOLUME_PATH
+from reana_workflow_controller.models import WorkflowStatus
 from .factory import db
 from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow
 from .tasks import run_cwl_workflow, run_yadage_workflow
+
+START = 'start'
+STOP = 'stop'
+PAUSE = 'pause'
+STATUSES = {START, STOP, PAUSE}
 
 organization_to_queue = {
     'alice': 'alice-queue',
@@ -41,6 +48,11 @@ organization_to_queue = {
     'lhcb': 'lhcb-queue',
     'cms': 'cms-queue',
     'default': 'default-queue'
+}
+
+workflow_spec_to_task = {
+    "yadage": run_yadage_workflow,
+    "cwl": run_cwl_workflow
 }
 
 restapi_blueprint = Blueprint('api', __name__)
@@ -739,7 +751,8 @@ def seed():  # noqa
             file = request.files['file']
             analysis_directory = os.path.join(
                 os.getenv('SHARED_VOLUME', '/data'),
-                '00000000-0000-0000-0000-000000000000',  # FIXME parameter from RWC
+                # FIXME parameter from RWC
+                '00000000-0000-0000-0000-000000000000',
                 'analyses')
 
             analysis_workspace = os.path.join(analysis_directory, 'workspace')
@@ -838,7 +851,9 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
     except (KeyError, ValueError):
         traceback.print_exc()
         abort(400)\
-        
+
+
+
 @restapi_blueprint.route('/cwl/remote', methods=['POST'])
 def run_cwl_workflow_from_remote_endpoint():  # noqa
     r"""Create a new cwl workflow from a remote repository.
@@ -926,85 +941,85 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
         abort(400)
 
 
-@restapi_blueprint.route('/cwl/spec', methods=['POST'])
-def run_cwl_workflow_from_spec_endpoint():  # noqa
-    r"""Create a new cwl workflow.
-
-    ---
-    post:
-      summary: Creates a new cwl workflow from a specification file.
-      description: This resource is expecting a JSON cwl specification.
-      operationId: run_cwl_workflow_from_spec
-      consumes:
-        - application/json
-      produces:
-        - application/json
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
-        - name: user
-          in: query
-          description: Required. UUID of workflow owner.
-          required: true
-          type: string
-        - name: workflow
-          in: body
-          description: >-
-            JSON object including workflow parameters and workflow
-            specification in JSON format (`cwlschemas.load()` output)
-            with necessary data to instantiate a cwl workflow.
-          required: true
-          schema:
-            type: object
-            properties:
-              parameters:
-                type: object
-                description: Workflow parameters.
-              workflow_spec:
-                type: object
-                description: >-
-                  cwl specification in JSON format.
-      responses:
-        200:
-          description: >-
-            Request succeeded. The workflow has been instantiated.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              workflow_id:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
-              }
-        400:
-          description: >-
-            Request failed. The incoming data specification seems malformed
-    """
-    try:
-        if request.json:
-            arguments = {
-                "workflow": request.json['workflow_spec'],
-                "inputs": request.json['parameters']
-            }
-            queue = organization_to_queue[request.args.get('organization')]
-            resultobject = run_cwl_workflow.apply_async(
-                args=[arguments],
-                queue='cwl-{}'.format(queue)
-            )
-            return jsonify({'message': 'Workflow successfully launched',
-                            'workflow_id': resultobject.id}), 200
-
-    except (KeyError, ValueError):
-        traceback.print_exc()
-        abort(400)
+# @restapi_blueprint.route('/cwl/spec', methods=['POST'])
+# def run_cwl_workflow_from_spec_endpoint():  # noqa
+#     r"""Create a new cwl workflow.
+#
+#     ---
+#     post:
+#       summary: Creates a new cwl workflow from a specification file.
+#       description: This resource is expecting a JSON cwl specification.
+#       operationId: run_cwl_workflow_from_spec
+#       consumes:
+#         - application/json
+#       produces:
+#         - application/json
+#       parameters:
+#         - name: organization
+#           in: query
+#           description: Required. Organization which the worklow belongs to.
+#           required: true
+#           type: string
+#         - name: user
+#           in: query
+#           description: Required. UUID of workflow owner.
+#           required: true
+#           type: string
+#         - name: workflow
+#           in: body
+#           description: >-
+#             JSON object including workflow parameters and workflow
+#             specification in JSON format (`cwlschemas.load()` output)
+#             with necessary data to instantiate a cwl workflow.
+#           required: true
+#           schema:
+#             type: object
+#             properties:
+#               parameters:
+#                 type: object
+#                 description: Workflow parameters.
+#               workflow_spec:
+#                 type: object
+#                 description: >-
+#                   cwl specification in JSON format.
+#       responses:
+#         200:
+#           description: >-
+#             Request succeeded. The workflow has been instantiated.
+#           schema:
+#             type: object
+#             properties:
+#               message:
+#                 type: string
+#               workflow_id:
+#                 type: string
+#           examples:
+#             application/json:
+#               {
+#                 "message": "Workflow successfully launched",
+#                 "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+#               }
+#         400:
+#           description: >-
+#             Request failed. The incoming data specification seems malformed
+#     """
+#     try:
+#         if request.json:
+#             arguments = {
+#                 "workflow": request.json['workflow_spec'],
+#                 "inputs": request.json['parameters']
+#             }
+#             queue = organization_to_queue[request.args.get('organization')]
+#             resultobject = run_cwl_workflow.apply_async(
+#                 args=[arguments],
+#                 queue='cwl-{}'.format(queue)
+#             )
+#             return jsonify({'message': 'Workflow successfully launched',
+#                             'workflow_id': resultobject.id}), 200
+#
+#     except (KeyError, ValueError):
+#         traceback.print_exc()
+#         abort(400)
 
 
 @restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['GET'])
@@ -1116,3 +1131,213 @@ def get_workflow_status(workflow_id):  # noqa
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['PUT'])
+def set_workflow_status(workflow_id):  # noqa
+    r"""Set workflow status.
+
+    ---
+    put:
+      summary: Set workflow status.
+      description: >-
+        This resource sets the status of workflow.
+      operationId: set_workflow_status
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the workflow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+        - name: status
+          in: body
+          description: Required. New status.
+          required: true
+          schema:
+              type: string
+              description: Required. New status.
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              organization:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow successfully launched",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            doesn't exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+
+    try:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        status = request.json
+        if not (status in STATUSES):
+            return jsonify({'message': 'Status {0} is not one of: {1}'.
+                            format(status, ", ".join(STATUSES))}), 400
+        if not workflow:
+            return jsonify({'message': 'Workflow {} does not exist'.
+                            format(workflow_id)}), 404
+        if not str(workflow.owner_id) == user_uuid:
+            return jsonify(
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id)}), 403
+        if status == START:
+            return start_workflow(organization, user_uuid, workflow)
+        elif status == STOP:
+            return stop_workflow(organization, user_uuid, workflow)
+        else:
+            raise NotImplemented("Status {} is not supported yet"
+                                 .format(status))
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+def start_workflow(organization, user_uuid, workflow):
+    """Start a workflow."""
+    workflow.status = WorkflowStatus.running
+    db.session.commit()
+    if workflow.type_ == 'yadage':
+        return run_yadage_workflow_from_spec(organization,
+                                                      user_uuid,
+                                                      workflow)
+    elif workflow.type_ == 'cwl':
+        return run_cwl_workflow_from_spec_endpoint(organization,
+                                                   user_uuid,
+                                                   workflow)
+
+
+def stop_workflow(organization, user_uuid, workflow):
+    """Stop a workflow."""
+    workflow.status = WorkflowStatus.finished
+    db.session.commit()
+    return jsonify({'message': 'Workflow stopped',
+                    'workflow_id': workflow.id_,
+                    'status': workflow.status.name,
+                    'organization': organization,
+                    'user': user_uuid}), 200
+
+
+def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
+    """Run a yadage workflow."""
+    try:
+        kwargs = {
+            "workflow_uuid": str(workflow.id_),
+            "workflow_workspace": workflow.workspace_path,
+            "workflow_json": workflow.specification,
+            "parameters": workflow.parameters
+        }
+        queue = organization_to_queue[organization]
+        if not os.environ.get("TESTS"):
+            resultobject = run_yadage_workflow.apply_async(
+                kwargs=kwargs,
+                queue='yadage-{}'.format(queue)
+            )
+        return jsonify({'message': 'Workflow successfully launched',
+                        'workflow_id': workflow.id_,
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}), 200
+
+    except(KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
+
+
+def run_cwl_workflow_from_spec_endpoint(organization, user_uuid, workflow):  # noqa
+    """Run a CWL workflow."""
+    try:
+        # arguments = {
+        #     "workflow": workflow.specification,
+        #     "inputs": workflow.parameters['input']
+        # }
+        # workspace_path = os.path.join(SHARED_VOLUME_PATH, workflow.workspace_path)
+        kwargs = {
+            "workflow_uuid": str(workflow.id_),
+            "workflow_workspace": workflow.workspace_path,
+            "workflow_json": workflow.specification,
+            "parameters": workflow.parameters['input']
+        }
+        queue = organization_to_queue[organization]
+        if not os.environ.get("TESTS"):
+            resultobject = run_cwl_workflow.apply_async(
+                kwargs=kwargs,
+                queue='cwl-{}'.format(queue)
+            )
+        return jsonify({'message': 'Workflow successfully launched',
+                        'workflow_id': str(workflow.id_),
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}), 200
+
+    except (KeyError, ValueError) as e:
+        print(e)
+        # traceback.print_exc()
+        abort(400)

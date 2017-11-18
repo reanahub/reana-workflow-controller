@@ -88,3 +88,11 @@ class Workflow(db.Model):
     def __repr__(self):
         """Workflow string represetantion."""
         return '<Workflow %r>' % self.id_
+
+    def update_workflow_status(self, db_session, status):
+        """Update database workflow status.
+
+        :param status: String that represents the analysis status.
+        """
+        self.status = status
+        db_session.commit()
