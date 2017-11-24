@@ -648,6 +648,103 @@ def get_workflow_outputs(workflow_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+
+@restapi_blueprint.route('/workflows/<workflow_id>/logs',
+                         methods=['GET'])
+def get_workflow_logs(workflow_id):  # noqa
+    r"""Get workflow logs from a workflow engine.
+
+    ---
+    get:
+      summary: Returns logs of a specific workflow from a workflow engine.
+      description: >-
+        This resource is expecting a workflow UUID and a filename to return
+        its outputs.
+      operationId: get_workflow_logs
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id
+          in: path
+          description: Required. Workflow UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              organization:
+                type: string
+              logs:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "logs": "<Workflow engine log output>",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. User doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                            exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        organization = request.args['organization']
+        user_uuid = request.args['user']
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if not workflow:
+            return jsonify({'message': 'Workflow {} does not exist'.
+                            format(workflow_id)}), 404
+        if not str(workflow.owner_id) == user_uuid:
+            return jsonify(
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id)}), 403
+
+        return jsonify({'workflow_id': workflow.id_,
+                        'logs': workflow.logs or "",
+                        'organization': organization,
+                        'user': user_uuid}), 200
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
 @restapi_blueprint.route('/yadage/remote', methods=['POST'])
 def run_yadage_workflow_from_remote_endpoint():  # noqa
     r"""Create a new yadage workflow from a remote repository.

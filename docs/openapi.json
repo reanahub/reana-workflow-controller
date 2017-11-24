@@ -266,6 +266,88 @@
         "summary": "Create workflow and its workspace."
       }
     },
+    "/api/workflows/{workflow_id}/logs": {
+      "get": {
+        "description": "This resource is expecting a workflow UUID and a filename to return its outputs.",
+        "operationId": "get_workflow_logs",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about workflow, including the status is returned.",
+            "examples": {
+              "application/json": {
+                "logs": "<Workflow engine log output>",
+                "organization": "default_org",
+                "user": "00000000-0000-0000-0000-000000000000",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "logs": {
+                  "type": "string"
+                },
+                "organization": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed."
+          },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Either organization or user doesn't exist."
+              }
+            }
+          }
+        },
+        "summary": "Returns logs of a specific workflow from a workflow engine."
+      }
+    },
     "/api/workflows/{workflow_id}/status": {
       "get": {
         "description": "This resource reports the status of workflow.",
