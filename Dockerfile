@@ -21,7 +21,8 @@
 FROM python:3.5
 ADD . /code
 WORKDIR /code
-RUN pip install -e .[all]
+RUN apt update && apt install -y vim emacs-nox && \
+    pip install -e .[all]
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
 CMD flask users create info@reana.io &&\

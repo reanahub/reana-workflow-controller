@@ -357,13 +357,21 @@ def seed_workflow_workspace(workflow_id):
     """
     try:
         file_ = request.files['file_content']
-        file_name = secure_filename(request.args['file_name'])
+        # file_name = secure_filename(request.args['file_name'])
+        file_name = request.args['file_name']
         if not file_name:
             raise ValueError('The file transferred needs to have name.')
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        file_.save(os.path.join(os.getenv('SHARED_VOLUME_PATH'),
-                                workflow.workspace_path, file_name))
+        path = os.path.join(os.getenv('SHARED_VOLUME_PATH'), workflow.workspace_path)
+        if len(file_name.split("/")) > 1:
+            dirs = file_name.split("/")[:-1]
+            file_name = file_name.split("/")[-1]
+            path = os.path.join(path, "/".join(dirs))
+            if not os.path.exists(path):
+                os.makedirs(path)
+
+        file_.save(os.path.join(path, file_name))
         return jsonify({'message': 'File successfully transferred'}), 200
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
