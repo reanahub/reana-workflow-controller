@@ -1068,7 +1068,7 @@ def set_workflow_status(workflow_id):  # noqa
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id)}), 403
         if status == START:
-            return start_workflow(organization, user_uuid, workflow)
+            return start_workflow(organization, workflow)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1078,24 +1078,27 @@ def set_workflow_status(workflow_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def start_workflow(organization, user_uuid, workflow):
+def start_workflow(organization, workflow):
     """Start a workflow."""
     workflow.status = WorkflowStatus.running
     db.session.commit()
     if workflow.type_ == 'yadage':
         return run_yadage_workflow_from_spec(organization,
-                                             user_uuid,
                                              workflow)
     elif workflow.type_ == 'cwl':
         pass
 
 
-def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
+def run_yadage_workflow_from_spec(organization, workflow):
     """Run a yadage workflow."""
     try:
+        # Remove organization from workspace path since workflow
+        # engines already work in its organization folder.
+        workspace_path_without_organization = \
+            '/'.join(workflow.workspace_path.strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.workspace_path,
+            "workflow_workspace": workspace_path_without_organization,
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
         }
@@ -1109,7 +1112,7 @@ def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
                         'workflow_id': workflow.id_,
                         'status': workflow.status.name,
                         'organization': organization,
-                        'user': user_uuid}), 200
+                        'user': str(workflow.owner_id)}), 200
 
     except(KeyError, ValueError):
         traceback.print_exc()
