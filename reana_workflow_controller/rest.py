@@ -28,6 +28,7 @@ from uuid import uuid4
 
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
+from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 from .factory import db
@@ -415,12 +416,11 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. `file_name` does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
-                            exist"
+                "message": "input.csv does not exist"
               }
         500:
           description: >-
@@ -453,6 +453,9 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
 
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except NotFound as e:
+        return jsonify(
+            {"message": "{0} does not exist.".format(file_name)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 

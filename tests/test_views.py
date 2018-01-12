@@ -182,6 +182,41 @@ def test_create_workflow_wrong_user(app, db_session, tmp_shared_volume_path):
         assert not os.path.exists(workflow_workspace)
 
 
+def test_get_workflow_outputs_absent_file(app, db_session, default_user,
+                                          tmp_shared_volume_path):
+    """Test download output file."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        assert res.status_code == 201
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        file_name = 'input.csv'
+        res = client.get(
+            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+                    file_name=file_name),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json',
+            data=json.dumps(data))
+
+        assert res.status_code == 404
+        response_data = json.loads(res.get_data(as_text=True))
+        assert response_data == {'message': 'input.csv does not exist.'}
+
+
 def test_get_workflow_outputs_file(app, db_session, default_user,
                                    tmp_shared_volume_path):
     """Test download output file."""
