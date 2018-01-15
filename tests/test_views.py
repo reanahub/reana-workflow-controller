@@ -304,7 +304,6 @@ def test_get_workflow_inputs_list(app, db_session, default_user,
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
         # from config
         inputs_relative_path = app.config['INPUTS_RELATIVE_PATH']
-        fs_.makedirs(inputs_relative_path)
         test_files = []
         for i in range(5):
             file_name = '{0}.csv'.format(i)
@@ -353,7 +352,6 @@ def test_get_workflow_outputs_list(app, db_session, default_user,
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
         # from config
         outputs_realative_path = app.config['OUTPUTS_RELATIVE_PATH']
-        fs_.makedirs(outputs_realative_path)
         test_files = []
         for i in range(5):
             file_name = '{0}.csv'.format(i)

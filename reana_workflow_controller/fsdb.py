@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -65,6 +65,12 @@ def create_workflow_workspace(org, user, workflow_uuid):
     workflow_workspace = fs.path.join(analysis_workspace, 'workspace')
     if not reana_fs.exists(workflow_workspace):
         reana_fs.makedirs(workflow_workspace)
+        reana_fs.makedirs(
+            fs.path.join(workflow_workspace,
+                         app.config['INPUTS_RELATIVE_PATH']))
+        reana_fs.makedirs(
+            fs.path.join(workflow_workspace,
+                         app.config['OUTPUTS_RELATIVE_PATH']))
 
     return workflow_workspace, analysis_workspace
 
