@@ -638,9 +638,6 @@ def test_seed_workflow_workspace(app, db_session, default_user,
         # create file
         file_name = 'dataset.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
 
         res = client.post(
             url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
@@ -664,3 +661,24 @@ def test_seed_workflow_workspace(app, db_session, default_user,
 
         with open(file_path, 'rb') as f:
             assert f.read() == file_binary_content
+
+
+def test_seed_unknown_workflow_workspace(app, db_session, default_user,
+                                         tmp_shared_volume_path):
+    """Test download output file."""
+    with app.test_client() as client:
+        random_workflow_uuid = uuid.uuid4()
+        # create file
+        file_name = 'dataset.csv'
+        file_binary_content = b'1,2,3,4\n5,6,7,8'
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace',
+                    workflow_id=random_workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": "default",
+                          "file_name": file_name},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 404

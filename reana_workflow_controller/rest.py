@@ -339,12 +339,25 @@ def seed_workflow_workspace(workflow_id):
           examples:
             application/json:
               {
-                "message": "The file input.csv has been successfully
-                transferred.",
+                "message": "input.csv has been successfully transferred.",
               }
         400:
           description: >-
             Request failed. The incoming data specification seems malformed
+        404:
+          description: >-
+            Request failed. The specified workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist",
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -353,14 +366,20 @@ def seed_workflow_workspace(workflow_id):
         file_ = request.files['file_content']
         file_name = secure_filename(request.args['file_name'])
         if not file_name:
-            raise ValueError('The file transferred needs to have name.')
+            raise ValueError('A file name should be provided.')
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        file_.save(os.path.join(current_app.config['SHARED_VOLUME_PATH'],
-                                workflow.workspace_path,
-                                current_app.config['INPUTS_RELATIVE_PATH'],
-                                file_name))
-        return jsonify({'message': 'File successfully transferred'}), 200
+        if workflow:
+            file_.save(os.path.join(current_app.config['SHARED_VOLUME_PATH'],
+                                    workflow.workspace_path,
+                                    current_app.config['INPUTS_RELATIVE_PATH'],
+                                    file_name))
+            return jsonify(
+                {'message': '{0} has been successfully trasferred.'.
+                 format(file_name)}), 200
+        else:
+            return jsonify({'message': 'Workflow {0} does not exist.'.
+                            format(workflow_id)}), 404
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except ValueError as e:
@@ -443,9 +462,6 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
             current_app.config['SHARED_VOLUME_PATH'],
             workflow.workspace_path,
             'outputs')
-        # fix, we don't know wich encoding is being used
-        # check how to add it to HTTP headers with `send_from_directory`
-        # or `send_file`
         return send_from_directory(outputs_directory,
                                    file_name,
                                    mimetype='multipart/form-data',
@@ -511,12 +527,12 @@ def get_workflow_inputs(workflow_id):  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. Workflow does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
-                            exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
               }
         500:
           description: >-
@@ -544,7 +560,7 @@ def get_workflow_inputs(workflow_id):  # noqa
             outputs_list = list_directory_files(outputs_directory)
             return jsonify(outputs_list), 200
         else:
-            return jsonify({'message': 'The workflow {} doesn\'t exist'.
+            return jsonify({'message': 'Workflow {} does not exist.'.
                             format(str(workflow.id_))}), 404
 
     except KeyError:
@@ -604,12 +620,12 @@ def get_workflow_outputs(workflow_id):  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. Workflow does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
-                            exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
               }
         500:
           description: >-
@@ -637,7 +653,7 @@ def get_workflow_outputs(workflow_id):  # noqa
             outputs_list = list_directory_files(outputs_directory)
             return jsonify(outputs_list), 200
         else:
-            return jsonify({'message': 'The workflow {} doesn\'t exist'.
+            return jsonify({'message': 'Workflow {} does not exist.'.
                             format(str(workflow.id_))}), 404
 
     except KeyError:
@@ -1029,7 +1045,7 @@ def set_workflow_status(workflow_id):  # noqa
             application/json:
               {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
-                            doesn't exist"
+                            does not exist"
               }
         500:
           description: >-
@@ -1045,7 +1061,7 @@ def set_workflow_status(workflow_id):  # noqa
             return jsonify({'message': 'Status {0} is not one of: {1}'.
                             format(status, ", ".join(STATUSES))}), 400
         if not workflow:
-            return jsonify({'message': 'Workflow {} does not exist'.
+            return jsonify({'message': 'Workflow {} does not exist.'.
                             format(workflow_id)}), 404
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(

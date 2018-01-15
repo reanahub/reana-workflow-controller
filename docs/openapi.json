@@ -366,7 +366,7 @@
             "description": "Request failed. Either User or Workflow doesn't exist.",
             "examples": {
               "application/json": {
-                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 doesn't exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
               }
             }
           },
@@ -429,7 +429,7 @@
             "description": "Request succeeded. The file has been added to the workspace.",
             "examples": {
               "application/json": {
-                "message": "The file input.csv has been successfully transferred."
+                "message": "input.csv has been successfully transferred."
               }
             },
             "schema": {
@@ -446,6 +446,22 @@
           },
           "400": {
             "description": "Request failed. The incoming data specification seems malformed"
+          },
+          "404": {
+            "description": "Request failed. The specified workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "500": {
             "description": "Request failed. Internal controller error."
@@ -510,10 +526,10 @@
             "description": "Request failed. The incoming data specification seems malformed."
           },
           "404": {
-            "description": "Request failed. User doesn't exist.",
+            "description": "Request failed. Workflow does not exist.",
             "examples": {
               "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
               }
             }
           },
@@ -585,10 +601,10 @@
             "description": "Request failed. The incoming data specification seems malformed."
           },
           "404": {
-            "description": "Request failed. User doesn't exist.",
+            "description": "Request failed. Workflow does not exist.",
             "examples": {
               "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
               }
             }
           },
