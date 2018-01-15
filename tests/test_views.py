@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -21,12 +21,14 @@
 # submit itself to any jurisdiction.
 """REANA-Workflow-Controller fsdb module tests."""
 
+import io
 import json
 import os
 import uuid
 
 import fs
 from flask import url_for
+from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.fsdb import get_user_analyses_dir
 from reana_workflow_controller.models import Workflow, WorkflowStatus
@@ -210,7 +212,7 @@ def test_get_workflow_outputs_file(app, db_session, default_user,
                          workflow.workspace_path)
         # write file in the workflow workspace under `outputs` directory
         file_path = os.path.join(absolute_path_workflow_workspace,
-                                 'outputs',
+                                 app.config['OUTPUTS_RELATIVE_PATH'],
                                  # we use `secure_filename` here because
                                  # we use it in server side when adding
                                  # files
@@ -574,3 +576,56 @@ def test_set_workflow_status_unknown_workflow(app, default_user):
                          content_type='application/json',
                          data=json.dumps(payload))
         assert res.status_code == 404
+
+
+def test_seed_workflow_workspace(app, db_session, default_user,
+                                 tmp_shared_volume_path):
+    """Test download output file."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        file_name = 'dataset.csv'
+        file_binary_content = b'1,2,3,4\n5,6,7,8'
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization,
+                          "file_name": file_name},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 200
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+
+        file_path = os.path.join(absolute_path_workflow_workspace,
+                                 app.config['INPUTS_RELATIVE_PATH'],
+                                 # we use `secure_filename` here because
+                                 # we use it in server side when adding
+                                 # files
+                                 secure_filename(file_name))
+
+        with open(file_path, 'rb') as f:
+            assert f.read() == file_binary_content

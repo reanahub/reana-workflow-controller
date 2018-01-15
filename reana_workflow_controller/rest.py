@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -355,8 +355,10 @@ def seed_workflow_workspace(workflow_id):
             raise ValueError('The file transferred needs to have name.')
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        file_.save(os.path.join(os.getenv('SHARED_VOLUME_PATH'),
-                                workflow.workspace_path, file_name))
+        file_.save(os.path.join(current_app.config['SHARED_VOLUME_PATH'],
+                                workflow.workspace_path,
+                                current_app.config['INPUTS_RELATIVE_PATH'],
+                                file_name))
         return jsonify({'message': 'File successfully transferred'}), 200
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
