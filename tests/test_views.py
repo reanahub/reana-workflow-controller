@@ -360,6 +360,27 @@ def test_get_workflow_inputs_list(app, db_session, default_user,
             assert file_.get('name') in test_files
 
 
+def test_get_unknown_workflow_inputs_list(app, default_user):
+    """Test get list of input files for non existing workflow."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        random_workflow_uuid = str(uuid.uuid4())
+
+        res = client.get(
+            url_for('api.get_workflow_inputs',
+                    workflow_id=random_workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json')
+
+        assert res.status_code == 404
+        response_data = json.loads(res.get_data(as_text=True))
+        expected_data = {'message': 'Workflow {0} does not exist.'.
+                         format(random_workflow_uuid)}
+        assert response_data == expected_data
+
+
 def test_get_workflow_outputs_list(app, db_session, default_user,
                                    tmp_shared_volume_path):
     """Test get list of output files."""
@@ -406,6 +427,27 @@ def test_get_workflow_outputs_list(app, db_session, default_user,
             data=json.dumps(data))
         for file_ in json.loads(res.data.decode()):
             assert file_.get('name') in test_files
+
+
+def test_get_unknown_workflow_outputs_list(app, default_user):
+    """Test get list of outputs files for non existing workflow."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        random_workflow_uuid = str(uuid.uuid4())
+
+        res = client.get(
+            url_for('api.get_workflow_inputs',
+                    workflow_id=random_workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json')
+
+        assert res.status_code == 404
+        response_data = json.loads(res.get_data(as_text=True))
+        expected_data = {'message': 'Workflow {0} does not exist.'.
+                         format(random_workflow_uuid)}
+        assert response_data == expected_data
 
 
 def test_get_workflow_status(app, db_session, default_user):

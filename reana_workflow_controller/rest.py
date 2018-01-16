@@ -561,7 +561,7 @@ def get_workflow_inputs(workflow_id):  # noqa
             return jsonify(outputs_list), 200
         else:
             return jsonify({'message': 'Workflow {} does not exist.'.
-                            format(str(workflow.id_))}), 404
+                            format(str(workflow_id))}), 404
 
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
@@ -654,7 +654,7 @@ def get_workflow_outputs(workflow_id):  # noqa
             return jsonify(outputs_list), 200
         else:
             return jsonify({'message': 'Workflow {} does not exist.'.
-                            format(str(workflow.id_))}), 404
+                            format(str(workflow_id))}), 404
 
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
