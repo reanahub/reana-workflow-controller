@@ -31,7 +31,6 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
-from .config import CODE_RELATIVE_PATH, INPUTS_RELATIVE_PATH
 from .factory import db
 from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow, WorkflowStatus
@@ -49,9 +48,6 @@ organization_to_queue = {
     'cms': 'cms-queue',
     'default': 'default-queue'
 }
-
-seed_input_directories = {'input': INPUTS_RELATIVE_PATH,
-                          'code': CODE_RELATIVE_PATH}
 
 restapi_blueprint = Blueprint('api', __name__)
 
@@ -298,7 +294,7 @@ def seed_workflow_workspace(workflow_id):
       description: >-
         This resource is expecting a workflow UUID and a file to place in the
         workflow workspace.
-      operationId: seed_workflow
+      operationId: seed_workflow_files
       consumes:
         - multipart/form-data
       produces:
@@ -358,7 +354,7 @@ def seed_workflow_workspace(workflow_id):
             Request failed. The incoming data specification seems malformed
         404:
           description: >-
-            Request failed. The specified workflow does not exist.
+            Request failed. Workflow does not exist.
           schema:
             type: object
             properties:
@@ -385,10 +381,11 @@ def seed_workflow_workspace(workflow_id):
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
-            file_.save(os.path.join(current_app.config['SHARED_VOLUME_PATH'],
-                                    workflow.workspace_path,
-                                    seed_input_directories[input_type],
-                                    file_name))
+            file_.save(os.path.join(
+                current_app.config['SHARED_VOLUME_PATH'],
+                workflow.workspace_path,
+                current_app.config['ALLOWED_SEED_DIRECTORIES'][input_type],
+                file_name))
             return jsonify(
                 {'message': '{0} has been successfully trasferred.'.
                  format(file_name)}), 200
@@ -491,18 +488,19 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/workspace/inputs',
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace',
                          methods=['GET'])
-def get_workflow_inputs(workflow_id):  # noqa
-    r"""List all workflow input files.
+def get_workflow_files(workflow_id):  # noqa
+    r"""List all workflow code/input/output files.
 
     ---
     get:
-      summary: Returns the list of input files for a specific workflow.
+      summary: Returns the list of code|input|output files for a specific
+               workflow.
       description: >-
         This resource is expecting a workflow UUID and a filename to return
-        its list of input files.
-      operationId: get_workflow_inputs
+        its list of code|input|output files.
+      operationId: get_workflow_files
       produces:
         - multipart/form-data
       parameters:
@@ -521,10 +519,19 @@ def get_workflow_inputs(workflow_id):  # noqa
           description: Required. Workflow UUID.
           required: true
           type: string
+        - name: input_type
+          in: query
+          description: Required. The file will be retrieved from the
+                       corresponding directory `workspace/<input_type>`.
+                       Possible values are `code`, `input` and `output`.
+                       `input` is the default value.
+          required: false
+          type: string
       responses:
         200:
           description: >-
-            Requests succeeded. The list of input files has been retrieved.
+            Requests succeeded. The list of code|input|output files has been
+            retrieved.
           schema:
             type: array
             items:
@@ -565,105 +572,15 @@ def get_workflow_inputs(workflow_id):  # noqa
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
 
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        if workflow:
-            outputs_directory = os.path.join(
-                current_app.config['SHARED_VOLUME_PATH'],
-                workflow.workspace_path,
-                current_app.config['INPUTS_RELATIVE_PATH'])
-
-            outputs_list = list_directory_files(outputs_directory)
-            return jsonify(outputs_list), 200
-        else:
-            return jsonify({'message': 'Workflow {} does not exist.'.
-                            format(str(workflow_id))}), 404
-
-    except KeyError:
-        return jsonify({"message": "Malformed request."}), 400
-    except Exception as e:
-        return jsonify({"message": str(e)}), 500
-
-
-@restapi_blueprint.route('/workflows/<workflow_id>/workspace/outputs',
-                         methods=['GET'])
-def get_workflow_outputs(workflow_id):  # noqa
-    r"""List all workflow output files.
-
-    ---
-    get:
-      summary: Returns the list of output files for a specific workflow.
-      description: >-
-        This resource is expecting a workflow UUID and a filename to return
-        its outputs.
-      operationId: get_workflow_outputs
-      produces:
-        - multipart/form-data
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
-        - name: user
-          in: query
-          description: Required. UUID of workflow owner.
-          required: true
-          type: string
-        - name: workflow_id
-          in: path
-          description: Required. Workflow UUID.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Requests succeeded. The list of output files has been retrieved.
-          schema:
-            type: array
-            items:
-              type: object
-              properties:
-                name:
-                  type: string
-                last-modified:
-                  type: string
-                  format: date-time
-                size:
-                  type: integer
-        400:
-          description: >-
-            Request failed. The incoming data specification seems malformed.
-        404:
-          description: >-
-            Request failed. Workflow does not exist.
-          examples:
-            application/json:
-              {
-                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
-                            not exist."
-              }
-        500:
-          description: >-
-            Request failed. Internal controller error.
-          examples:
-            application/json:
-              {
-                "message": "Either organization or user doesn't exist."
-              }
-    """
-    try:
-        user_uuid = request.args['user']
-        user = User.query.filter(User.id_ == user_uuid).first()
-        if not user:
-            return jsonify(
-                {'message': 'User {} does not exist'.format(user)}), 404
+        input_type = request.args.get('input_type') \
+            if request.args.get('input_type') else 'input'
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
             outputs_directory = os.path.join(
                 current_app.config['SHARED_VOLUME_PATH'],
                 workflow.workspace_path,
-                current_app.config['OUTPUTS_RELATIVE_PATH'])
+                current_app.config['ALLOWED_LIST_DIRECTORIES'][input_type])
 
             outputs_list = list_directory_files(outputs_directory)
             return jsonify(outputs_list), 200

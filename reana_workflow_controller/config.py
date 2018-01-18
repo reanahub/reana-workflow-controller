@@ -46,3 +46,12 @@ OUTPUTS_RELATIVE_PATH = 'outputs'
 
 CODE_RELATIVE_PATH = 'code'
 """Code directory name."""
+
+ALLOWED_SEED_DIRECTORIES = {'input': INPUTS_RELATIVE_PATH,
+                            'code': CODE_RELATIVE_PATH}
+"""Directories allowed to be seeded."""
+
+ALLOWED_LIST_DIRECTORIES = {'input': INPUTS_RELATIVE_PATH,
+                            'code': CODE_RELATIVE_PATH,
+                            'output': OUTPUTS_RELATIVE_PATH}
+"""Directories allowed to be listed."""
