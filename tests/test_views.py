@@ -724,3 +724,91 @@ def test_seed_unknown_workflow_workspace(app, db_session, default_user,
             data={'file_content': (io.BytesIO(file_binary_content),
                                    file_name)})
         assert res.status_code == 404
+
+
+def test_seed_workflow_workspace_with_code(app, db_session, default_user,
+                                           tmp_shared_volume_path):
+    """Seed files as code."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        file_name = 'helloworld.py'
+        file_binary_content = b'print("Hello world.")\n'
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization,
+                          "file_name": file_name,
+                          "input_type": "code"},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 200
+        absolute_path_workflow_workspace = \
+            os.path.join(tmp_shared_volume_path,
+                         workflow.workspace_path)
+
+        file_path = os.path.join(absolute_path_workflow_workspace,
+                                 app.config['CODE_RELATIVE_PATH'],
+                                 # we use `secure_filename` here because
+                                 # we use it in server side when adding
+                                 # files
+                                 secure_filename(file_name))
+
+        with open(file_path, 'rb') as f:
+            assert f.read() == file_binary_content
+
+
+def test_seed_workflow_workspace_with_wrong_input_type(app, default_user,
+                                                       tmp_shared_volume_path):
+    """Seed files with wrong input type."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+
+        # create file
+        file_name = 'helloworld.py'
+        file_binary_content = b'print("Hello world.")\n'
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization,
+                          "file_name": file_name,
+                          "input_type": "wrong-type"},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 400

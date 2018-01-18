@@ -31,6 +31,7 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
+from .config import CODE_RELATIVE_PATH, INPUTS_RELATIVE_PATH
 from .factory import db
 from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow, WorkflowStatus
@@ -48,6 +49,9 @@ organization_to_queue = {
     'cms': 'cms-queue',
     'default': 'default-queue'
 }
+
+seed_input_directories = {'input': INPUTS_RELATIVE_PATH,
+                          'code': CODE_RELATIVE_PATH}
 
 restapi_blueprint = Blueprint('api', __name__)
 
@@ -325,6 +329,14 @@ def seed_workflow_workspace(workflow_id):
           description: Required. File name.
           required: true
           type: string
+        - name: input_type
+          in: query
+          description: Required. If set to `input`, the file will be placed
+                       under `workspace/inputs/` whereas if it is of type
+                       `code` it will live under `workspace/code/`. By default
+                       it set to `input`.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -368,11 +380,14 @@ def seed_workflow_workspace(workflow_id):
         if not file_name:
             raise ValueError('A file name should be provided.')
 
+        input_type = request.args.get('input_type') \
+            if request.args.get('input_type') else 'input'
+
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
             file_.save(os.path.join(current_app.config['SHARED_VOLUME_PATH'],
                                     workflow.workspace_path,
-                                    current_app.config['INPUTS_RELATIVE_PATH'],
+                                    seed_input_directories[input_type],
                                     file_name))
             return jsonify(
                 {'message': '{0} has been successfully trasferred.'.
