@@ -325,7 +325,7 @@ def seed_workflow_workspace(workflow_id):
           description: Required. File name.
           required: true
           type: string
-        - name: input_type
+        - name: file_type
           in: query
           description: Required. If set to `input`, the file will be placed
                        under `workspace/inputs/` whereas if it is of type
@@ -376,15 +376,15 @@ def seed_workflow_workspace(workflow_id):
         if not file_name:
             raise ValueError('A file name should be provided.')
 
-        input_type = request.args.get('input_type') \
-            if request.args.get('input_type') else 'input'
+        file_type = request.args.get('file_type') \
+            if request.args.get('file_type') else 'input'
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
             file_.save(os.path.join(
                 current_app.config['SHARED_VOLUME_PATH'],
                 workflow.workspace_path,
-                current_app.config['ALLOWED_SEED_DIRECTORIES'][input_type],
+                current_app.config['ALLOWED_SEED_DIRECTORIES'][file_type],
                 file_name))
             return jsonify(
                 {'message': '{0} has been successfully trasferred.'.
@@ -519,10 +519,10 @@ def get_workflow_files(workflow_id):  # noqa
           description: Required. Workflow UUID.
           required: true
           type: string
-        - name: input_type
+        - name: file_type
           in: query
           description: Required. The file will be retrieved from the
-                       corresponding directory `workspace/<input_type>`.
+                       corresponding directory `workspace/<file_type>`.
                        Possible values are `code`, `input` and `output`.
                        `input` is the default value.
           required: false
@@ -572,15 +572,15 @@ def get_workflow_files(workflow_id):  # noqa
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
 
-        input_type = request.args.get('input_type') \
-            if request.args.get('input_type') else 'input'
+        file_type = request.args.get('file_type') \
+            if request.args.get('file_type') else 'input'
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
             outputs_directory = os.path.join(
                 current_app.config['SHARED_VOLUME_PATH'],
                 workflow.workspace_path,
-                current_app.config['ALLOWED_LIST_DIRECTORIES'][input_type])
+                current_app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
 
             outputs_list = list_directory_files(outputs_directory)
             return jsonify(outputs_list), 200

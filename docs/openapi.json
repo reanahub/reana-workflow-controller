@@ -404,9 +404,9 @@
             "type": "string"
           },
           {
-            "description": "Required. The file will be retrieved from the corresponding directory `workspace/<input_type>`. Possible values are `code`, `input` and `output`. `input` is the default value.",
+            "description": "Required. The file will be retrieved from the corresponding directory `workspace/<file_type>`. Possible values are `code`, `input` and `output`. `input` is the default value.",
             "in": "query",
-            "name": "input_type",
+            "name": "file_type",
             "required": false,
             "type": "string"
           }
@@ -503,7 +503,7 @@
           {
             "description": "Required. If set to `input`, the file will be placed under `workspace/inputs/` whereas if it is of type `code` it will live under `workspace/code/`. By default it set to `input`.",
             "in": "query",
-            "name": "input_type",
+            "name": "file_type",
             "required": false,
             "type": "string"
           }
