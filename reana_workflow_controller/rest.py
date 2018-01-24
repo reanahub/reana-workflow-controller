@@ -31,10 +31,12 @@ from flask import (Blueprint, abort, current_app, jsonify, request,
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
+from reana_workflow_controller.config import SHARED_VOLUME_PATH
+from reana_workflow_controller.models import WorkflowStatus
 from .factory import db
 from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow, WorkflowStatus
-from .tasks import run_yadage_workflow
+from .tasks import run_cwl_workflow, run_yadage_workflow
 
 START = 'start'
 STOP = 'stop'
@@ -47,6 +49,11 @@ organization_to_queue = {
     'lhcb': 'lhcb-queue',
     'cms': 'cms-queue',
     'default': 'default-queue'
+}
+
+workflow_spec_to_task = {
+    "yadage": run_yadage_workflow,
+    "cwl": run_cwl_workflow
 }
 
 restapi_blueprint = Blueprint('api', __name__)
@@ -690,6 +697,29 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
         abort(400)
 
 
+@restapi_blueprint.route('/seed', methods=['POST'])
+def seed():  # noqa
+    try:
+        if request.files:
+            file = request.files['file']
+            analysis_directory = os.path.join(
+                os.getenv('SHARED_VOLUME', '/data'),
+                # FIXME parameter from RWC
+                '00000000-0000-0000-0000-000000000000',
+                'analyses')
+
+            analysis_workspace = os.path.join(analysis_directory, 'workspace')
+
+            if not os.path.exists(analysis_workspace):
+                os.makedirs(analysis_workspace)
+            file.save(analysis_workspace)
+            return jsonify({'message': 'File saved'}), 200
+
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
+
+
 @restapi_blueprint.route('/yadage/spec', methods=['POST'])
 def run_yadage_workflow_from_spec_endpoint():  # noqa
     r"""Create a new yadage workflow.
@@ -776,9 +806,97 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
         abort(400)
 
 
+@restapi_blueprint.route('/cwl/remote', methods=['POST'])
+def run_cwl_workflow_from_remote_endpoint():  # noqa
+    r"""Create a new cwl workflow from a remote repository.
+
+    ---
+    post:
+      summary: Creates a new cwl workflow from a remote repository.
+      description: >-
+        This resource is expecting JSON data with all the necessary information
+        to instantiate a cwl workflow from a remote repository.
+      operationId: run_cwl_workflow_from_remote
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_data
+          in: body
+          description: >-
+            Workflow information in JSON format with all the necessary data to
+            instantiate a cwl workflow from a remote repository such as
+            GitHub.
+          required: true
+          schema:
+            type: object
+            properties:
+              toplevel:
+                type: string
+                description: >-
+                  cwl toplevel argument. It represents the remote repository
+                  where the workflow should be pulled from.
+              workflow:
+                type: string
+                description: >-
+                  cwl workflow parameter. It represents the name of the
+                  workflow spec file name inside the remote repository.
+              nparallel:
+                type: integer
+              preset_pars:
+                type: object
+                description: Workflow parameters.
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been instantiated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        if request.json:
+            queue = organization_to_queue[request.args.get('organization')]
+            resultobject = run_cwl_workflow.apply_async(
+                args=[request.json],
+                queue='cwl-{}'.format(queue)
+            )
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': resultobject.id}), 200
+
+    except (KeyError, ValueError):
+        traceback.print_exc()
+        abort(400)
+
+
 @restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['GET'])
 def get_workflow_status(workflow_id):  # noqa
     r"""Get workflow status.
+
     ---
     get:
       summary: Get workflow status.
@@ -875,6 +993,7 @@ def get_workflow_status(workflow_id):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id)}), 403
+
         return jsonify({'id': workflow.id_,
                         'status': workflow.status.name,
                         'organization': organization,
@@ -1018,7 +1137,9 @@ def start_workflow(organization, workflow):
         return run_yadage_workflow_from_spec(organization,
                                              workflow)
     elif workflow.type_ == 'cwl':
-        pass
+        return run_cwl_workflow_from_spec_endpoint(organization,
+                                                   user_uuid,
+                                                   workflow)
 
 
 def run_yadage_workflow_from_spec(organization, workflow):
@@ -1048,4 +1169,31 @@ def run_yadage_workflow_from_spec(organization, workflow):
 
     except(KeyError, ValueError):
         traceback.print_exc()
+        abort(400)
+
+
+def run_cwl_workflow_from_spec_endpoint(organization, user_uuid, workflow):  # noqa
+    """Run a CWL workflow."""
+    try:
+        kwargs = {
+            "workflow_uuid": str(workflow.id_),
+            "workflow_workspace": workflow.workspace_path,
+            "workflow_json": workflow.specification,
+            "parameters": workflow.parameters['input']
+        }
+        queue = organization_to_queue[organization]
+        if not os.environ.get("TESTS"):
+            resultobject = run_cwl_workflow.apply_async(
+                kwargs=kwargs,
+                queue='cwl-{}'.format(queue)
+            )
+        return jsonify({'message': 'Workflow successfully launched',
+                        'workflow_id': str(workflow.id_),
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': user_uuid}), 200
+
+    except (KeyError, ValueError) as e:
+        print(e)
+        # traceback.print_exc()
         abort(400)
