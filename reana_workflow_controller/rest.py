@@ -31,10 +31,10 @@ from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 from .factory import db
-from .fsdb import (create_workflow_workspace, get_analysis_files_dir,
-                   list_directory_files)
 from .models import User, Workflow, WorkflowStatus
 from .tasks import run_yadage_workflow
+from .utils import (create_workflow_workspace, get_analysis_files_dir,
+                    list_directory_files)
 
 START = 'start'
 STOP = 'stop'

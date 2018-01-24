@@ -19,7 +19,7 @@
 # In applying this license, CERN does not waive the privileges and immunities
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
-"""REANA-Workflow-Controller fsdb module tests."""
+"""REANA-Workflow-Controller module tests."""
 
 import io
 import json
@@ -33,10 +33,10 @@ from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import (ALLOWED_LIST_DIRECTORIES,
                                               ALLOWED_SEED_DIRECTORIES)
-from reana_workflow_controller.fsdb import (get_analysis_files_dir,
-                                            get_user_analyses_dir)
 from reana_workflow_controller.models import Workflow, WorkflowStatus
 from reana_workflow_controller.rest import START, STOP
+from reana_workflow_controller.utils import (get_analysis_files_dir,
+                                             get_user_analyses_dir)
 
 status_dict = {
     START: WorkflowStatus.running,
