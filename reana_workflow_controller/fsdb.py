@@ -66,13 +66,13 @@ def create_workflow_workspace(org, user, workflow_uuid):
     if not reana_fs.exists(workflow_workspace):
         reana_fs.makedirs(workflow_workspace)
         reana_fs.makedirs(
-            fs.path.join(workflow_workspace,
+            fs.path.join(analysis_workspace,
                          app.config['INPUTS_RELATIVE_PATH']))
         reana_fs.makedirs(
-            fs.path.join(workflow_workspace,
+            fs.path.join(analysis_workspace,
                          app.config['OUTPUTS_RELATIVE_PATH']))
         reana_fs.makedirs(
-            fs.path.join(workflow_workspace,
+            fs.path.join(analysis_workspace,
                          app.config['CODE_RELATIVE_PATH']))
 
     return workflow_workspace, analysis_workspace

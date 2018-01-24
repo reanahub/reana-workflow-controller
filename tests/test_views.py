@@ -631,9 +631,11 @@ def test_seed_workflow_workspace(app, db_session, default_user,
             data={'file_content': (io.BytesIO(file_binary_content),
                                    file_name)})
         assert res.status_code == 200
+        # remove workspace directory from path
+        analysis_workspace = os.path.dirname(workflow.workspace_path)
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
+                         analysis_workspace)
 
         file_path = os.path.join(
             absolute_path_workflow_workspace,

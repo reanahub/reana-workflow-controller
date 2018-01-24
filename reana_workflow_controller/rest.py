@@ -381,9 +381,11 @@ def seed_workflow_workspace(workflow_id):
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
+            # remove workspace directory from path
+            analysis_workspace = os.path.dirname(workflow.workspace_path)
             file_.save(os.path.join(
                 current_app.config['SHARED_VOLUME_PATH'],
-                workflow.workspace_path,
+                analysis_workspace,
                 current_app.config['ALLOWED_SEED_DIRECTORIES'][file_type],
                 file_name))
             return jsonify(
@@ -577,9 +579,11 @@ def get_workflow_files(workflow_id):  # noqa
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
+            # remove workspace directory from path
+            analysis_workspace = os.path.dirname(workflow.workspace_path)
             outputs_directory = os.path.join(
                 current_app.config['SHARED_VOLUME_PATH'],
-                workflow.workspace_path,
+                analysis_workspace,
                 current_app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
 
             outputs_list = list_directory_files(outputs_directory)
