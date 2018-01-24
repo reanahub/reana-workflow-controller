@@ -26,13 +26,13 @@ import os
 import traceback
 from uuid import uuid4
 
-from flask import (Blueprint, abort, current_app, jsonify, request,
-                   send_from_directory)
+from flask import Blueprint, abort, jsonify, request, send_from_directory
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 from .factory import db
-from .fsdb import create_workflow_workspace, list_directory_files
+from .fsdb import (create_workflow_workspace, get_analysis_files_dir,
+                   list_directory_files)
 from .models import User, Workflow, WorkflowStatus
 from .tasks import run_yadage_workflow
 
@@ -381,13 +381,9 @@ def seed_workflow_workspace(workflow_id):
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
-            # remove workspace directory from path
-            analysis_workspace = os.path.dirname(workflow.workspace_path)
-            file_.save(os.path.join(
-                current_app.config['SHARED_VOLUME_PATH'],
-                analysis_workspace,
-                current_app.config['ALLOWED_SEED_DIRECTORIES'][file_type],
-                file_name))
+            seed_directory = get_analysis_files_dir(workflow, file_type,
+                                                    'seed')
+            file_.save(os.path.join(seed_directory, file_name))
             return jsonify(
                 {'message': '{0} has been successfully trasferred.'.
                  format(file_name)}), 200
@@ -472,15 +468,15 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
                 {'message': 'User {} does not exist'.format(user)}), 404
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        outputs_directory = os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'],
-            workflow.workspace_path,
-            'outputs')
-        return send_from_directory(outputs_directory,
-                                   file_name,
-                                   mimetype='multipart/form-data',
-                                   as_attachment=True), 200
-
+        if workflow:
+            outputs_directory = get_analysis_files_dir(workflow, 'output')
+            return send_from_directory(outputs_directory,
+                                       file_name,
+                                       mimetype='multipart/form-data',
+                                       as_attachment=True), 200
+        else:
+            return jsonify({'message': 'Workflow {} does not exist.'.
+                            format(str(workflow_id))}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except NotFound as e:
@@ -579,15 +575,9 @@ def get_workflow_files(workflow_id):  # noqa
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
-            # remove workspace directory from path
-            analysis_workspace = os.path.dirname(workflow.workspace_path)
-            outputs_directory = os.path.join(
-                current_app.config['SHARED_VOLUME_PATH'],
-                analysis_workspace,
-                current_app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
-
-            outputs_list = list_directory_files(outputs_directory)
-            return jsonify(outputs_list), 200
+            file_list = list_directory_files(
+                get_analysis_files_dir(workflow, file_type))
+            return jsonify(file_list), 200
         else:
             return jsonify({'message': 'Workflow {} does not exist.'.
                             format(str(workflow_id))}), 404

@@ -33,7 +33,8 @@ from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import (ALLOWED_LIST_DIRECTORIES,
                                               ALLOWED_SEED_DIRECTORIES)
-from reana_workflow_controller.fsdb import get_user_analyses_dir
+from reana_workflow_controller.fsdb import (get_analysis_files_dir,
+                                            get_user_analyses_dir)
 from reana_workflow_controller.models import Workflow, WorkflowStatus
 from reana_workflow_controller.rest import START, STOP
 
@@ -245,16 +246,12 @@ def test_get_workflow_outputs_file(app, db_session, default_user,
         # create file
         file_name = 'output name.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
-        # write file in the workflow workspace under `outputs` directory
-        file_path = os.path.join(absolute_path_workflow_workspace,
-                                 app.config['OUTPUTS_RELATIVE_PATH'],
-                                 # we use `secure_filename` here because
-                                 # we use it in server side when adding
-                                 # files
-                                 file_name)
+        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        # write file in the workflow workspace under `outputs` directory:
+        # we use `secure_filename` here because
+        # we use it in server side when adding
+        # files
+        file_path = os.path.join(outputs_directory, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb+') as f:
@@ -294,13 +291,12 @@ def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
         # create file
         file_name = 'first/1991/output.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
-        # write file in the workflow workspace under `outputs` directory
-        file_path = os.path.join(absolute_path_workflow_workspace,
-                                 'outputs',
-                                 file_name)
+        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        # write file in the workflow workspace under `outputs` directory:
+        # we use `secure_filename` here because
+        # we use it in server side when adding
+        # files
+        file_path = os.path.join(outputs_directory, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb+') as f:
@@ -632,18 +628,12 @@ def test_seed_workflow_workspace(app, db_session, default_user,
                                    file_name)})
         assert res.status_code == 200
         # remove workspace directory from path
-        analysis_workspace = os.path.dirname(workflow.workspace_path)
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         analysis_workspace)
+        files_directory = get_analysis_files_dir(workflow, file_type, 'seed')
 
-        file_path = os.path.join(
-            absolute_path_workflow_workspace,
-            app.config['ALLOWED_SEED_DIRECTORIES'][file_type],
-            # we use `secure_filename` here because
-            # we use it in server side when adding
-            # files
-            secure_filename(file_name))
+        # we use `secure_filename` here because
+        # we use it in server side when adding
+        # files
+        file_path = os.path.join(files_directory, secure_filename(file_name))
 
         with open(file_path, 'rb') as f:
             assert f.read() == file_binary_content

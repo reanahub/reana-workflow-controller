@@ -78,8 +78,27 @@ def create_workflow_workspace(org, user, workflow_uuid):
     return workflow_workspace, analysis_workspace
 
 
+def get_analysis_dir(workflow):
+    """Given a workflow, returns its analysis directory."""
+    # remove workflow workspace (/workspace) directory from path
+    analysis_workspace = fs.path.dirname(workflow.workspace_path)
+    return fs.path.join(app.config['SHARED_VOLUME_PATH'],
+                        analysis_workspace)
+
+
+def get_analysis_files_dir(workflow, file_type, action='list'):
+    """Given a workflow and a file type, returns path to the file type dir."""
+    analysis_workspace = get_analysis_dir(workflow)
+    if action == 'list':
+        return fs.path.join(analysis_workspace,
+                            app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
+    elif action == 'seed':
+        return fs.path.join(analysis_workspace,
+                            app.config['ALLOWED_SEED_DIRECTORIES'][file_type])
+
+
 def list_directory_files(directory):
-    """Return a list of files contained in a directory."""
+    """Return a list of files of a given type for an analysis."""
     fs_ = fs.open_fs(directory)
     file_list = []
     for file_name in fs_.walk.files():
