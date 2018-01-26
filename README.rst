@@ -20,4 +20,27 @@
 .. image:: https://img.shields.io/github/license/reanahub/reana-workflow-controller.svg
       :target: https://github.com/reanahub/reana-workflow-controller/blob/master/COPYING
 
-The workflow controller component of the REANA system.
+About
+-----
+
+REANA-Workflow-Controller is a component of the `REANA <http://reanahub.io/>`_
+reusable analysis platform. It takes care of instantiating and managing
+computational workflows.
+
+Features
+--------
+
+- start workflow execution
+- control workflow steps
+- support for several workflow specifications (CWL, Yadage)
+
+Useful links
+------------
+
+- `documentation <https://reana-workflow-controller.readthedocs.io/>`_
+- `releases <https://github.com/reanahub/reana-workflow-controller/releases>`_
+- `known issues <https://github.com/reanahub/reana-workflow-controller/issues>`_
+- `source code <https://github.com/reanahub/reana-workflow-controller>`_
+
+For more information about the REANA reusable analysis platform, please see the
+general `REANA documentation <http://reana.readthedocs.io/>`_.
