@@ -390,9 +390,8 @@ def seed_workflow_workspace(workflow_id):
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
             filename = full_file_name.split("/")[-1]
-            # path = os.path.join(os.getenv('SHARED_VOLUME_PATH'), workflow.workspace_path)
-            path = os.path.join(get_analysis_files_dir(workflow, file_type,
-                                                    'seed'), workflow.workspace_path)
+            path = get_analysis_files_dir(workflow, file_type,
+                                                    'seed')
             if len(full_file_name.split("/")) > 1 and not os.path.isabs(full_file_name):
                 dirs = full_file_name.split("/")[:-1]
                 path = os.path.join(path, "/".join(dirs))
@@ -1234,7 +1233,6 @@ def start_workflow(organization, workflow):
                                              workflow)
     elif workflow.type_ == 'cwl':
         return run_cwl_workflow_from_spec_endpoint(organization,
-                                                   user_uuid,
                                                    workflow)
 
 
@@ -1268,7 +1266,7 @@ def run_yadage_workflow_from_spec(organization, workflow):
         abort(400)
 
 
-def run_cwl_workflow_from_spec_endpoint(organization, user_uuid, workflow):  # noqa
+def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
     """Run a CWL workflow."""
     try:
         kwargs = {
@@ -1286,8 +1284,7 @@ def run_cwl_workflow_from_spec_endpoint(organization, user_uuid, workflow):  # n
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'status': workflow.status.name,
-                        'organization': organization,
-                        'user': user_uuid}), 200
+                        'organization': organization}), 200
 
     except (KeyError, ValueError) as e:
         print(e)
