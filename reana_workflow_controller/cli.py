@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -24,12 +24,11 @@
 
 import click
 from flask.cli import with_appcontext
-from sqlalchemy import exc
 
 from reana_workflow_controller import config
 from reana_workflow_controller.factory import db
-from reana_workflow_controller.fsdb import create_user_space
 from reana_workflow_controller.models import User
+from reana_workflow_controller.utils import create_user_space
 
 
 @click.group()

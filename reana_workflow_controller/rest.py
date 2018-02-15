@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -26,16 +26,17 @@ import os
 import traceback
 from uuid import uuid4
 
-from flask import (Blueprint, abort, current_app, jsonify, request,
-                   send_from_directory)
+from flask import Blueprint, abort, jsonify, request, send_from_directory
+from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import SHARED_VOLUME_PATH
 from reana_workflow_controller.models import WorkflowStatus
 from .factory import db
-from .fsdb import create_workflow_workspace, list_directory_files
 from .models import User, Workflow, WorkflowStatus
 from .tasks import run_cwl_workflow, run_yadage_workflow
+from .utils import (create_workflow_workspace, get_analysis_files_dir,
+                    list_directory_files)
 
 START = 'start'
 STOP = 'stop'
@@ -300,7 +301,7 @@ def seed_workflow_workspace(workflow_id):
       description: >-
         This resource is expecting a workflow UUID and a file to place in the
         workflow workspace.
-      operationId: seed_workflow
+      operationId: seed_workflow_files
       consumes:
         - multipart/form-data
       produces:
@@ -331,6 +332,14 @@ def seed_workflow_workspace(workflow_id):
           description: Required. File name.
           required: true
           type: string
+        - name: file_type
+          in: query
+          description: Required. If set to `input`, the file will be placed
+                       under `workspace/inputs/` whereas if it is of type
+                       `code` it will live under `workspace/code/`. By default
+                       it set to `input`.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -345,12 +354,25 @@ def seed_workflow_workspace(workflow_id):
           examples:
             application/json:
               {
-                "message": "The file input.csv has been successfully
-                transferred.",
+                "message": "input.csv has been successfully transferred.",
               }
         400:
           description: >-
             Request failed. The incoming data specification seems malformed
+        404:
+          description: >-
+            Request failed. Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist",
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -362,19 +384,26 @@ def seed_workflow_workspace(workflow_id):
         if not full_file_name:
             raise ValueError('The file transferred needs to have name.')
 
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        filename = full_file_name.split("/")[-1]
-        path = os.path.join(os.getenv('SHARED_VOLUME_PATH'), workflow.workspace_path)
-        if len(full_file_name.split("/")) > 1 and not os.path.isabs(full_file_name):
-            dirs = full_file_name.split("/")[:-1]
-            path = os.path.join(path, "/".join(dirs))
-            if not os.path.exists(path):
-                os.makedirs(path)
+        file_type = request.args.get('file_type') \
+            if request.args.get('file_type') else 'input'
 
-        file_.save(os.path.join(path, filename))
-        return jsonify({'message': 'File successfully transferred'}), 200
-    except KeyError as e:
-        return jsonify({"message": str(e)}), 400
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        if workflow:
+            filename = full_file_name.split("/")[-1]
+            # path = os.path.join(os.getenv('SHARED_VOLUME_PATH'), workflow.workspace_path)
+            path = os.path.join(get_analysis_files_dir(workflow, file_type,
+                                                    'seed'), workflow.workspace_path)
+            if len(full_file_name.split("/")) > 1 and not os.path.isabs(full_file_name):
+                dirs = full_file_name.split("/")[:-1]
+                path = os.path.join(path, "/".join(dirs))
+                if not os.path.exists(path):
+                    os.makedirs(path)
+
+            file_.save(os.path.join(path, filename))
+            return jsonify({'message': 'File successfully transferred'}), 200
+        else:
+            return jsonify({'message': 'Workflow {0} does not exist.'.
+               format(workflow_id)}), 404
     except ValueError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -428,105 +457,11 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. `file_name` does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
-                            exist"
-              }
-        500:
-          description: >-
-            Request failed. Internal controller error.
-          examples:
-            application/json:
-              {
-                "message": "Either organization or user doesn't exist."
-              }
-    """
-    try:
-        user_uuid = request.args['user']
-        user = User.query.filter(User.id_ == user_uuid).first()
-        if not user:
-            return jsonify(
-                {'message': 'User {} does not exist'.format(user)}), 404
-
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        outputs_directory = os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'],
-            workflow.workspace_path,
-            'outputs')
-        # fix, we don't know wich encoding is being used
-        # check how to add it to HTTP headers with `send_from_directory`
-        # or `send_file`
-        return send_from_directory(outputs_directory,
-                                   file_name,
-                                   mimetype='multipart/form-data',
-                                   as_attachment=True), 200
-
-    except KeyError:
-        return jsonify({"message": "Malformed request."}), 400
-    except Exception as e:
-        return jsonify({"message": str(e)}), 500
-
-
-@restapi_blueprint.route('/workflows/<workflow_id>/workspace/inputs',
-                         methods=['GET'])
-def get_workflow_inputs(workflow_id):  # noqa
-    r"""List all workflow input files.
-
-    ---
-    get:
-      summary: Returns the list of input files for a specific workflow.
-      description: >-
-        This resource is expecting a workflow UUID and a filename to return
-        its list of input files.
-      operationId: get_workflow_inputs
-      produces:
-        - multipart/form-data
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
-        - name: user
-          in: query
-          description: Required. UUID of workflow owner.
-          required: true
-          type: string
-        - name: workflow_id
-          in: path
-          description: Required. Workflow UUID.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Requests succeeded. The list of input files has been retrieved.
-          schema:
-            type: array
-            items:
-              type: object
-              properties:
-                name:
-                  type: string
-                last-modified:
-                  type: string
-                  format: date-time
-                size:
-                  type: integer
-        400:
-          description: >-
-            Request failed. The incoming data specification seems malformed.
-        404:
-          description: >-
-            Request failed. User doesn't exist.
-          examples:
-            application/json:
-              {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
-                            exist"
+                "message": "input.csv does not exist"
               }
         500:
           description: >-
@@ -546,35 +481,36 @@ def get_workflow_inputs(workflow_id):  # noqa
 
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
-            outputs_directory = os.path.join(
-                current_app.config['SHARED_VOLUME_PATH'],
-                workflow.workspace_path,
-                current_app.config['INPUTS_RELATIVE_PATH'])
-
-            outputs_list = list_directory_files(outputs_directory)
-            return jsonify(outputs_list), 200
+            outputs_directory = get_analysis_files_dir(workflow, 'output')
+            return send_from_directory(outputs_directory,
+                                       file_name,
+                                       mimetype='multipart/form-data',
+                                       as_attachment=True), 200
         else:
-            return jsonify({'message': 'The workflow {} doesn\'t exist'.
-                            format(str(workflow.id_))}), 404
-
+            return jsonify({'message': 'Workflow {} does not exist.'.
+                            format(str(workflow_id))}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except NotFound as e:
+        return jsonify(
+            {"message": "{0} does not exist.".format(file_name)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/workspace/outputs',
+@restapi_blueprint.route('/workflows/<workflow_id>/workspace',
                          methods=['GET'])
-def get_workflow_outputs(workflow_id):  # noqa
-    r"""List all workflow output files.
+def get_workflow_files(workflow_id):  # noqa
+    r"""List all workflow code/input/output files.
 
     ---
     get:
-      summary: Returns the list of output files for a specific workflow.
+      summary: Returns the list of code|input|output files for a specific
+               workflow.
       description: >-
         This resource is expecting a workflow UUID and a filename to return
-        its outputs.
-      operationId: get_workflow_outputs
+        its list of code|input|output files.
+      operationId: get_workflow_files
       produces:
         - multipart/form-data
       parameters:
@@ -593,10 +529,19 @@ def get_workflow_outputs(workflow_id):  # noqa
           description: Required. Workflow UUID.
           required: true
           type: string
+        - name: file_type
+          in: query
+          description: Required. The file will be retrieved from the
+                       corresponding directory `workspace/<file_type>`.
+                       Possible values are `code`, `input` and `output`.
+                       `input` is the default value.
+          required: false
+          type: string
       responses:
         200:
           description: >-
-            Requests succeeded. The list of output files has been retrieved.
+            Requests succeeded. The list of code|input|output files has been
+            retrieved.
           schema:
             type: array
             items:
@@ -614,12 +559,12 @@ def get_workflow_outputs(workflow_id):  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. Workflow does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
-                            exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
               }
         500:
           description: >-
@@ -637,18 +582,17 @@ def get_workflow_outputs(workflow_id):  # noqa
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
 
+        file_type = request.args.get('file_type') \
+            if request.args.get('file_type') else 'input'
+
         workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
         if workflow:
-            outputs_directory = os.path.join(
-                current_app.config['SHARED_VOLUME_PATH'],
-                workflow.workspace_path,
-                current_app.config['OUTPUTS_RELATIVE_PATH'])
-
-            outputs_list = list_directory_files(outputs_directory)
-            return jsonify(outputs_list), 200
+            file_list = list_directory_files(
+                get_analysis_files_dir(workflow, file_type))
+            return jsonify(file_list), 200
         else:
-            return jsonify({'message': 'The workflow {} doesn\'t exist'.
-                            format(str(workflow.id_))}), 404
+            return jsonify({'message': 'Workflow {} does not exist.'.
+                            format(str(workflow_id))}), 404
 
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
@@ -1248,7 +1192,7 @@ def set_workflow_status(workflow_id):  # noqa
             application/json:
               {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
-                            doesn't exist"
+                            does not exist"
               }
         500:
           description: >-
@@ -1264,14 +1208,14 @@ def set_workflow_status(workflow_id):  # noqa
             return jsonify({'message': 'Status {0} is not one of: {1}'.
                             format(status, ", ".join(STATUSES))}), 400
         if not workflow:
-            return jsonify({'message': 'Workflow {} does not exist'.
+            return jsonify({'message': 'Workflow {} does not exist.'.
                             format(workflow_id)}), 404
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id)}), 403
         if status == START:
-            return start_workflow(organization, user_uuid, workflow)
+            return start_workflow(organization, workflow)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1281,13 +1225,12 @@ def set_workflow_status(workflow_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def start_workflow(organization, user_uuid, workflow):
+def start_workflow(organization, workflow):
     """Start a workflow."""
     workflow.status = WorkflowStatus.running
     db.session.commit()
     if workflow.type_ == 'yadage':
         return run_yadage_workflow_from_spec(organization,
-                                             user_uuid,
                                              workflow)
     elif workflow.type_ == 'cwl':
         return run_cwl_workflow_from_spec_endpoint(organization,
@@ -1295,12 +1238,16 @@ def start_workflow(organization, user_uuid, workflow):
                                                    workflow)
 
 
-def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
+def run_yadage_workflow_from_spec(organization, workflow):
     """Run a yadage workflow."""
     try:
+        # Remove organization from workspace path since workflow
+        # engines already work in its organization folder.
+        workspace_path_without_organization = \
+            '/'.join(workflow.workspace_path.strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.workspace_path,
+            "workflow_workspace": workspace_path_without_organization,
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
         }
@@ -1314,7 +1261,7 @@ def run_yadage_workflow_from_spec(organization, user_uuid, workflow):
                         'workflow_id': workflow.id_,
                         'status': workflow.status.name,
                         'organization': organization,
-                        'user': user_uuid}), 200
+                        'user': str(workflow.owner_id)}), 200
 
     except(KeyError, ValueError):
         traceback.print_exc()

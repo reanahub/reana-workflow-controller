@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -19,18 +19,24 @@
 # In applying this license, CERN does not waive the privileges and immunities
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
-"""REANA-Workflow-Controller fsdb module tests."""
+"""REANA-Workflow-Controller module tests."""
 
+import io
 import json
 import os
 import uuid
 
 import fs
+import pytest
 from flask import url_for
+from werkzeug.utils import secure_filename
 
-from reana_workflow_controller.fsdb import get_user_analyses_dir
+from reana_workflow_controller.config import (ALLOWED_LIST_DIRECTORIES,
+                                              ALLOWED_SEED_DIRECTORIES)
 from reana_workflow_controller.models import Workflow, WorkflowStatus
 from reana_workflow_controller.rest import START, STOP
+from reana_workflow_controller.utils import (get_analysis_files_dir,
+                                             get_user_analyses_dir)
 
 status_dict = {
     START: WorkflowStatus.running,
@@ -180,6 +186,41 @@ def test_create_workflow_wrong_user(app, db_session, tmp_shared_volume_path):
         assert not os.path.exists(workflow_workspace)
 
 
+def test_get_workflow_outputs_absent_file(app, db_session, default_user,
+                                          tmp_shared_volume_path):
+    """Test download output file."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        assert res.status_code == 201
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        file_name = 'input.csv'
+        res = client.get(
+            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+                    file_name=file_name),
+            query_string={"user": default_user.id_,
+                          "organization": organization},
+            content_type='application/json',
+            data=json.dumps(data))
+
+        assert res.status_code == 404
+        response_data = json.loads(res.get_data(as_text=True))
+        assert response_data == {'message': 'input.csv does not exist.'}
+
+
 def test_get_workflow_outputs_file(app, db_session, default_user,
                                    tmp_shared_volume_path):
     """Test download output file."""
@@ -205,16 +246,12 @@ def test_get_workflow_outputs_file(app, db_session, default_user,
         # create file
         file_name = 'output name.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
-        # write file in the workflow workspace under `outputs` directory
-        file_path = os.path.join(absolute_path_workflow_workspace,
-                                 'outputs',
-                                 # we use `secure_filename` here because
-                                 # we use it in server side when adding
-                                 # files
-                                 file_name)
+        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        # write file in the workflow workspace under `outputs` directory:
+        # we use `secure_filename` here because
+        # we use it in server side when adding
+        # files
+        file_path = os.path.join(outputs_directory, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb+') as f:
@@ -254,13 +291,12 @@ def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
         # create file
         file_name = 'first/1991/output.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
-        # write file in the workflow workspace under `outputs` directory
-        file_path = os.path.join(absolute_path_workflow_workspace,
-                                 'outputs',
-                                 file_name)
+        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        # write file in the workflow workspace under `outputs` directory:
+        # we use `secure_filename` here because
+        # we use it in server side when adding
+        # files
+        file_path = os.path.join(outputs_directory, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb+') as f:
@@ -275,8 +311,9 @@ def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
         assert res.data == file_binary_content
 
 
-def test_get_workflow_inputs_list(app, db_session, default_user,
-                                  tmp_shared_volume_path):
+@pytest.mark.parametrize("file_type", ALLOWED_LIST_DIRECTORIES.keys())
+def test_get_workflow_files(app, default_user, tmp_shared_volume_path,
+                            file_type):
     """Test get list of input files."""
     with app.test_client() as client:
         # create workflow
@@ -303,8 +340,8 @@ def test_get_workflow_inputs_list(app, db_session, default_user,
                          workflow.workspace_path)
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
         # from config
-        inputs_relative_path = app.config['INPUTS_RELATIVE_PATH']
-        fs_.makedirs(inputs_relative_path)
+        inputs_relative_path = \
+            app.config['ALLOWED_LIST_DIRECTORIES'][file_type]
         test_files = []
         for i in range(5):
             file_name = '{0}.csv'.format(i)
@@ -315,62 +352,37 @@ def test_get_workflow_inputs_list(app, db_session, default_user,
             test_files.append(os.path.join(subdir_name, file_name))
 
         res = client.get(
-            url_for('api.get_workflow_inputs', workflow_id=workflow_uuid),
+            url_for('api.get_workflow_files', workflow_id=workflow_uuid),
             query_string={"user": default_user.id_,
-                          "organization": organization},
+                          "organization": organization,
+                          "file_type": file_type},
             content_type='application/json',
             data=json.dumps(data))
         for file_ in json.loads(res.data.decode()):
             assert file_.get('name') in test_files
 
 
-def test_get_workflow_outputs_list(app, db_session, default_user,
-                                   tmp_shared_volume_path):
-    """Test get list of output files."""
+@pytest.mark.parametrize("file_type", ALLOWED_LIST_DIRECTORIES.keys())
+def test_get_unknown_workflow_files(app, default_user, file_type):
+    """Test get list of input files for non existing workflow."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
-        res = client.post(url_for('api.create_workflow'),
-                          query_string={
-                              "user": default_user.id_,
-                              "organization": organization},
-                          content_type='application/json',
-                          data=json.dumps(data))
-
-        response_data = json.loads(res.get_data(as_text=True))
-        workflow_uuid = response_data.get('workflow_id')
-        workflow = Workflow.query.filter(
-            Workflow.id_ == workflow_uuid).first()
-        # create file
-        absolute_path_workflow_workspace = \
-            os.path.join(tmp_shared_volume_path,
-                         workflow.workspace_path)
-        fs_ = fs.open_fs(absolute_path_workflow_workspace)
-        # from config
-        outputs_realative_path = app.config['OUTPUTS_RELATIVE_PATH']
-        fs_.makedirs(outputs_realative_path)
-        test_files = []
-        for i in range(5):
-            file_name = '{0}.csv'.format(i)
-            subdir_name = str(uuid.uuid4())
-            subdir = fs.path.join(outputs_realative_path, subdir_name)
-            fs_.makedirs(subdir)
-            fs_.touch('{0}/{1}'.format(subdir, file_name))
-            test_files.append(os.path.join(subdir_name, file_name))
+        random_workflow_uuid = str(uuid.uuid4())
 
         res = client.get(
-            url_for('api.get_workflow_outputs', workflow_id=workflow_uuid),
+            url_for('api.get_workflow_files',
+                    workflow_id=random_workflow_uuid),
             query_string={"user": default_user.id_,
-                          "organization": organization},
-            content_type='application/json',
-            data=json.dumps(data))
-        for file_ in json.loads(res.data.decode()):
-            assert file_.get('name') in test_files
+                          "organization": organization,
+                          "file_type": file_type},
+            content_type='application/json')
+
+        assert res.status_code == 404
+        response_data = json.loads(res.get_data(as_text=True))
+        expected_data = {'message': 'Workflow {0} does not exist.'.
+                         format(random_workflow_uuid)}
+        assert response_data == expected_data
 
 
 def test_get_workflow_status(app, db_session, default_user):
@@ -576,3 +588,110 @@ def test_set_workflow_status_unknown_workflow(app, default_user):
                          content_type='application/json',
                          data=json.dumps(payload))
         assert res.status_code == 404
+
+
+@pytest.mark.parametrize("file_type", ALLOWED_SEED_DIRECTORIES.keys())
+def test_seed_workflow_workspace(app, db_session, default_user,
+                                 tmp_shared_volume_path, file_type):
+    """Test download output file."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
+        # create file
+        file_name = 'dataset.csv'
+        file_binary_content = b'1,2,3,4\n5,6,7,8'
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization,
+                          "file_name": file_name,
+                          "file_type": file_type},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 200
+        # remove workspace directory from path
+        files_directory = get_analysis_files_dir(workflow, file_type, 'seed')
+
+        # we use `secure_filename` here because
+        # we use it in server side when adding
+        # files
+        file_path = os.path.join(files_directory, secure_filename(file_name))
+
+        with open(file_path, 'rb') as f:
+            assert f.read() == file_binary_content
+
+
+def test_seed_unknown_workflow_workspace(app, db_session, default_user,
+                                         tmp_shared_volume_path):
+    """Test download output file."""
+    with app.test_client() as client:
+        random_workflow_uuid = uuid.uuid4()
+        # create file
+        file_name = 'dataset.csv'
+        file_binary_content = b'1,2,3,4\n5,6,7,8'
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace',
+                    workflow_id=random_workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": "default",
+                          "file_name": file_name},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 404
+
+
+def test_seed_workflow_workspace_with_wrong_file_type(app, default_user,
+                                                      tmp_shared_volume_path):
+    """Seed files with wrong input type."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+
+        # create file
+        file_name = 'helloworld.py'
+        file_binary_content = b'print("Hello world.")\n'
+
+        res = client.post(
+            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            query_string={"user": default_user.id_,
+                          "organization": organization,
+                          "file_name": file_name,
+                          "file_type": "wrong-type"},
+            content_type='multipart/form-data',
+            data={'file_content': (io.BytesIO(file_binary_content),
+                                   file_name)})
+        assert res.status_code == 400

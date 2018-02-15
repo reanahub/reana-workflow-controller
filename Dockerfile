@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -18,11 +18,16 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-FROM python:3.5
+FROM python:3.6
+
 ADD . /code
 WORKDIR /code
-RUN apt update && apt install -y vim emacs-nox && \
-    pip install -e .[all]
+ENV TERM=xterm
+RUN apt-get update && \
+    apt-get install -y vim-tiny
+# Debug off by default
+ARG DEBUG=false
+RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
 CMD flask users create info@reana.io &&\
