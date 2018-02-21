@@ -405,7 +405,7 @@ def seed_workflow_workspace(workflow_id):
         else:
             return jsonify({'message': 'Workflow {0} does not exist.'.format(
                            workflow_id)}), 404
-    except ValueError as e:
+    except (KeyError, ValueError) as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
