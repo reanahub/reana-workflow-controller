@@ -78,3 +78,6 @@ target/
 
 # Vagrant
 .vagrant
+
+# Visual Studio Code files
+.vscode

@@ -20,14 +20,18 @@
 
 FROM python:3.6
 
-ADD . /code
-WORKDIR /code
 ENV TERM=xterm
 RUN apt-get update && \
     apt-get install -y vim-tiny
+
+ADD . /code
+WORKDIR /code
+
 # Debug off by default
 ARG DEBUG=false
+
 RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
+
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
 CMD flask users create info@reana.io &&\

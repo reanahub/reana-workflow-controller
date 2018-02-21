@@ -22,7 +22,6 @@
 """Workflow persistence management."""
 
 import fs
-import fs.path
 from flask import current_app as app
 
 

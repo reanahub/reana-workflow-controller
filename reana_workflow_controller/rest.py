@@ -32,6 +32,7 @@ from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import SHARED_VOLUME_PATH
 from reana_workflow_controller.models import WorkflowStatus
+
 from .factory import db
 from .models import User, Workflow, WorkflowStatus
 from .tasks import run_cwl_workflow, run_yadage_workflow
@@ -391,8 +392,9 @@ def seed_workflow_workspace(workflow_id):
         if workflow:
             filename = full_file_name.split("/")[-1]
             path = get_analysis_files_dir(workflow, file_type,
-                                                    'seed')
-            if len(full_file_name.split("/")) > 1 and not os.path.isabs(full_file_name):
+                                          'seed')
+            if len(full_file_name.split("/")) > 1 and not \
+               os.path.isabs(full_file_name):
                 dirs = full_file_name.split("/")[:-1]
                 path = os.path.join(path, "/".join(dirs))
                 if not os.path.exists(path):
@@ -401,8 +403,8 @@ def seed_workflow_workspace(workflow_id):
             file_.save(os.path.join(path, filename))
             return jsonify({'message': 'File successfully transferred'}), 200
         else:
-            return jsonify({'message': 'Workflow {0} does not exist.'.
-               format(workflow_id)}), 404
+            return jsonify({'message': 'Workflow {0} does not exist.'.format(
+                           workflow_id)}), 404
     except ValueError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -599,7 +601,6 @@ def get_workflow_files(workflow_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-
 @restapi_blueprint.route('/workflows/<workflow_id>/logs',
                          methods=['GET'])
 def get_workflow_logs(workflow_id):  # noqa
@@ -696,6 +697,7 @@ def get_workflow_logs(workflow_id):  # noqa
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
+
 @restapi_blueprint.route('/yadage/remote', methods=['POST'])
 def run_yadage_workflow_from_remote_endpoint():  # noqa
     r"""Create a new yadage workflow from a remote repository.
@@ -786,29 +788,6 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
             )
             return jsonify({'message': 'Workflow successfully launched',
                             'workflow_id': resultobject.id}), 200
-
-    except (KeyError, ValueError):
-        traceback.print_exc()
-        abort(400)
-
-
-@restapi_blueprint.route('/seed', methods=['POST'])
-def seed():  # noqa
-    try:
-        if request.files:
-            file = request.files['file']
-            analysis_directory = os.path.join(
-                os.getenv('SHARED_VOLUME', '/data'),
-                # FIXME parameter from RWC
-                '00000000-0000-0000-0000-000000000000',
-                'analyses')
-
-            analysis_workspace = os.path.join(analysis_directory, 'workspace')
-
-            if not os.path.exists(analysis_workspace):
-                os.makedirs(analysis_workspace)
-            file.save(analysis_workspace)
-            return jsonify({'message': 'File saved'}), 200
 
     except (KeyError, ValueError):
         traceback.print_exc()
