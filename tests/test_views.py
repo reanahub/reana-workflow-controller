@@ -695,3 +695,93 @@ def test_seed_workflow_workspace_with_wrong_file_type(app, default_user,
             data={'file_content': (io.BytesIO(file_binary_content),
                                    file_name)})
         assert res.status_code == 400
+
+
+def test_get_created_workflow_logs(app, default_user):
+    """Test get workflow logs."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'cwl'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        res = client.get(url_for('api.get_workflow_logs',
+                                 workflow_id=workflow_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json')
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))
+        create_workflow_logs = ""
+        expected_data = {
+            'workflow_id': workflow_uuid,
+            'organization': organization,
+            'user': str(default_user.id_),
+            'logs': create_workflow_logs
+        }
+        assert response_data == expected_data
+
+
+def test_get_unknown_workflow_logs(app, default_user):
+    """Test set workflow status for unknown workflow."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'yadage'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+        random_workflow_uuid = uuid.uuid4()
+        res = client.get(url_for('api.get_workflow_logs',
+                                 workflow_id=random_workflow_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json')
+        assert res.status_code == 404
+
+
+def test_get_workflow_logs_unauthorized(app, default_user):
+    """Test set workflow status for unknown workflow."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'min_year': '1991',
+                               'max_year': '2001'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'yadage'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get('workflow_id')
+        random_user_uuid = uuid.uuid4()
+        res = client.get(url_for('api.get_workflow_logs',
+                                 workflow_id=workflow_uuid),
+                         query_string={
+                             "user": random_user_uuid,
+                             "organization": organization},
+                         content_type='application/json')
+        assert res.status_code == 403
