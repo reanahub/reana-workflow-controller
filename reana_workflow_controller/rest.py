@@ -1263,7 +1263,8 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'status': workflow.status.name,
-                        'organization': organization}), 200
+                        'organization': organization,
+                        'user': str(workflow.owner_id)}), 200
 
     except (KeyError, ValueError) as e:
         print(e)
