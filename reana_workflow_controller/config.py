@@ -24,6 +24,9 @@
 
 import os
 
+BROKER = os.getenv("RABBIT_MQ", 'amqp://test:1234@'
+                   'message-broker.default.svc.cluster.local//')
+
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
 """Path to the mounted REANA shared volume."""
 

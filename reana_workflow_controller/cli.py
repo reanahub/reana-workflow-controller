@@ -24,12 +24,11 @@
 
 import click
 from flask.cli import with_appcontext
-from sqlalchemy import exc
 
-from . import config
-from .factory import db
-from .models import User
-from .utils import create_user_space
+from reana_workflow_controller import config
+from reana_workflow_controller.factory import db
+from reana_workflow_controller.models import User
+from reana_workflow_controller.utils import create_user_space
 
 
 @click.group()
