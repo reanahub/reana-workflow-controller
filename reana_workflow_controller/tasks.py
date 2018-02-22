@@ -24,18 +24,16 @@
 
 from __future__ import absolute_import
 
-import json
-import os
-
-import requests
 from celery import Celery
 
+from reana_workflow_controller.config import BROKER
+
 celery = Celery('tasks',
-                broker='amqp://test:1234@'
-                       'message-broker.default.svc.cluster.local//')
+                broker=BROKER)
 
 celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
                    CELERY_TASK_SERIALIZER='json')
 
 
 run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
+run_cwl_workflow = celery.signature('tasks.run_cwl_workflow')

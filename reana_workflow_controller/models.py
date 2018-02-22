@@ -72,6 +72,7 @@ class Workflow(db.Model):
     specification = db.Column(JSONType)
     parameters = db.Column(JSONType)
     type_ = db.Column(db.String(30))
+    logs = db.Column(db.String, default="")
 
     def __init__(self, id_, workspace_path, owner_id,
                  specification, parameters, type_,

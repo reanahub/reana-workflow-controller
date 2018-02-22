@@ -22,6 +22,6 @@
 
 """REANA Workflow Controller Instance."""
 
-from .factory import create_app
+from reana_workflow_controller.factory import create_app
 
 app = create_app()
