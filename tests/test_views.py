@@ -532,6 +532,52 @@ def test_set_workflow_status(app, db_session, default_user):
         assert json_response.get('status') == status_dict[payload].name
 
 
+def test_start_already_started_workflow(app, db_session, default_user):
+    """Test start workflow twice."""
+    with app.test_client() as client:
+        os.environ["TESTS"] = "True"
+        # create workflow
+        organization = 'default'
+        data = {'parameters': {'input': 'job.json'},
+                'specification': {'first': 'do this',
+                                  'second': 'do that'},
+                'type': 'yadage'}
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(data))
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_created_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_created_uuid).first()
+        assert workflow.status == WorkflowStatus.created
+        payload = START
+        res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id=workflow_created_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(payload))
+        json_response = json.loads(res.data.decode())
+        assert json_response.get('status') == status_dict[payload].name
+        res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id=workflow_created_uuid),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(payload))
+        json_response = json.loads(res.data.decode())
+        assert res.status_code == 409
+        expected_message = ("Workflow {0} could not be started because it is"
+                            " already running.").format(workflow_created_uuid)
+        assert json_response.get('message') == expected_message
+
+
 def test_set_workflow_status_unauthorized(app, default_user):
     """Test set workflow status unauthorized."""
     with app.test_client() as client:

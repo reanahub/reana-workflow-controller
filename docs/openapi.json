@@ -532,6 +532,14 @@
               }
             }
           },
+          "409": {
+            "description": "Request failed. The workflow could not be started due to a conflict.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 could not be started because it is already running."
+              }
+            }
+          },
           "500": {
             "description": "Request failed. Internal controller error."
           }

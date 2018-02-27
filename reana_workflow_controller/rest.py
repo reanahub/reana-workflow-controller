@@ -31,13 +31,14 @@ from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import SHARED_VOLUME_PATH
-from reana_workflow_controller.models import WorkflowStatus
-
-from .factory import db
-from .models import User, Workflow, WorkflowStatus
-from .tasks import run_cwl_workflow, run_yadage_workflow
-from .utils import (create_workflow_workspace, get_analysis_files_dir,
-                    list_directory_files)
+from reana_workflow_controller.errors import REANAWorkflowControllerError
+from reana_workflow_controller.factory import db
+from reana_workflow_controller.models import User, Workflow, WorkflowStatus
+from reana_workflow_controller.tasks import (run_cwl_workflow,
+                                             run_yadage_workflow)
+from reana_workflow_controller.utils import (create_workflow_workspace,
+                                             get_analysis_files_dir,
+                                             list_directory_files)
 
 START = 'start'
 STOP = 'stop'
@@ -1172,6 +1173,17 @@ def set_workflow_status(workflow_id):  # noqa
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
                             does not exist"
               }
+        409:
+          description: >-
+            Request failed. The workflow could not be started due to a
+            conflict.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            could not be started because it is already
+                            running."
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -1197,6 +1209,8 @@ def set_workflow_status(workflow_id):  # noqa
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
+    except REANAWorkflowControllerError as e:
+        return jsonify({"message": str(e)}), 409
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -1205,14 +1219,22 @@ def set_workflow_status(workflow_id):  # noqa
 
 def start_workflow(organization, workflow):
     """Start a workflow."""
-    workflow.status = WorkflowStatus.running
-    db.session.commit()
-    if workflow.type_ == 'yadage':
-        return run_yadage_workflow_from_spec(organization,
-                                             workflow)
-    elif workflow.type_ == 'cwl':
-        return run_cwl_workflow_from_spec_endpoint(organization,
-                                                   workflow)
+    if workflow.status == WorkflowStatus.created:
+        workflow.status = WorkflowStatus.running
+        db.session.commit()
+        if workflow.type_ == 'yadage':
+            return run_yadage_workflow_from_spec(organization,
+                                                 workflow)
+        elif workflow.type_ == 'cwl':
+            return run_cwl_workflow_from_spec_endpoint(organization,
+                                                       workflow)
+    else:
+        verb = "is" if workflow.status == WorkflowStatus.running else "has"
+        message = \
+            ("Workflow {id_} could not be started because it {verb}"
+             " already {status}.").format(id_=workflow.id_, verb=verb,
+                                          status=str(workflow.status.name))
+        raise REANAWorkflowControllerError(message)
 
 
 def run_yadage_workflow_from_spec(organization, workflow):
