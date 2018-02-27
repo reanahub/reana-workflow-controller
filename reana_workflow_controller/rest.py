@@ -1187,6 +1187,14 @@ def set_workflow_status(workflow_id):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+        501:
+          description: >-
+            Request failed. The specified status change is not implemented.
+          examples:
+            application/json:
+              {
+                "message": "Status resume is not supported yet."
+              }
     """
 
     try:
@@ -1207,12 +1215,14 @@ def set_workflow_status(workflow_id):  # noqa
         if status == START:
             return start_workflow(organization, workflow)
         else:
-            raise NotImplemented("Status {} is not supported yet"
-                                 .format(status))
+            return jsonify({"message": "Status {} is not supported yet."
+                                       .format(status)})
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
+    except NotImplementedError as e:
+        return jsonify({"message": str(e)}), 501
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
@@ -1228,6 +1238,9 @@ def start_workflow(organization, workflow):
         elif workflow.type_ == 'cwl':
             return run_cwl_workflow_from_spec_endpoint(organization,
                                                        workflow)
+        else:
+            raise NotImplementedError(
+                'Workflow type {} is not supported.'.format(workflow.type_))
     else:
         verb = "is" if workflow.status == WorkflowStatus.running else "has"
         message = \
