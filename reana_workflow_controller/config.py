@@ -58,3 +58,8 @@ ALLOWED_LIST_DIRECTORIES = {'input': INPUTS_RELATIVE_PATH,
                             'code': CODE_RELATIVE_PATH,
                             'output': OUTPUTS_RELATIVE_PATH}
 """Directories allowed to be listed."""
+
+DEFAULT_NAME_FOR_WORKFLOWS = 'workflow'
+"""The default prefix used to name workflow(s): e.g. reana-1, reana-2, etc.
+   If workflow is manually named by the user that prefix will used instead.
+"""

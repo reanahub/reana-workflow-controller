@@ -24,14 +24,17 @@
 
 import os
 import traceback
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from flask import Blueprint, abort, jsonify, request, send_from_directory
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
-from reana_workflow_controller.config import SHARED_VOLUME_PATH
-from reana_workflow_controller.errors import REANAWorkflowControllerError
+from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
+                                              SHARED_VOLUME_PATH)
+from reana_workflow_controller.errors import (REANAWorkflowControllerError,
+                                              WorkflowInexistentError,
+                                              WorkflowNameError)
 from reana_workflow_controller.factory import db
 from reana_workflow_controller.models import User, Workflow, WorkflowStatus
 from reana_workflow_controller.tasks import (run_cwl_workflow,
@@ -111,6 +114,8 @@ def get_workflows():  # noqa
               properties:
                 id:
                   type: string
+                name:
+                  type: string
                 organization:
                   type: string
                 status:
@@ -122,24 +127,28 @@ def get_workflows():  # noqa
               [
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                  "name": "mytest-1",
                   "organization": "default_org",
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
+                  "name": "mytest-2",
                   "organization": "default_org",
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
+                  "name": "mytest-3",
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
+                  "name": "mytest-4",
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000"
@@ -177,6 +186,7 @@ def get_workflows():  # noqa
         workflows = []
         for workflow in user.workflows:
             workflows.append({'id': workflow.id_,
+                              'name': _get_workflow_name(workflow),
                               'status': workflow.status.name,
                               'organization': organization,
                               'user': user_uuid})
@@ -231,6 +241,9 @@ def create_workflow():  # noqa
               type:
                 type: string
                 description: Workflow type.
+              name:
+                type: string
+                description: Workflow name. If empty name will be generated.
       responses:
         201:
           description: >-
@@ -243,11 +256,14 @@ def create_workflow():  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
           examples:
             application/json:
               {
                 "message": "Workflow workspace has been created.",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
         400:
           description: >-
@@ -275,8 +291,23 @@ def create_workflow():  # noqa
             organization,
             user_uuid,
             workflow_uuid)
+
+        # Use name prefix user specified or use default name prefix
+        # Actual name is prefix + autoincremented run_number.
+        workflow_name = request.json.get('name', '')
+        if workflow_name is '':
+            workflow_name = DEFAULT_NAME_FOR_WORKFLOWS
+        else:
+            try:
+                workflow_name.encode('ascii')
+            except UnicodeEncodeError:
+                # `workflow_name` contains something else than just ASCII.
+                raise WorkflowNameError('Workflow name {} is not valid.'.
+                                        format(workflow_name))
+
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,
+                            name=workflow_name,
                             workspace_path=workflow_workspace,
                             owner_id=request.args['user'],
                             specification=request.json['specification'],
@@ -284,17 +315,22 @@ def create_workflow():  # noqa
                             type_=request.json['type'])
         db.session.add(workflow)
         db.session.commit()
+
+        # Should workflow_workspace be destroyed in case creation of Workflow
+        # doesn't complete successfully?
         return jsonify({'message': 'Workflow workspace created',
-                        'workflow_id': workflow_uuid}), 201
-    except KeyError as e:
+                        'workflow_id': workflow.id_,
+                        'workflow_name': _get_workflow_name(workflow)}), 201
+
+    except (WorkflowNameError, KeyError) as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/workspace',
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['POST'])
-def seed_workflow_workspace(workflow_id):
+def seed_workflow_workspace(workflow_id_or_name):
     r"""Seed workflow workspace.
 
     ---
@@ -319,9 +355,9 @@ def seed_workflow_workspace(workflow_id):
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: workflow_id
+        - name: workflow_id_or_name
           in: path
-          description: Required. Workflow UUID.
+          description: Required. Workflow UUID or name.
           required: true
           type: string
         - name: file_content
@@ -350,8 +386,6 @@ def seed_workflow_workspace(workflow_id):
             type: object
             properties:
               message:
-                type: string
-              workflow_id:
                 type: string
           examples:
             application/json:
@@ -389,23 +423,24 @@ def seed_workflow_workspace(workflow_id):
         file_type = request.args.get('file_type') \
             if request.args.get('file_type') else 'input'
 
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        if workflow:
-            filename = full_file_name.split("/")[-1]
-            path = get_analysis_files_dir(workflow, file_type,
-                                          'seed')
-            if len(full_file_name.split("/")) > 1 and not \
-               os.path.isabs(full_file_name):
-                dirs = full_file_name.split("/")[:-1]
-                path = os.path.join(path, "/".join(dirs))
-                if not os.path.exists(path):
-                    os.makedirs(path)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
 
-            file_.save(os.path.join(path, filename))
-            return jsonify({'message': 'File successfully transferred'}), 200
-        else:
-            return jsonify({'message': 'Workflow {0} does not exist.'.format(
-                           workflow_id)}), 404
+        filename = full_file_name.split("/")[-1]
+        path = get_analysis_files_dir(workflow, file_type,
+                                      'seed')
+        if len(full_file_name.split("/")) > 1 and not \
+           os.path.isabs(full_file_name):
+            dirs = full_file_name.split("/")[:-1]
+            path = os.path.join(path, "/".join(dirs))
+            if not os.path.exists(path):
+                os.makedirs(path)
+
+        file_.save(os.path.join(path, filename))
+        return jsonify({'message': 'File successfully transferred'}), 200
+
+    except WorkflowInexistentError:
+        return jsonify({'message': 'Workflow {0} does not exist.'.format(
+            workflow_id_or_name)}), 404
     except (KeyError, ValueError) as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -413,9 +448,9 @@ def seed_workflow_workspace(workflow_id):
 
 
 @restapi_blueprint.route(
-    '/workflows/<workflow_id>/workspace/outputs/<path:file_name>',
+    '/workflows/<workflow_id_or_name>/workspace/outputs/<path:file_name>',
     methods=['GET'])
-def get_workflow_outputs_file(workflow_id, file_name):  # noqa
+def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
     r"""Get all workflows.
 
     ---
@@ -438,9 +473,9 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: workflow_id
+        - name: workflow_id_or_name
           in: path
-          description: Required. Workflow UUID.
+          description: Required. Workflow UUID or name
           required: true
           type: string
         - name: file_name
@@ -481,16 +516,16 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
 
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        if workflow:
-            outputs_directory = get_analysis_files_dir(workflow, 'output')
-            return send_from_directory(outputs_directory,
-                                       file_name,
-                                       mimetype='multipart/form-data',
-                                       as_attachment=True), 200
-        else:
-            return jsonify({'message': 'Workflow {} does not exist.'.
-                            format(str(workflow_id))}), 404
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        return send_from_directory(outputs_directory,
+                                   file_name,
+                                   mimetype='multipart/form-data',
+                                   as_attachment=True), 200
+
+    except WorkflowInexistentError:
+        return jsonify({'message': 'Workflow {0} does not exist.'.format(
+            workflow_id_or_name)}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except NotFound as e:
@@ -500,9 +535,9 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/workspace',
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['GET'])
-def get_workflow_files(workflow_id):  # noqa
+def get_workflow_files(workflow_id_or_name):  # noqa
     r"""List all workflow code/input/output files.
 
     ---
@@ -526,9 +561,9 @@ def get_workflow_files(workflow_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: workflow_id
+        - name: workflow_id_or_name
           in: path
-          description: Required. Workflow UUID.
+          description: Required. Workflow UUID or name.
           required: true
           type: string
         - name: file_type
@@ -587,24 +622,24 @@ def get_workflow_files(workflow_id):  # noqa
         file_type = request.args.get('file_type') \
             if request.args.get('file_type') else 'input'
 
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        if workflow:
-            file_list = list_directory_files(
-                get_analysis_files_dir(workflow, file_type))
-            return jsonify(file_list), 200
-        else:
-            return jsonify({'message': 'Workflow {} does not exist.'.
-                            format(str(workflow_id))}), 404
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
 
+        file_list = list_directory_files(
+            get_analysis_files_dir(workflow, file_type))
+        return jsonify(file_list), 200
+
+    except WorkflowInexistentError:
+        return jsonify({'message': 'Workflow {0} does not exist.'.format(
+            workflow_id_or_name)}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/logs',
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/logs',
                          methods=['GET'])
-def get_workflow_logs(workflow_id):  # noqa
+def get_workflow_logs(workflow_id_or_name):  # noqa
     r"""Get workflow logs from a workflow engine.
 
     ---
@@ -627,9 +662,9 @@ def get_workflow_logs(workflow_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: workflow_id
+        - name: workflow_id_or_name
           in: path
-          description: Required. Workflow UUID.
+          description: Required. Workflow UUID or name.
           required: true
           type: string
       responses:
@@ -640,7 +675,9 @@ def get_workflow_logs(workflow_id):  # noqa
           schema:
             type: object
             properties:
-              id:
+              workflow_id:
+                type: string
+              workflow_name:
                 type: string
               organization:
                 type: string
@@ -652,6 +689,7 @@ def get_workflow_logs(workflow_id):  # noqa
             application/json:
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest-1",
                 "organization": "default_org",
                 "logs": "<Workflow engine log output>",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -680,19 +718,23 @@ def get_workflow_logs(workflow_id):  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        if not workflow:
-            return jsonify({'message': 'Workflow {} does not exist'.
-                            format(workflow_id)}), 404
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id)}), 403
+                 .format(user_uuid, workflow_id_or_name)}), 403
 
         return jsonify({'workflow_id': workflow.id_,
+                        'workflow_name': _get_workflow_name(workflow),
                         'logs': workflow.logs or "",
                         'organization': organization,
                         'user': user_uuid}), 200
+
+    except WorkflowInexistentError:
+        return jsonify({'message': 'Workflow {0} does not exist.'.format(
+            workflow_id_or_name)}), 404
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -761,11 +803,14 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
           examples:
             application/json:
               {
                 "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
         400:
           description: >-
@@ -787,8 +832,11 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
                 kwargs=kwargs,
                 queue='yadage-{}'.format(queue)
             )
+            # TODO: Check if _get_workflow_name(resultobject) should be used to
+            # get the name
             return jsonify({'message': 'Workflow successfully launched',
-                            'workflow_id': resultobject.id}), 200
+                            'workflow_id': resultobject.id,
+                            'workflow_name': resultobject.name}), 200
 
     except (KeyError, ValueError):
         traceback.print_exc()
@@ -847,11 +895,14 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
           examples:
             application/json:
               {
                 "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
         400:
           description: >-
@@ -873,8 +924,11 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
                 kwargs=kwargs,
                 queue='yadage-{}'.format(queue)
             )
+            # TODO: Check if _get_workflow_name(resultobject) should be used to
+            # get the name
             return jsonify({'message': 'Workflow successfully launched',
-                            'workflow_id': resultobject.id}), 200
+                            'workflow_id': resultobject.id,
+                            'workflow_name': resultobject.name}), 200
 
     except (KeyError, ValueError):
         traceback.print_exc()
@@ -943,11 +997,14 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
           examples:
             application/json:
               {
                 "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
         400:
           description: >-
@@ -960,16 +1017,20 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
                 args=[request.json],
                 queue='cwl-{}'.format(queue)
             )
+            # TODO: Check if _get_workflow_name(resultobject) should be used to
+            # get the name
             return jsonify({'message': 'Workflow successfully launched',
-                            'workflow_id': resultobject.id}), 200
+                            'workflow_id': resultobject.id,
+                            'workflow_name': resultobject.name}), 200
 
     except (KeyError, ValueError):
         traceback.print_exc()
         abort(400)
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['GET'])
-def get_workflow_status(workflow_id):  # noqa
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/status',
+                         methods=['GET'])
+def get_workflow_status(workflow_id_or_name):  # noqa
     r"""Get workflow status.
 
     ---
@@ -991,9 +1052,9 @@ def get_workflow_status(workflow_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: workflow_id
+        - name: workflow_id_or_name
           in: path
-          description: Required. Workflow UUID.
+          description: Required. Workflow UUID or name.
           required: true
           type: string
       responses:
@@ -1006,6 +1067,8 @@ def get_workflow_status(workflow_id):  # noqa
             properties:
               id:
                 type: string
+              name:
+                type: string
               organization:
                 type: string
               status:
@@ -1016,6 +1079,7 @@ def get_workflow_status(workflow_id):  # noqa
             application/json:
               {
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "name": "mytest-1",
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -1060,27 +1124,32 @@ def get_workflow_status(workflow_id):  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
-        if not workflow:
-            return jsonify({'message': 'Workflow {} does not exist'.
-                            format(workflow_id)}), 404
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id)}), 403
+                 .format(user_uuid, workflow_id_or_name)}), 403
 
+        # TODO:
+        # Returned JSON doesn't match the style of other endpoints
         return jsonify({'id': workflow.id_,
+                        'name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'organization': organization,
                         'user': user_uuid}), 200
+    except WorkflowInexistentError:
+        return jsonify({'message': 'Workflow {0} does not exist.'.format(
+            workflow_id_or_name)}), 404
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id>/status', methods=['PUT'])
-def set_workflow_status(workflow_id):  # noqa
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/status',
+                         methods=['PUT'])
+def set_workflow_status(workflow_id_or_name):  # noqa
     r"""Set workflow status.
 
     ---
@@ -1102,9 +1171,9 @@ def set_workflow_status(workflow_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: workflow_id
+        - name: workflow_id_or_name
           in: path
-          description: Required. Workflow UUID.
+          description: Required. Workflow UUID or name.
           required: true
           type: string
         - name: status
@@ -1126,6 +1195,8 @@ def set_workflow_status(workflow_id):  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
               organization:
                 type: string
               status:
@@ -1137,6 +1208,7 @@ def set_workflow_status(workflow_id):  # noqa
               {
                 "message": "Workflow successfully launched",
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest-1",
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -1200,23 +1272,26 @@ def set_workflow_status(workflow_id):  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_id).first()
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+
         status = request.json
         if not (status in STATUSES):
             return jsonify({'message': 'Status {0} is not one of: {1}'.
                             format(status, ", ".join(STATUSES))}), 400
-        if not workflow:
-            return jsonify({'message': 'Workflow {} does not exist.'.
-                            format(workflow_id)}), 404
+
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id)}), 403
+                 .format(user_uuid, workflow_id_or_name)}), 403
+
         if status == START:
             return start_workflow(organization, workflow)
         else:
-            return jsonify({"message": "Status {} is not supported yet."
-                                       .format(status)})
+            raise NotImplemented("Status {} is not supported yet"
+                                 .format(status))
+    except WorkflowInexistentError:
+        return jsonify({'message': 'Workflow {0} does not exist.'.format(
+            workflow_id_or_name)}), 404
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
     except KeyError as e:
@@ -1271,6 +1346,7 @@ def run_yadage_workflow_from_spec(organization, workflow):
             )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': workflow.id_,
+                        'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'organization': organization,
                         'user': str(workflow.owner_id)}), 200
@@ -1297,6 +1373,7 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
             )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
+                        'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'organization': organization,
                         'user': str(workflow.owner_id)}), 200
@@ -1305,3 +1382,138 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
         print(e)
         # traceback.print_exc()
         abort(400)
+
+
+def _get_workflow_name(workflow):
+    """Return a name of a Workflow.
+
+    :param workflow: Workflow object which name should be returned.
+    :type workflow: reana-workflow-controller.models.Workflow
+    """
+    return workflow.name + '.' + str(workflow.run_number)
+
+
+def _get_workflow_by_name(workflow_name):
+    """From Workflows named as `workflow_name` the latest run_number.
+
+    Only use when you are sure that workflow_name is not UUIDv4.
+
+    :rtype: reana-workflow-controller.models.Workflow
+    """
+    workflow = Workflow.query.filter(Workflow.name == workflow_name). \
+        order_by(Workflow.run_number.desc()).first()
+    if not workflow:
+        raise WorkflowInexistentError('No Workflow with UUID {} found.'.
+                                      format(workflow_name))
+    return workflow
+
+
+def _get_workflow_by_uuid(workflow_uuid):
+    """Get Workflow with UUIDv4.
+
+    :param workflow_uuid: UUIDv4 of a Workflow.
+    :type workflow_uuid: String representing a valid UUIDv4.
+
+    :rtype: reana-workflow-controller.models.Workflow
+    """
+    workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+    if not workflow:
+        raise WorkflowInexistentError('No Workflow with UUID {} found.'.
+                                      format(workflow_uuid))
+    return workflow
+
+
+def _get_workflow_with_uuid_or_name(uuid_or_name):
+    """Get Workflow from database with uuid or name.
+
+    :param uuid_or_name: String representing a valid UUIDv4 or valid
+        Workflow name. Valid name contains only ASCII alphanumerics.
+
+        Name might be in format 'reana.workflow.123' with arbitrary
+        number of dot-delimited substrings, where last substring specifies
+        the run number of the workflow this workflow name refers to.
+
+        If name does not contain a valid run number, but it is a valid name,
+        workflow with latest run number of all the workflows with this name
+        is returned.
+    :type uuid_or_name: String
+
+    :rtype: reana-workflow-controller.models.Workflow
+    """
+    # Check existence
+    if not uuid_or_name:
+        raise WorkflowNameError('No Workflow was specified.')
+
+    # Check validity
+    try:
+        uuid_or_name.encode('ascii')
+    except UnicodeEncodeError:
+        # `workflow_name` contains something else than just ASCII.
+        raise WorkflowNameError('Workflow name {} is not valid.'.
+                                format(uuid_or_name))
+
+    # Check if UUIDv4
+    try:
+        # is_uuid = UUID(uuid_or_name, version=4)
+        is_uuid = UUID('{' + uuid_or_name + '}', version=4)
+    except (TypeError, ValueError):
+        is_uuid = None
+
+    if is_uuid:
+        # `uuid_or_name` is an UUIDv4.
+        # Search with it since it is expected to be unique.
+        return _get_workflow_by_uuid(uuid_or_name)
+
+    else:
+        # `uuid_or_name` is not and UUIDv4. Expect it is a name.
+
+        # Expect name might be in format 'reana.workflow.123' with arbitrary
+        # number of dot-delimited substring, where last substring specifies
+        # the run_number of the workflow this workflow name refers to.
+
+        # Possible candidates for names are e.g. :
+        # 'workflow_name' -> ValueError
+        # 'workflow.name' -> True, True
+        # 'workflow.name.123' -> True, True
+        # '123.' -> True, False
+        # '' -> ValueError
+        # '.123' -> False, True
+        # '..' -> False, False
+        # '123.12' -> True, True
+        # '123.12.' -> True, False
+
+        # Try to split the dot-separated string.
+        try:
+            workflow_name, run_number = uuid_or_name.rsplit('.', maxsplit=1)
+        except ValueError:
+            # Couldn't split. Probably not a dot-separated string.
+            #  -> Search with `uuid_or_name`
+            return _get_workflow_by_name(uuid_or_name)
+
+        # Check if `run_number` was specified
+        if not run_number:
+            # No `run_number` specified.
+            # -> Search by `workflow_name`
+            return _get_workflow_by_name(workflow_name)
+
+        # `run_number` was specified.
+        # Check `run_number` is valid.
+        if not run_number.isdigit():
+            # `uuid_or_name` was split, so it is a dot-separated string
+            # but it didn't contain a valid `run_number`.
+            # Assume that this dot-separated string is the name of
+            # the workflow and search with it.
+            return _get_workflow_by_name(uuid_or_name)
+
+        # `run_number` is valid.
+        # Search by `run_number` since it is a primary key.
+        # workflow = Workflow.query. \
+        #     filter(Workflow.name == run_number).first()
+        workflow = Workflow.query.get(run_number)
+        if not workflow:
+            raise WorkflowInexistentError(
+                'No Workflow with name {} and '
+                'run number of {} found.'.
+                format(workflow_name, run_number))
+
+        return workflow

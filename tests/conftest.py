@@ -84,3 +84,43 @@ def db_session():
     """DB fixture"""
     yield db.session
     db.session.close()
+
+
+@pytest.fixture()
+def cwl_workflow_with_name():
+    return {'parameters': {'min_year': '1991',
+                           'max_year': '2001'},
+            'specification': {'first': 'do this',
+                              'second': 'do that'},
+            'type': 'cwl',
+            'name': 'my_test_workflow'}
+
+
+@pytest.fixture()
+def yadage_workflow_with_name():
+    return {'parameters': {'min_year': '1991',
+                           'max_year': '2001'},
+            'specification': {'first': 'do this',
+                              'second': 'do that'},
+            'type': 'yadage',
+            'name': 'my_test_workflow'}
+
+
+@pytest.fixture()
+def cwl_workflow_without_name():
+    return {'parameters': {'min_year': '1991',
+                           'max_year': '2001'},
+            'specification': {'first': 'do this',
+                              'second': 'do that'},
+            'type': 'cwl',
+            'name': ''}
+
+
+@pytest.fixture()
+def yadage_workflow_without_name():
+    return {'parameters': {'min_year': '1991',
+                           'max_year': '2001'},
+            'specification': {'first': 'do this',
+                              'second': 'do that'},
+            'type': 'yadage',
+            'name': ''}

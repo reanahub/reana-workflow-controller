@@ -44,24 +44,23 @@ status_dict = {
 }
 
 
-def test_get_workflows(app, default_user, db_session):
+def test_get_workflows(app, default_user, db_session, cwl_workflow_with_name):
     """Test listing all workflows."""
     with app.test_client() as client:
         workflow_uuid = uuid.uuid4()
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
-        workflow = Workflow(id_=workflow_uuid,
-                            workspace_path='',
-                            status=WorkflowStatus.finished,
-                            owner_id=default_user.id_,
-                            specification=data['specification'],
-                            parameters=data['parameters'],
-                            type_=data['type'])
+        workflow_name = 'my_test_workflow'
+        workflow = Workflow(
+            id_=workflow_uuid,
+            name=workflow_name,
+            workspace_path='',
+            status=WorkflowStatus.finished,
+            owner_id=default_user.id_,
+            specification=cwl_workflow_with_name['specification'],
+            parameters=cwl_workflow_with_name['parameters'],
+            type_=cwl_workflow_with_name['type'])
         db_session.add(workflow)
         db_session.commit()
+
         res = client.get(url_for('api.get_workflows'),
                          query_string={
                              "user": default_user.id_,
@@ -71,6 +70,7 @@ def test_get_workflows(app, default_user, db_session):
         expected_data = [
             {
                 "id": str(workflow.id_),
+                "name": workflow.name + '.1',  # Add run_number
                 "organization": "default",
                 "status": workflow.status.name,
                 "user": str(workflow.owner_id)
@@ -118,33 +118,39 @@ def test_get_workflows_missing_organization(app, default_user):
         assert res.status_code == 400
 
 
-def test_create_workflow(app, default_user, db_session,
-                         tmp_shared_volume_path):
-    """Test create workflow and its workspace."""
+def test_create_workflow_with_name(app, default_user, tmp_shared_volume_path,
+                                   cwl_workflow_with_name):
+    """Test create workflow and its workspace by specifying a name."""
     with app.test_client() as client:
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
-        workflow = Workflow.query.filter(
+
+        # Check workflow fetch by id
+        workflow_by_id = Workflow.query.filter(
             Workflow.id_ == response_data.get('workflow_id')).first()
-        # workflow exist in DB
-        assert workflow
-        workflow.specification == data['specification']
-        workflow.parameters == data['parameters']
-        workflow.type_ == data['type']
-        # workflow workspace exist
+        assert workflow_by_id
+
+        # Check workflow fetch by name and that name of created workflow
+        # is the same that was supplied to `api.create_workflow`
+        workflow_by_name = Workflow.query.filter(
+            Workflow.name == 'my_test_workflow').first()
+        assert workflow_by_name
+
+        workflow = workflow_by_id
+
+        workflow.specification == cwl_workflow_with_name['specification']
+        workflow.parameters == cwl_workflow_with_name['parameters']
+        workflow.type_ == cwl_workflow_with_name['type']
+
+        # Check that workflow workspace exist
         user_analyses_workspace = get_user_analyses_dir(
             organization, str(default_user.id_))
         workflow_workspace = os.path.join(
@@ -154,22 +160,67 @@ def test_create_workflow(app, default_user, db_session,
         assert os.path.exists(workflow_workspace)
 
 
-def test_create_workflow_wrong_user(app, db_session, tmp_shared_volume_path):
+def test_create_workflow_without_name(app, default_user,
+                                      tmp_shared_volume_path,
+                                      cwl_workflow_without_name):
+    """Test create workflow and its workspace without specifying a name."""
+    with app.test_client() as client:
+
+        organization = 'default'
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_,
+                              "organization": organization},
+                          content_type='application/json',
+                          data=json.dumps(cwl_workflow_without_name))
+
+        assert res.status_code == 201
+        response_data = json.loads(res.get_data(as_text=True))
+
+        # Check workflow fetch by id
+        workflow_by_id = Workflow.query.filter(
+            Workflow.id_ == response_data.get('workflow_id')).first()
+        assert workflow_by_id
+
+        # Check workflow fetch by name and that name of created workflow
+        # is the same that was supplied to `api.create_workflow`
+
+        import reana_workflow_controller
+        default_workflow_name = reana_workflow_controller.config.\
+            DEFAULT_NAME_FOR_WORKFLOWS
+
+        workflow_by_name = Workflow.query.filter(
+            Workflow.name == default_workflow_name).first()
+        assert workflow_by_name
+
+        workflow = workflow_by_id
+
+        workflow.specification == cwl_workflow_without_name['specification']
+        workflow.parameters == cwl_workflow_without_name['parameters']
+        workflow.type_ == cwl_workflow_without_name['type']
+
+        # Check that workflow workspace exist
+        user_analyses_workspace = get_user_analyses_dir(
+            organization, str(default_user.id_))
+        workflow_workspace = os.path.join(
+            tmp_shared_volume_path,
+            user_analyses_workspace,
+            str(workflow.id_))
+        assert os.path.exists(workflow_workspace)
+
+
+def test_create_workflow_wrong_user(app, tmp_shared_volume_path,
+                                    cwl_workflow_with_name):
     """Test create workflow providing unknown user."""
     with app.test_client() as client:
         organization = 'default'
         random_user_uuid = uuid.uuid4()
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": random_user_uuid,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         assert res.status_code == 404
         response_data = json.loads(res.get_data(as_text=True))
@@ -186,58 +237,48 @@ def test_create_workflow_wrong_user(app, db_session, tmp_shared_volume_path):
         assert not os.path.exists(workflow_workspace)
 
 
-def test_get_workflow_outputs_absent_file(app, db_session, default_user,
-                                          tmp_shared_volume_path):
+def test_get_workflow_outputs_absent_file(app, default_user,
+                                          cwl_workflow_with_name):
     """Test download output file."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
         file_name = 'input.csv'
         res = client.get(
-            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+            url_for('api.get_workflow_outputs_file',
+                    workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_,
                           "organization": organization},
             content_type='application/json',
-            data=json.dumps(data))
+            data=json.dumps(cwl_workflow_with_name))
 
         assert res.status_code == 404
         response_data = json.loads(res.get_data(as_text=True))
         assert response_data == {'message': 'input.csv does not exist.'}
 
 
-def test_get_workflow_outputs_file(app, db_session, default_user,
-                                   tmp_shared_volume_path):
+def test_get_workflow_outputs_file(app, default_user, cwl_workflow_with_name):
     """Test download output file."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
@@ -257,32 +298,28 @@ def test_get_workflow_outputs_file(app, db_session, default_user,
         with open(file_path, 'wb+') as f:
             f.write(file_binary_content)
         res = client.get(
-            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+            url_for('api.get_workflow_outputs_file',
+                    workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_,
                           "organization": organization},
             content_type='application/json',
-            data=json.dumps(data))
+            data=json.dumps(cwl_workflow_with_name))
         assert res.data == file_binary_content
 
 
-def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
-                                             tmp_shared_volume_path):
+def test_get_workflow_outputs_file_with_path(app, default_user,
+                                             cwl_workflow_with_name):
     """Test download output file prepended with path."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
@@ -302,33 +339,29 @@ def test_get_workflow_outputs_file_with_path(app, db_session, default_user,
         with open(file_path, 'wb+') as f:
             f.write(file_binary_content)
         res = client.get(
-            url_for('api.get_workflow_outputs_file', workflow_id=workflow_uuid,
+            url_for('api.get_workflow_outputs_file',
+                    workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_,
                           "organization": organization},
             content_type='application/json',
-            data=json.dumps(data))
+            data=json.dumps(cwl_workflow_with_name))
         assert res.data == file_binary_content
 
 
 @pytest.mark.parametrize("file_type", ALLOWED_LIST_DIRECTORIES.keys())
 def test_get_workflow_files(app, default_user, tmp_shared_volume_path,
-                            file_type):
+                            file_type, cwl_workflow_with_name):
     """Test get list of input files."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
@@ -352,12 +385,13 @@ def test_get_workflow_files(app, default_user, tmp_shared_volume_path,
             test_files.append(os.path.join(subdir_name, file_name))
 
         res = client.get(
-            url_for('api.get_workflow_files', workflow_id=workflow_uuid),
+            url_for('api.get_workflow_files',
+                    workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization,
                           "file_type": file_type},
             content_type='application/json',
-            data=json.dumps(data))
+            data=json.dumps(cwl_workflow_with_name))
         for file_ in json.loads(res.data.decode()):
             assert file_.get('name') in test_files
 
@@ -372,7 +406,7 @@ def test_get_unknown_workflow_files(app, default_user, file_type):
 
         res = client.get(
             url_for('api.get_workflow_files',
-                    workflow_id=random_workflow_uuid),
+                    workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization,
                           "file_type": file_type},
@@ -385,135 +419,165 @@ def test_get_unknown_workflow_files(app, default_user, file_type):
         assert response_data == expected_data
 
 
-def test_get_workflow_status(app, db_session, default_user):
+def test_get_workflow_status_with_uuid(app, db_session, default_user,
+                                       cwl_workflow_with_name):
     """Test get workflow status."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
-        workflow_created_uuid = response_data.get('workflow_id')
-        workflow_created = Workflow.query.filter(
-            Workflow.id_ == workflow_created_uuid).first()
+        workflow_uuid = response_data.get('workflow_id')
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_uuid).first()
 
         res = client.get(url_for('api.get_workflow_status',
-                                 workflow_id=workflow_created_uuid),
+                                 workflow_id_or_name=workflow_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
                          content_type='application/json',
-                         data=json.dumps(data))
+                         data=json.dumps(cwl_workflow_with_name))
         json_response = json.loads(res.data.decode())
-        assert json_response.get('status') == workflow_created.status.name
-        # create second test workflow modifying status
-        res = client.post(url_for('api.create_workflow'),
-                          query_string={
-                              "user": default_user.id_,
-                              "organization": organization},
-                          content_type='application/json',
-                          data=json.dumps(data))
-        response_data = json.loads(res.get_data(as_text=True))
-        workflow_finished_uuid = response_data.get('workflow_id')
-        workflow_finished = Workflow.query.filter(
-            Workflow.id_ == workflow_finished_uuid).first()
-        workflow_finished.status = WorkflowStatus.finished
+        assert json_response.get('status') == workflow.status.name
+        workflow.status = WorkflowStatus.finished
         db_session.commit()
 
         res = client.get(url_for('api.get_workflow_status',
-                                 workflow_id=workflow_finished_uuid),
+                                 workflow_id_or_name=workflow_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
                          content_type='application/json',
-                         data=json.dumps(data))
+                         data=json.dumps(cwl_workflow_with_name))
         json_response = json.loads(res.data.decode())
-        assert json_response.get('status') == workflow_finished.status.name
+        assert json_response.get('status') == workflow.status.name
 
 
-def test_get_workflow_status_unauthorized(app, default_user):
+def test_get_workflow_status_with_name(app, db_session, default_user,
+                                       cwl_workflow_with_name):
+    """Test get workflow status."""
+    with app.test_client() as client:
+        # create workflow
+        organization = 'default'
+        # res = client.post(url_for('api.create_workflow'),
+        #                   query_string={
+        #                       "user": default_user.id_,
+        #                       "organization": organization},
+        #                   content_type='application/json',
+        #                   data=json.dumps(cwl_workflow_with_name))
+        #
+        # response_data = json.loads(res.get_data(as_text=True))
+        # workflow_name = response_data.get('workflow_name')
+
+        workflow_uuid = uuid.uuid4()
+        workflow_name = 'my_test_workflow'
+        workflow = Workflow(
+            id_=workflow_uuid,
+            name=workflow_name,
+            workspace_path='',
+            status=WorkflowStatus.finished,
+            owner_id=default_user.id_,
+            specification=cwl_workflow_with_name['specification'],
+            parameters=cwl_workflow_with_name['parameters'],
+            type_=cwl_workflow_with_name['type'])
+        db_session.add(workflow)
+        db_session.commit()
+
+        workflow = Workflow.query.filter(
+            Workflow.name == workflow_name).first()
+
+        res = client.get(url_for('api.get_workflow_status',
+                                 workflow_id_or_name=workflow_name + '.1'),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(cwl_workflow_with_name))
+        json_response = json.loads(res.data.decode())
+
+        assert json_response.get('status') == workflow.status.name
+        workflow.status = WorkflowStatus.finished
+        db_session.commit()
+
+        res = client.get(url_for('api.get_workflow_status',
+                                 workflow_id_or_name=workflow_name + '.1'),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization},
+                         content_type='application/json',
+                         data=json.dumps(cwl_workflow_with_name))
+        json_response = json.loads(res.data.decode())
+        assert json_response.get('status') == workflow.status.name
+
+
+def test_get_workflow_status_unauthorized(app, default_user,
+                                          cwl_workflow_with_name):
     """Test get workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get('workflow_id')
         random_user_uuid = uuid.uuid4()
         res = client.get(url_for('api.get_workflow_status',
-                                 workflow_id=workflow_created_uuid),
+                                 workflow_id_or_name=workflow_created_uuid),
                          query_string={
                              "user": random_user_uuid,
                              "organization": organization},
                          content_type='application/json',
-                         data=json.dumps(data))
+                         data=json.dumps(cwl_workflow_with_name))
         assert res.status_code == 403
 
 
-def test_get_workflow_status_unknown_workflow(app, default_user):
+def test_get_workflow_status_unknown_workflow(app, default_user,
+                                              cwl_workflow_with_name):
     """Test get workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
         random_workflow_uuid = uuid.uuid4()
         res = client.get(url_for('api.get_workflow_status',
-                                 workflow_id=random_workflow_uuid),
+                                 workflow_id_or_name=random_workflow_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
                          content_type='application/json',
-                         data=json.dumps(data))
+                         data=json.dumps(cwl_workflow_with_name))
         assert res.status_code == 404
 
 
-def test_set_workflow_status(app, db_session, default_user):
+def test_set_workflow_status(app, default_user, yadage_workflow_with_name):
     """Test set workflow status "Start"."""
     with app.test_client() as client:
         os.environ["TESTS"] = "True"
         # create workflow
         organization = 'default'
-        data = {'parameters': {'input': 'job.json'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(yadage_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get('workflow_id')
@@ -522,7 +586,7 @@ def test_set_workflow_status(app, db_session, default_user):
         assert workflow.status == WorkflowStatus.created
         payload = START
         res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id=workflow_created_uuid),
+                                 workflow_id_or_name=workflow_created_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
@@ -556,7 +620,7 @@ def test_start_already_started_workflow(app, db_session, default_user):
         assert workflow.status == WorkflowStatus.created
         payload = START
         res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id=workflow_created_uuid),
+                                 workflow_id_or_name=workflow_created_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
@@ -565,7 +629,7 @@ def test_start_already_started_workflow(app, db_session, default_user):
         json_response = json.loads(res.data.decode())
         assert json_response.get('status') == status_dict[payload].name
         res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id=workflow_created_uuid),
+                                 workflow_id_or_name=workflow_created_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
@@ -578,28 +642,25 @@ def test_start_already_started_workflow(app, db_session, default_user):
         assert json_response.get('message') == expected_message
 
 
-def test_set_workflow_status_unauthorized(app, default_user):
+def test_set_workflow_status_unauthorized(app, default_user,
+                                          yadage_workflow_with_name):
     """Test set workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'input': 'job.json'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(yadage_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get('workflow_id')
         random_user_uuid = uuid.uuid4()
         payload = START
         res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id=workflow_created_uuid),
+                                 workflow_id_or_name=workflow_created_uuid),
                          query_string={
                              "user": random_user_uuid,
                              "organization": organization},
@@ -608,26 +669,22 @@ def test_set_workflow_status_unauthorized(app, default_user):
         assert res.status_code == 403
 
 
-def test_set_workflow_status_unknown_workflow(app, default_user):
+def test_set_workflow_status_unknown_workflow(app, default_user,
+                                              yadage_workflow_with_name):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(yadage_workflow_with_name))
         random_workflow_uuid = uuid.uuid4()
         payload = START
         res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id=random_workflow_uuid),
+                                 workflow_id_or_name=random_workflow_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
@@ -637,23 +694,18 @@ def test_set_workflow_status_unknown_workflow(app, default_user):
 
 
 @pytest.mark.parametrize("file_type", ALLOWED_SEED_DIRECTORIES.keys())
-def test_seed_workflow_workspace(app, db_session, default_user,
-                                 tmp_shared_volume_path, file_type):
+def test_seed_workflow_workspace(app, db_session, default_user, file_type,
+                                 cwl_workflow_with_name):
     """Test download output file."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
@@ -664,7 +716,8 @@ def test_seed_workflow_workspace(app, db_session, default_user,
         file_binary_content = b'1,2,3,4\n5,6,7,8'
 
         res = client.post(
-            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            url_for('api.seed_workflow_workspace',
+                    workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization,
                           "file_name": file_name,
@@ -685,8 +738,7 @@ def test_seed_workflow_workspace(app, db_session, default_user,
             assert f.read() == file_binary_content
 
 
-def test_seed_unknown_workflow_workspace(app, db_session, default_user,
-                                         tmp_shared_volume_path):
+def test_seed_unknown_workflow_workspace(app, default_user):
     """Test download output file."""
     with app.test_client() as client:
         random_workflow_uuid = uuid.uuid4()
@@ -696,7 +748,7 @@ def test_seed_unknown_workflow_workspace(app, db_session, default_user,
 
         res = client.post(
             url_for('api.seed_workflow_workspace',
-                    workflow_id=random_workflow_uuid),
+                    workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": "default",
                           "file_name": file_name},
@@ -707,22 +759,17 @@ def test_seed_unknown_workflow_workspace(app, db_session, default_user,
 
 
 def test_seed_workflow_workspace_with_wrong_file_type(app, default_user,
-                                                      tmp_shared_volume_path):
+                                                      cwl_workflow_with_name):
     """Seed files with wrong input type."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
@@ -732,7 +779,8 @@ def test_seed_workflow_workspace_with_wrong_file_type(app, default_user,
         file_binary_content = b'print("Hello world.")\n'
 
         res = client.post(
-            url_for('api.seed_workflow_workspace', workflow_id=workflow_uuid),
+            url_for('api.seed_workflow_workspace',
+                    workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization,
                           "file_name": file_name,
@@ -743,26 +791,22 @@ def test_seed_workflow_workspace_with_wrong_file_type(app, default_user,
         assert res.status_code == 400
 
 
-def test_get_created_workflow_logs(app, default_user):
+def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
     """Test get workflow logs."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'cwl'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(cwl_workflow_with_name))
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
+        workflow_name = response_data.get('workflow_name')
         res = client.get(url_for('api.get_workflow_logs',
-                                 workflow_id=workflow_uuid),
+                                 workflow_id_or_name=workflow_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
@@ -772,6 +816,7 @@ def test_get_created_workflow_logs(app, default_user):
         create_workflow_logs = ""
         expected_data = {
             'workflow_id': workflow_uuid,
+            'workflow_name': workflow_name,
             'organization': organization,
             'user': str(default_user.id_),
             'logs': create_workflow_logs
@@ -779,25 +824,21 @@ def test_get_created_workflow_logs(app, default_user):
         assert response_data == expected_data
 
 
-def test_get_unknown_workflow_logs(app, default_user):
+def test_get_unknown_workflow_logs(app, default_user,
+                                   yadage_workflow_with_name):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(yadage_workflow_with_name))
         random_workflow_uuid = uuid.uuid4()
         res = client.get(url_for('api.get_workflow_logs',
-                                 workflow_id=random_workflow_uuid),
+                                 workflow_id_or_name=random_workflow_uuid),
                          query_string={
                              "user": default_user.id_,
                              "organization": organization},
@@ -805,27 +846,23 @@ def test_get_unknown_workflow_logs(app, default_user):
         assert res.status_code == 404
 
 
-def test_get_workflow_logs_unauthorized(app, default_user):
+def test_get_workflow_logs_unauthorized(app, default_user,
+                                        yadage_workflow_with_name):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
-        data = {'parameters': {'min_year': '1991',
-                               'max_year': '2001'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_,
                               "organization": organization},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(yadage_workflow_with_name))
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
         random_user_uuid = uuid.uuid4()
         res = client.get(url_for('api.get_workflow_logs',
-                                 workflow_id=workflow_uuid),
+                                 workflow_id_or_name=workflow_uuid),
                          query_string={
                              "user": random_user_uuid,
                              "organization": organization},
