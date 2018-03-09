@@ -149,11 +149,11 @@ def get_workflows():  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. User does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
                             exist"
               }
         500:
@@ -162,7 +162,7 @@ def get_workflows():  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -253,11 +253,11 @@ def create_workflow():  # noqa
             Request failed. The incoming data specification seems malformed
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. User does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
                             exist"
               }
     """
@@ -470,7 +470,7 @@ def get_workflow_outputs_file(workflow_id, file_name):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -573,7 +573,7 @@ def get_workflow_files(workflow_id):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -660,11 +660,11 @@ def get_workflow_logs(workflow_id):  # noqa
             Request failed. The incoming data specification seems malformed.
         404:
           description: >-
-            Request failed. User doesn't exist.
+            Request failed. User does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
                             exist"
               }
         500:
@@ -673,7 +673,7 @@ def get_workflow_logs(workflow_id):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -1039,17 +1039,17 @@ def get_workflow_status(workflow_id):  # noqa
               }
         404:
           description: >-
-            Request failed. Either User or Workflow doesn't exist.
+            Request failed. Either User or Workflow does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
                             exist"
               }
             application/json:
               {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
-                            doesn't exist"
+                            does not exist"
               }
         500:
           description: >-
@@ -1160,11 +1160,11 @@ def set_workflow_status(workflow_id):  # noqa
               }
         404:
           description: >-
-            Request failed. Either User or Workflow doesn't exist.
+            Request failed. Either User or Workflow does not exist.
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
                             exist"
               }
             application/json:
