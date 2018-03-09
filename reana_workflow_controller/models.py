@@ -64,7 +64,9 @@ class WorkflowStatus(enum.Enum):
 class Workflow(db.Model):
     """Workflow model."""
 
-    id_ = db.Column(UUIDType, primary_key=True)
+    id_ = db.Column(UUIDType, unique=True)
+    name = db.Column(db.String(255))
+    run_number = db.Column(db.Integer, primary_key=True, autoincrement="auto")
     create_date = db.Column(db.DateTime, default=db.func.now())
     workspace_path = db.Column(db.String(255))
     status = db.Column(db.Enum(WorkflowStatus), default=WorkflowStatus.created)
@@ -74,11 +76,12 @@ class Workflow(db.Model):
     type_ = db.Column(db.String(30))
     logs = db.Column(db.String, default="")
 
-    def __init__(self, id_, workspace_path, owner_id,
+    def __init__(self, id_, name, workspace_path, owner_id,
                  specification, parameters, type_,
                  status=WorkflowStatus.created):
         """Initialize workflow model."""
         self.id_ = id_
+        self.name = name
         self.workspace_path = workspace_path
         self.owner_id = owner_id
         self.specification = specification

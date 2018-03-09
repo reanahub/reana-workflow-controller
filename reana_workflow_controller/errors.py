@@ -23,5 +23,13 @@
 """REANA Workflow Controller errors."""
 
 
+class WorkflowNameError(Exception):
+    """."""
+
+
+class WorkflowInexistentError(Exception):
+    """."""
+
+
 class REANAWorkflowControllerError(Exception):
     """Error when trying to manage workflows."""
