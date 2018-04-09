@@ -1,6 +1,16 @@
 Changes
 =======
 
+Version 0.2.0 (2018-04-19)
+--------------------------
+
+- Adds support for Common Workflow Language workflows.
+- Adds support for specifying workflow names in REST API requests.
+- Adds sequential incrementing of workflow run numbers.
+- Adds support for nested inputs and runtime code directory uploads.
+- Improves error messages and information.
+- Prevents multiple starts of the same workflow.
+
 Version 0.1.0 (2018-01-30)
 --------------------------
 
