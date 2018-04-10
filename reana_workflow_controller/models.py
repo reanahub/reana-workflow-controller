@@ -26,6 +26,7 @@ from __future__ import absolute_import
 
 import enum
 
+from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy_utils.types import JSONType, UUIDType
 
 from .factory import db
@@ -64,9 +65,9 @@ class WorkflowStatus(enum.Enum):
 class Workflow(db.Model):
     """Workflow model."""
 
-    id_ = db.Column(UUIDType, unique=True)
+    id_ = db.Column(UUIDType, unique=True, primary_key=True)
     name = db.Column(db.String(255))
-    run_number = db.Column(db.Integer, primary_key=True, autoincrement="auto")
+    run_number = db.Column(db.Integer)
     create_date = db.Column(db.DateTime, default=db.func.now())
     workspace_path = db.Column(db.String(255))
     status = db.Column(db.Enum(WorkflowStatus), default=WorkflowStatus.created)
@@ -75,6 +76,8 @@ class Workflow(db.Model):
     parameters = db.Column(JSONType)
     type_ = db.Column(db.String(30))
     logs = db.Column(db.String, default="")
+    __table_args__ = UniqueConstraint('name', 'owner_id', 'run_number',
+                                      name='_user_workflow_run_uc'),
 
     def __init__(self, id_, name, workspace_path, owner_id,
                  specification, parameters, type_,
@@ -88,6 +91,14 @@ class Workflow(db.Model):
         self.parameters = parameters
         self.type_ = type_
         self.status = status
+        last_workflow = Workflow.query.filter_by(
+            name=name,
+            owner_id=owner_id).\
+            order_by(Workflow.run_number.desc()).first()
+        if not last_workflow:
+            self.run_number = 1
+        else:
+            self.run_number = last_workflow.run_number + 1
 
     def __repr__(self):
         """Workflow string represetantion."""
