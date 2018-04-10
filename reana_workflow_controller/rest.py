@@ -414,6 +414,7 @@ def seed_workflow_workspace(workflow_id_or_name):
             Request failed. Internal controller error.
     """
     try:
+        user_uuid = request.args['user']
         file_ = request.files['file_content']
         # file_name = secure_filename(request.args['file_name'])
         full_file_name = request.args['file_name']
@@ -423,7 +424,8 @@ def seed_workflow_workspace(workflow_id_or_name):
         file_type = request.args.get('file_type') \
             if request.args.get('file_type') else 'input'
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
 
         filename = full_file_name.split("/")[-1]
         path = get_analysis_files_dir(workflow, file_type,
@@ -516,7 +518,8 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
         outputs_directory = get_analysis_files_dir(workflow, 'output')
         return send_from_directory(outputs_directory,
                                    file_name,
@@ -622,7 +625,8 @@ def get_workflow_files(workflow_id_or_name):  # noqa
         file_type = request.args.get('file_type') \
             if request.args.get('file_type') else 'input'
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
 
         file_list = list_directory_files(
             get_analysis_files_dir(workflow, file_type))
@@ -719,7 +723,8 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         organization = request.args['organization']
         user_uuid = request.args['user']
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
 
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
@@ -1124,7 +1129,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
 
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
@@ -1272,7 +1278,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
 
         status = request.json
         if not (status in STATUSES):
@@ -1393,14 +1400,15 @@ def _get_workflow_name(workflow):
     return workflow.name + '.' + str(workflow.run_number)
 
 
-def _get_workflow_by_name(workflow_name):
+def _get_workflow_by_name(workflow_name, user_uuid):
     """From Workflows named as `workflow_name` the latest run_number.
 
     Only use when you are sure that workflow_name is not UUIDv4.
 
     :rtype: reana-workflow-controller.models.Workflow
     """
-    workflow = Workflow.query.filter(Workflow.name == workflow_name). \
+    workflow = Workflow.query.filter(Workflow.name == workflow_name,
+                                     Workflow.owner_id == user_uuid). \
         order_by(Workflow.run_number.desc()).first()
     if not workflow:
         raise WorkflowInexistentError('No Workflow with UUID {} found.'.
@@ -1423,7 +1431,7 @@ def _get_workflow_by_uuid(workflow_uuid):
     return workflow
 
 
-def _get_workflow_with_uuid_or_name(uuid_or_name):
+def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
     """Get Workflow from database with uuid or name.
 
     :param uuid_or_name: String representing a valid UUIDv4 or valid
@@ -1488,13 +1496,13 @@ def _get_workflow_with_uuid_or_name(uuid_or_name):
         except ValueError:
             # Couldn't split. Probably not a dot-separated string.
             #  -> Search with `uuid_or_name`
-            return _get_workflow_by_name(uuid_or_name)
+            return _get_workflow_by_name(uuid_or_name, user_uuid)
 
         # Check if `run_number` was specified
         if not run_number:
             # No `run_number` specified.
             # -> Search by `workflow_name`
-            return _get_workflow_by_name(workflow_name)
+            return _get_workflow_by_name(workflow_name, user_uuid)
 
         # `run_number` was specified.
         # Check `run_number` is valid.
@@ -1503,13 +1511,16 @@ def _get_workflow_with_uuid_or_name(uuid_or_name):
             # but it didn't contain a valid `run_number`.
             # Assume that this dot-separated string is the name of
             # the workflow and search with it.
-            return _get_workflow_by_name(uuid_or_name)
+            return _get_workflow_by_name(uuid_or_name, user_uuid)
 
         # `run_number` is valid.
         # Search by `run_number` since it is a primary key.
         # workflow = Workflow.query. \
         #     filter(Workflow.name == run_number).first()
-        workflow = Workflow.query.get(run_number)
+        workflow = Workflow.query.filter(Workflow.name == workflow_name,
+                                         Workflow.run_number == run_number,
+                                         Workflow.owner_id == user_uuid).\
+            one_or_none()
         if not workflow:
             raise WorkflowInexistentError(
                 'No Workflow with name {} and '
