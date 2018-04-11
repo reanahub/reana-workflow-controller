@@ -33,6 +33,7 @@ from werkzeug.utils import secure_filename
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
                                               SHARED_VOLUME_PATH)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
+                                              UploadPathError,
                                               WorkflowInexistentError,
                                               WorkflowNameError)
 from reana_workflow_controller.factory import db
@@ -416,7 +417,6 @@ def seed_workflow_workspace(workflow_id_or_name):
     try:
         user_uuid = request.args['user']
         file_ = request.files['file_content']
-        # file_name = secure_filename(request.args['file_name'])
         full_file_name = request.args['file_name']
         if not full_file_name:
             raise ValueError('The file transferred needs to have name.')
@@ -428,10 +428,15 @@ def seed_workflow_workspace(workflow_id_or_name):
                                                    user_uuid)
 
         filename = full_file_name.split("/")[-1]
+
+        # Remove starting '/' in path
+        if full_file_name[0] == '/':
+            full_file_name = full_file_name[1:]
+        elif '..' in full_file_name.split("/"):
+            raise UploadPathError('Path cannot contain "..".')
         path = get_analysis_files_dir(workflow, file_type,
                                       'seed')
-        if len(full_file_name.split("/")) > 1 and not \
-           os.path.isabs(full_file_name):
+        if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
             path = os.path.join(path, "/".join(dirs))
             if not os.path.exists(path):

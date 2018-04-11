@@ -33,3 +33,7 @@ class WorkflowInexistentError(Exception):
 
 class REANAWorkflowControllerError(Exception):
     """Error when trying to manage workflows."""
+
+
+class UploadPathError(Exception):
+    """Provided paths contain '../'."""
