@@ -414,8 +414,8 @@ def seed_workflow_workspace(workflow_id_or_name):
             Request failed. Internal controller error.
     """
     try:
+        user_uuid = request.args['user']
         file_ = request.files['file_content']
-        # file_name = secure_filename(request.args['file_name'])
         full_file_name = request.args['file_name']
         if not full_file_name:
             raise ValueError('The file transferred needs to have name.')
@@ -423,19 +423,23 @@ def seed_workflow_workspace(workflow_id_or_name):
         file_type = request.args.get('file_type') \
             if request.args.get('file_type') else 'input'
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name)
-
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
         filename = full_file_name.split("/")[-1]
+
+        # Remove starting '/' in path
+        if full_file_name[0] == '/':
+            full_file_name = full_file_name[1:]
         path = get_analysis_files_dir(workflow, file_type,
                                       'seed')
-        if len(full_file_name.split("/")) > 1 and not \
-           os.path.isabs(full_file_name):
+        if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
             path = os.path.join(path, "/".join(dirs))
             if not os.path.exists(path):
                 os.makedirs(path)
 
         file_.save(os.path.join(path, filename))
+
         return jsonify({'message': 'File successfully transferred'}), 200
 
     except WorkflowInexistentError:
