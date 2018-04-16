@@ -414,7 +414,10 @@ def test_get_unknown_workflow_files(app, default_user, file_type):
 
         assert res.status_code == 404
         response_data = json.loads(res.get_data(as_text=True))
-        expected_data = {'message': 'Workflow {0} does not exist.'.
+        expected_data = {'message': 'REANA_WORKON is set to {0}, but '
+                                    'that workflow does not exist. '
+                                    'Please set your REANA_WORKON environment '
+                                    'variable appropriately.'.
                          format(random_workflow_uuid)}
         assert response_data == expected_data
 

@@ -441,8 +441,11 @@ def seed_workflow_workspace(workflow_id_or_name):
         return jsonify({'message': 'File successfully transferred'}), 200
 
     except WorkflowInexistentError:
-        return jsonify({'message': 'Workflow {0} does not exist.'.format(
-            workflow_id_or_name)}), 404
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment'
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
     except (KeyError, ValueError) as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -527,8 +530,11 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
                                    as_attachment=True), 200
 
     except WorkflowInexistentError:
-        return jsonify({'message': 'Workflow {0} does not exist.'.format(
-            workflow_id_or_name)}), 404
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except NotFound as e:
@@ -633,8 +639,11 @@ def get_workflow_files(workflow_id_or_name):  # noqa
         return jsonify(file_list), 200
 
     except WorkflowInexistentError:
-        return jsonify({'message': 'Workflow {0} does not exist.'.format(
-            workflow_id_or_name)}), 404
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except Exception as e:
@@ -738,8 +747,11 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
                         'user': user_uuid}), 200
 
     except WorkflowInexistentError:
-        return jsonify({'message': 'Workflow {0} does not exist.'.format(
-            workflow_id_or_name)}), 404
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -1145,8 +1157,11 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         'organization': organization,
                         'user': user_uuid}), 200
     except WorkflowInexistentError:
-        return jsonify({'message': 'Workflow {0} does not exist.'.format(
-            workflow_id_or_name)}), 404
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -1297,8 +1312,11 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
     except WorkflowInexistentError:
-        return jsonify({'message': 'Workflow {0} does not exist.'.format(
-            workflow_id_or_name)}), 404
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
     except KeyError as e:
@@ -1411,8 +1429,12 @@ def _get_workflow_by_name(workflow_name, user_uuid):
                                      Workflow.owner_id == user_uuid). \
         order_by(Workflow.run_number.desc()).first()
     if not workflow:
-        raise WorkflowInexistentError('No Workflow with UUID {} found.'.
-                                      format(workflow_name))
+        raise WorkflowInexistentError(
+            'REANA_WORKON is set to {0}, but '
+            'that workflow does not exist. '
+            'Please set your REANA_WORKON environment '
+            'variable appropriately.'.
+            format(workflow_name))
     return workflow
 
 
@@ -1426,8 +1448,12 @@ def _get_workflow_by_uuid(workflow_uuid):
     """
     workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
     if not workflow:
-        raise WorkflowInexistentError('No Workflow with UUID {} found.'.
-                                      format(workflow_uuid))
+        raise WorkflowInexistentError(
+            'REANA_WORKON is set to {0}, but '
+            'that workflow does not exist. '
+            'Please set your REANA_WORKON environment '
+            'variable appropriately.'.
+            format(workflow_uuid))
     return workflow
 
 
@@ -1523,8 +1549,10 @@ def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
             one_or_none()
         if not workflow:
             raise WorkflowInexistentError(
-                'No Workflow with name {} and '
-                'run number of {} found.'.
+                'REANA_WORKON is set to {0}, but '
+                'that workflow does not exist. '
+                'Please set your REANA_WORKON environment '
+                'variable appropriately.'.
                 format(workflow_name, run_number))
 
         return workflow
