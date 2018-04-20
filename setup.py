@@ -73,6 +73,7 @@ install_requires = [
     'marshmallow>=2.13',
     'requests==2.11.1',
     'sqlalchemy-utils>=0.31.0',
+    'reana-commons>=0.1.0',
 ]
 
 packages = find_packages()

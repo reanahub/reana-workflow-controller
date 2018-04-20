@@ -26,7 +26,11 @@ import os
 import traceback
 from uuid import UUID, uuid4
 
-from flask import Blueprint, abort, jsonify, request, send_from_directory
+from flask import (Blueprint, abort, current_app, jsonify, request,
+                   send_from_directory)
+from reana_commons.database import Session
+from reana_commons.models import (User, UserOrganization, Workflow,
+                                  WorkflowStatus)
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
@@ -36,8 +40,6 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
                                               WorkflowInexistentError,
                                               WorkflowNameError)
-from reana_workflow_controller.factory import db
-from reana_workflow_controller.models import User, Workflow, WorkflowStatus
 from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_yadage_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
@@ -63,19 +65,6 @@ workflow_spec_to_task = {
 }
 
 restapi_blueprint = Blueprint('api', __name__)
-
-
-@restapi_blueprint.before_request
-def before_request():
-    """Retrieve organization from request."""
-    try:
-        db.choose_organization(request.args['organization'])
-    except KeyError as e:
-        return jsonify({"message": "An organization should be provided"}), 400
-    except ValueError as e:
-        return jsonify({"message": str(e)}), 404
-    except Exception as e:
-        return jsonify({"message": str(e)}), 500
 
 
 @restapi_blueprint.route('/workflows', methods=['GET'])
@@ -179,11 +168,12 @@ def get_workflows():  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = User.query.\
+            filter(User.id_ == user_uuid,
+                   UserOrganization.name == organization).first()
         if not user:
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
-
         workflows = []
         for workflow in user.workflows:
             workflows.append({'id': workflow.id_,
@@ -193,6 +183,8 @@ def get_workflows():  # noqa
                               'user': user_uuid})
 
         return jsonify(workflows), 200
+    except ValueError:
+        return jsonify({"message": "Malformed request."}), 400
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except Exception as e:
@@ -282,10 +274,14 @@ def create_workflow():  # noqa
     try:
         organization = request.args['organization']
         user_uuid = request.args['user']
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = User.query.\
+            filter(User.id_ == user_uuid,
+                   UserOrganization.name ==
+                   organization).first()
         if not user:
             return jsonify(
-                {'message': 'User {} does not exist'.format(user)}), 404
+                {'message': 'User with id:{} does not exist'.
+                 format(user_uuid)}), 404
 
         workflow_uuid = str(uuid4())
         workflow_workspace, _ = create_workflow_workspace(
@@ -296,7 +292,7 @@ def create_workflow():  # noqa
         # Use name prefix user specified or use default name prefix
         # Actual name is prefix + autoincremented run_number.
         workflow_name = request.json.get('name', '')
-        if workflow_name is '':
+        if workflow_name == '':
             workflow_name = DEFAULT_NAME_FOR_WORKFLOWS
         else:
             try:
@@ -305,7 +301,6 @@ def create_workflow():  # noqa
                 # `workflow_name` contains something else than just ASCII.
                 raise WorkflowNameError('Workflow name {} is not valid.'.
                                         format(workflow_name))
-
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,
                             name=workflow_name,
@@ -313,10 +308,10 @@ def create_workflow():  # noqa
                             owner_id=request.args['user'],
                             specification=request.json['specification'],
                             parameters=request.json['parameters'],
-                            type_=request.json['type'])
-        db.session.add(workflow)
-        db.session.commit()
-
+                            type_=request.json['type'],
+                            logs='')
+        Session.add(workflow)
+        Session.commit()
         # Should workflow_workspace be destroyed in case creation of Workflow
         # doesn't complete successfully?
         return jsonify({'message': 'Workflow workspace created',
@@ -1336,7 +1331,9 @@ def start_workflow(organization, workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         workflow.status = WorkflowStatus.running
-        db.session.commit()
+        current_db_sessions = Session.object_session(workflow)
+        current_db_sessions.add(workflow)
+        current_db_sessions.commit()
         if workflow.type_ == 'yadage':
             return run_yadage_workflow_from_spec(organization,
                                                  workflow)
@@ -1418,7 +1415,7 @@ def _get_workflow_name(workflow):
     """Return a name of a Workflow.
 
     :param workflow: Workflow object which name should be returned.
-    :type workflow: reana-workflow-controller.models.Workflow
+    :type workflow: reana-commons.models.Workflow
     """
     return workflow.name + '.' + str(workflow.run_number)
 
@@ -1428,10 +1425,11 @@ def _get_workflow_by_name(workflow_name, user_uuid):
 
     Only use when you are sure that workflow_name is not UUIDv4.
 
-    :rtype: reana-workflow-controller.models.Workflow
+    :rtype: reana-commons.models.Workflow
     """
-    workflow = Workflow.query.filter(Workflow.name == workflow_name,
-                                     Workflow.owner_id == user_uuid). \
+    workflow = Workflow.query.filter(
+        Workflow.name == workflow_name,
+        Workflow.owner_id == user_uuid). \
         order_by(Workflow.run_number.desc()).first()
     if not workflow:
         raise WorkflowInexistentError(
@@ -1449,9 +1447,10 @@ def _get_workflow_by_uuid(workflow_uuid):
     :param workflow_uuid: UUIDv4 of a Workflow.
     :type workflow_uuid: String representing a valid UUIDv4.
 
-    :rtype: reana-workflow-controller.models.Workflow
+    :rtype: reana-commons.models.Workflow
     """
-    workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+    workflow = Workflow.query.filter(Workflow.id_ ==
+                                     workflow_uuid).first()
     if not workflow:
         raise WorkflowInexistentError(
             'REANA_WORKON is set to {0}, but '
@@ -1477,7 +1476,7 @@ def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
         is returned.
     :type uuid_or_name: String
 
-    :rtype: reana-workflow-controller.models.Workflow
+    :rtype: reana-commons.models.Workflow
     """
     # Check existence
     if not uuid_or_name:
@@ -1546,11 +1545,10 @@ def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
 
         # `run_number` is valid.
         # Search by `run_number` since it is a primary key.
-        # workflow = Workflow.query. \
-        #     filter(Workflow.name == run_number).first()
-        workflow = Workflow.query.filter(Workflow.name == workflow_name,
-                                         Workflow.run_number == run_number,
-                                         Workflow.owner_id == user_uuid).\
+        workflow = Workflow.query.filter(
+            Workflow.name == workflow_name,
+            Workflow.run_number == run_number,
+            Workflow.owner_id == user_uuid).\
             one_or_none()
         if not workflow:
             raise WorkflowInexistentError(

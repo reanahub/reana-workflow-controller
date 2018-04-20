@@ -28,12 +28,15 @@ import os
 import shutil
 
 import pytest
+from reana_commons.models import Base, Organization, User, UserOrganization
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy_utils import create_database, database_exists, drop_database
 
-from reana_workflow_controller.factory import create_app, db
-from reana_workflow_controller.models import User
+from reana_workflow_controller.factory import create_app
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def tmp_shared_volume_path(tmpdir_factory):
     """Fixture temporary file system database."""
     temp_path = str(tmpdir_factory.mktemp('data').join('reana'))
@@ -44,7 +47,7 @@ def tmp_shared_volume_path(tmpdir_factory):
     shutil.rmtree(temp_path)
 
 
-@pytest.fixture()
+@pytest.fixture(scope='module')
 def base_app(tmp_shared_volume_path):
     """Flask application fixture."""
     config_mapping = {
@@ -52,8 +55,8 @@ def base_app(tmp_shared_volume_path):
         'SECRET_KEY': 'SECRET_KEY',
         'TESTING': True,
         'SHARED_VOLUME_PATH': tmp_shared_volume_path,
-        'SQLALCHEMY_DATABASE_URI_TEMPLATE':
-        'sqlite:///{0}/default/reana.db'.format(tmp_shared_volume_path),
+        'SQLALCHEMY_DATABASE_URI':
+        'sqlite:///',
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
         'ORGANIZATIONS': ['default'],
     }
@@ -61,29 +64,66 @@ def base_app(tmp_shared_volume_path):
     return app_
 
 
+@pytest.fixture(scope='module')
+def db_engine(base_app):
+    test_db_engine = create_engine(
+        base_app.config['SQLALCHEMY_DATABASE_URI'])
+    if not database_exists(test_db_engine.url):
+        create_database(test_db_engine.url)
+    yield test_db_engine
+    drop_database(test_db_engine.url)
+
+
 @pytest.fixture()
-def app(base_app):
+def session(db_engine):
+    Session = scoped_session(sessionmaker(autocommit=False,
+                                          autoflush=False,
+                                          bind=db_engine))
+    Base.query = Session.query_property()
+    from reana_commons.database import Session as _Session
+    _Session.configure(bind=db_engine)
+    yield Session
+
+
+@pytest.fixture()
+def app(base_app, db_engine, session):
     """Flask application fixture."""
     with base_app.app_context():
+        import reana_commons.models
+        Base.metadata.create_all(bind=db_engine)
         yield base_app
+        for table in reversed(Base.metadata.sorted_tables):
+            db_engine.execute(table.delete())
 
 
 @pytest.fixture()
-def default_user(app):
+def default_organization(app, session):
     """Create users."""
-    db.choose_organization('default')
-    user = User(id_='00000000-0000-0000-0000-000000000000',
-                email='info@reana.io', api_key='secretkey')
-    db.session.add(user)
-    db.session.commit()
-    return user
+    org = Organization.query.filter_by(
+        name='default').first()
+    if not org:
+        org = Organization(name='default')
+        session.add(org)
+        session.commit()
+    return org
 
 
 @pytest.fixture()
-def db_session():
-    """DB fixture"""
-    yield db.session
-    db.session.close()
+def default_user(app, session, default_organization):
+    """Create users."""
+    default_user_id = '00000000-0000-0000-0000-000000000000'
+    user = User.query.filter_by(
+        id_=default_user_id).first()
+    if not user:
+        user = User(id_=default_user_id,
+                    email='info@reana.io', api_key='secretkey')
+        session.add(user)
+        session.commit()
+        user_org = UserOrganization(user_id=default_user_id,
+                                    name='default')
+        session.add(user_org)
+        session.commit()
+    return user
 
 
 @pytest.fixture()

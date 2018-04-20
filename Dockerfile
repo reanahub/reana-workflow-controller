@@ -22,7 +22,10 @@ FROM python:3.6
 
 ENV TERM=xterm
 RUN apt-get update && \
-    apt-get install -y vim-tiny
+    apt-get install -y vim-tiny && \
+    pip install --upgrade pip
+
+RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
 
 ADD . /code
 WORKDIR /code
@@ -35,4 +38,4 @@ RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip in
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
 CMD flask users create info@reana.io &&\
-    flask run --host=0.0.0.0
+	flask run --host=0.0.0.0

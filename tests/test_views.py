@@ -29,11 +29,11 @@ import uuid
 import fs
 import pytest
 from flask import url_for
+from reana_commons.models import Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import (ALLOWED_LIST_DIRECTORIES,
                                               ALLOWED_SEED_DIRECTORIES)
-from reana_workflow_controller.models import Workflow, WorkflowStatus
 from reana_workflow_controller.rest import START, STOP
 from reana_workflow_controller.utils import (get_analysis_files_dir,
                                              get_user_analyses_dir)
@@ -44,7 +44,7 @@ status_dict = {
 }
 
 
-def test_get_workflows(app, default_user, db_session, cwl_workflow_with_name):
+def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
     """Test listing all workflows."""
     with app.test_client() as client:
         workflow_uuid = uuid.uuid4()
@@ -57,10 +57,10 @@ def test_get_workflows(app, default_user, db_session, cwl_workflow_with_name):
             owner_id=default_user.id_,
             specification=cwl_workflow_with_name['specification'],
             parameters=cwl_workflow_with_name['parameters'],
-            type_=cwl_workflow_with_name['type'])
-        db_session.add(workflow)
-        db_session.commit()
-
+            type_=cwl_workflow_with_name['type'],
+            logs='')
+        session.add(workflow)
+        session.commit()
         res = client.get(url_for('api.get_workflows'),
                          query_string={
                              "user": default_user.id_,
@@ -109,6 +109,14 @@ def test_get_workflows_wrong_organization(app, default_user):
                              "organization": organization})
         assert res.status_code == 404
 
+    with app.test_client() as client:
+        organization = '10000000-0000-0000-0000-000000000000'
+        res = client.get(url_for('api.get_workflows'),
+                         query_string={
+                             "user": default_user.id_,
+                             "organization": organization})
+        assert res.status_code == 404
+
 
 def test_get_workflows_missing_organization(app, default_user):
     """Test listing all workflows with missing organization."""
@@ -118,7 +126,8 @@ def test_get_workflows_missing_organization(app, default_user):
         assert res.status_code == 400
 
 
-def test_create_workflow_with_name(app, default_user, tmp_shared_volume_path,
+def test_create_workflow_with_name(app, session, default_user,
+                                   tmp_shared_volume_path,
                                    cwl_workflow_with_name):
     """Test create workflow and its workspace by specifying a name."""
     with app.test_client() as client:
@@ -129,7 +138,6 @@ def test_create_workflow_with_name(app, default_user, tmp_shared_volume_path,
                               "organization": organization},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
-
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
 
@@ -160,7 +168,7 @@ def test_create_workflow_with_name(app, default_user, tmp_shared_volume_path,
         assert os.path.exists(workflow_workspace)
 
 
-def test_create_workflow_without_name(app, default_user,
+def test_create_workflow_without_name(app, session, default_user,
                                       tmp_shared_volume_path,
                                       cwl_workflow_without_name):
     """Test create workflow and its workspace without specifying a name."""
@@ -209,7 +217,7 @@ def test_create_workflow_without_name(app, default_user,
         assert os.path.exists(workflow_workspace)
 
 
-def test_create_workflow_wrong_user(app, tmp_shared_volume_path,
+def test_create_workflow_wrong_user(app, session, tmp_shared_volume_path,
                                     cwl_workflow_with_name):
     """Test create workflow providing unknown user."""
     with app.test_client() as client:
@@ -268,7 +276,8 @@ def test_get_workflow_outputs_absent_file(app, default_user,
         assert response_data == {'message': 'input.csv does not exist.'}
 
 
-def test_get_workflow_outputs_file(app, default_user, cwl_workflow_with_name):
+def test_get_workflow_outputs_file(app, session, default_user,
+                                   cwl_workflow_with_name):
     """Test download output file."""
     with app.test_client() as client:
         # create workflow
@@ -308,7 +317,7 @@ def test_get_workflow_outputs_file(app, default_user, cwl_workflow_with_name):
         assert res.data == file_binary_content
 
 
-def test_get_workflow_outputs_file_with_path(app, default_user,
+def test_get_workflow_outputs_file_with_path(app, session, default_user,
                                              cwl_workflow_with_name):
     """Test download output file prepended with path."""
     with app.test_client() as client:
@@ -350,7 +359,8 @@ def test_get_workflow_outputs_file_with_path(app, default_user,
 
 
 @pytest.mark.parametrize("file_type", ALLOWED_LIST_DIRECTORIES.keys())
-def test_get_workflow_files(app, default_user, tmp_shared_volume_path,
+def test_get_workflow_files(app, session, default_user,
+                            tmp_shared_volume_path,
                             file_type, cwl_workflow_with_name):
     """Test get list of input files."""
     with app.test_client() as client:
@@ -422,7 +432,7 @@ def test_get_unknown_workflow_files(app, default_user, file_type):
         assert response_data == expected_data
 
 
-def test_get_workflow_status_with_uuid(app, db_session, default_user,
+def test_get_workflow_status_with_uuid(app, session, default_user,
                                        cwl_workflow_with_name):
     """Test get workflow status."""
     with app.test_client() as client:
@@ -450,7 +460,7 @@ def test_get_workflow_status_with_uuid(app, db_session, default_user,
         json_response = json.loads(res.data.decode())
         assert json_response.get('status') == workflow.status.name
         workflow.status = WorkflowStatus.finished
-        db_session.commit()
+        session.commit()
 
         res = client.get(url_for('api.get_workflow_status',
                                  workflow_id_or_name=workflow_uuid),
@@ -463,7 +473,7 @@ def test_get_workflow_status_with_uuid(app, db_session, default_user,
         assert json_response.get('status') == workflow.status.name
 
 
-def test_get_workflow_status_with_name(app, db_session, default_user,
+def test_get_workflow_status_with_name(app, session, default_user,
                                        cwl_workflow_with_name):
     """Test get workflow status."""
     with app.test_client() as client:
@@ -489,9 +499,10 @@ def test_get_workflow_status_with_name(app, db_session, default_user,
             owner_id=default_user.id_,
             specification=cwl_workflow_with_name['specification'],
             parameters=cwl_workflow_with_name['parameters'],
-            type_=cwl_workflow_with_name['type'])
-        db_session.add(workflow)
-        db_session.commit()
+            type_=cwl_workflow_with_name['type'],
+            logs='')
+        session.add(workflow)
+        session.commit()
 
         workflow = Workflow.query.filter(
             Workflow.name == workflow_name).first()
@@ -507,7 +518,7 @@ def test_get_workflow_status_with_name(app, db_session, default_user,
 
         assert json_response.get('status') == workflow.status.name
         workflow.status = WorkflowStatus.finished
-        db_session.commit()
+        session.commit()
 
         res = client.get(url_for('api.get_workflow_status',
                                  workflow_id_or_name=workflow_name + '.1'),
@@ -569,7 +580,8 @@ def test_get_workflow_status_unknown_workflow(app, default_user,
         assert res.status_code == 404
 
 
-def test_set_workflow_status(app, default_user, yadage_workflow_with_name):
+def test_set_workflow_status(app, session, default_user,
+                             yadage_workflow_with_name):
     """Test set workflow status "Start"."""
     with app.test_client() as client:
         os.environ["TESTS"] = "True"
@@ -599,7 +611,7 @@ def test_set_workflow_status(app, default_user, yadage_workflow_with_name):
         assert json_response.get('status') == status_dict[payload].name
 
 
-def test_start_already_started_workflow(app, db_session, default_user):
+def test_start_already_started_workflow(app, session, default_user):
     """Test start workflow twice."""
     with app.test_client() as client:
         os.environ["TESTS"] = "True"
@@ -697,7 +709,7 @@ def test_set_workflow_status_unknown_workflow(app, default_user,
 
 
 @pytest.mark.parametrize("file_type", ALLOWED_SEED_DIRECTORIES.keys())
-def test_seed_workflow_workspace(app, db_session, default_user, file_type,
+def test_seed_workflow_workspace(app, session, default_user, file_type,
                                  cwl_workflow_with_name):
     """Test download output file."""
     with app.test_client() as client:

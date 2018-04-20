@@ -28,15 +28,7 @@ BROKER = os.getenv("RABBIT_MQ", 'amqp://test:1234@'
                    'message-broker.default.svc.cluster.local//')
 
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
-"""Path to the mounted REANA shared volume."""
 
-SQLALCHEMY_DATABASE_URI_TEMPLATE = 'sqlite:///{path}'.format(
-    path=os.path.join(SHARED_VOLUME_PATH, 'default/reana.db'))
-"""SQLAlchemy database location"""
-
-ORGANIZATIONS = os.getenv('ORGANIZATIONS').split(',') \
-                if os.getenv('ORGANIZATIONS') else []
-"""Organizations."""
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
@@ -63,3 +55,5 @@ DEFAULT_NAME_FOR_WORKFLOWS = 'workflow'
 """The default prefix used to name workflow(s): e.g. reana-1, reana-2, etc.
    If workflow is manually named by the user that prefix will used instead.
 """
+
+ORGANIZATIONS = ['atlas', 'alice', 'cms', 'default', 'lhcb']

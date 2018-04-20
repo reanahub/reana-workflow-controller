@@ -24,10 +24,10 @@
 
 import click
 from flask.cli import with_appcontext
+from reana_commons.database import Session
+from reana_commons.models import Organization, User, UserOrganization
 
 from reana_workflow_controller import config
-from reana_workflow_controller.factory import db
-from reana_workflow_controller.models import User
 from reana_workflow_controller.utils import create_user_space
 
 
@@ -38,26 +38,40 @@ def users():
 
 @users.command('create')
 @click.argument('email')
-@click.option('-o', '--organization', 'organization',
+@click.option('-o', '--organization', 'organization_name',
               type=click.Choice(config.ORGANIZATIONS),
               default='default')
 @click.option('-i', '--id', 'id_',
               default='00000000-0000-0000-0000-000000000000')
 @click.option('-k', '--key', 'key', default='secretkey')
 @with_appcontext
-def users_create_default(email, organization, id_, key):
+def users_create_default(email, organization_name, id_, key):
     """Create new user."""
     user_characteristics = {"id_": id_,
                             "email": email,
-                            "api_key": key}
+                            "api_key": key
+                            }
+    user_organization_characteristics = {"user_id": id_,
+                                         "name": organization_name}
+    organization_characteristics = {"name": organization_name}
     try:
-        db.choose_organization(organization)
-        user = db.session.query(User).filter_by(**user_characteristics).first()
+        user = User.query.filter_by(**user_characteristics).first()
+        organization = Organization.query.filter_by(
+            **organization_characteristics).first()
+        user_organization = UserOrganization.query.filter_by(
+            **user_organization_characteristics).first()
+        if not organization:
+            organization = Organization(**organization_characteristics)
+            Session.add(organization)
         if not user:
             user = User(**user_characteristics)
-            db.session.add(user)
-            db.session.commit()
-            create_user_space(id_, organization)
+            create_user_space(id_, organization_name)
+            Session.add(user)
+        if not user_organization:
+            user_organization = UserOrganization(
+                **user_organization_characteristics)
+            Session.add(user_organization)
+        Session.commit()
         click.echo(user.id_)
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))

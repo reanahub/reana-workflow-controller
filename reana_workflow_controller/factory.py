@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -26,12 +26,7 @@ from __future__ import absolute_import
 
 from flask import Flask
 
-from .multiorganization import MultiOrganizationSQLAlchemy
-
-# Initialize DB
-db = MultiOrganizationSQLAlchemy()
-
-from .models import User, Workflow  # isort:skip  # noqa
+from reana_commons.models import Base  # isort:skip  # noqa
 
 
 def create_app(config_mapping=None):
@@ -42,13 +37,7 @@ def create_app(config_mapping=None):
         app.config.from_mapping(config_mapping)
 
     app.secret_key = "super secret key"
-
-    # Initialize flask extensions
-    db.init_app(app)
     # Register API routes
     from .rest import restapi_blueprint  # noqa
     app.register_blueprint(restapi_blueprint, url_prefix='/api')
-    with app.app_context():
-        db.initialize_dbs()
-
     return app
