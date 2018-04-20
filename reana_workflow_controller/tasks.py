@@ -37,3 +37,4 @@ celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
 
 run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
 run_cwl_workflow = celery.signature('tasks.run_cwl_workflow')
+run_serial_workflow = celery.signature('tasks.run_serial_workflow')

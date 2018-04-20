@@ -41,6 +41,7 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               WorkflowInexistentError,
                                               WorkflowNameError)
 from reana_workflow_controller.tasks import (run_cwl_workflow,
+                                             run_serial_workflow,
                                              run_yadage_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
                                              get_analysis_files_dir,
@@ -1340,6 +1341,9 @@ def start_workflow(organization, workflow):
         elif workflow.type_ == 'cwl':
             return run_cwl_workflow_from_spec_endpoint(organization,
                                                        workflow)
+        elif workflow.type_ == 'serial':
+            return run_serial_workflow_from_spec(organization,
+                                                 workflow)
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))
@@ -1408,6 +1412,36 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
     except (KeyError, ValueError) as e:
         print(e)
         # traceback.print_exc()
+        abort(400)
+
+
+def run_serial_workflow_from_spec(organization, workflow):
+    """Run a serial workflow."""
+    try:
+        # Remove organization from workspace path since workflow
+        # engines already work in its organization folder.
+        workspace_path_without_organization = \
+            '/'.join(workflow.workspace_path.strip('/').split('/')[1:])
+        kwargs = {
+            "workflow_uuid": str(workflow.id_),
+            "workflow_workspace": workspace_path_without_organization,
+            "workflow_json": workflow.specification,
+            "parameters": workflow.parameters
+        }
+        queue = organization_to_queue[organization]
+        if not os.environ.get("TESTS"):
+            resultobject = run_serial_workflow.apply_async(
+                kwargs=kwargs,
+                queue='serial-{}'.format(queue))
+        return jsonify({'message': 'Workflow successfully launched',
+                        'workflow_id': workflow.id_,
+                        'workflow_name': _get_workflow_name(workflow),
+                        'status': workflow.status.name,
+                        'organization': organization,
+                        'user': str(workflow.owner_id)}), 200
+
+    except(KeyError, ValueError):
+        traceback.print_exc()
         abort(400)
 
 
