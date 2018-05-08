@@ -22,6 +22,15 @@
 
 """REANA Workflow Controller Instance."""
 
+from flask import current_app
+
 from reana_workflow_controller.factory import create_app
 
 app = create_app()
+
+
+@app.teardown_appcontext
+def shutdown_session(response_or_exc):
+    """Close session on app teardown."""
+    current_app.session.remove()
+    return response_or_exc

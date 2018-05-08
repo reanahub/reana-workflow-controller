@@ -25,6 +25,7 @@
 from __future__ import absolute_import
 
 from flask import Flask
+from reana_commons.database import Session
 
 from reana_commons.models import Base  # isort:skip  # noqa
 
@@ -40,4 +41,5 @@ def create_app(config_mapping=None):
     # Register API routes
     from .rest import restapi_blueprint  # noqa
     app.register_blueprint(restapi_blueprint, url_prefix='/api')
+    app.session = Session
     return app
