@@ -72,8 +72,10 @@ install_requires = [
     'Flask-SQLAlchemy>=2.2',
     'marshmallow>=2.13',
     'requests==2.11.1',
+    'pika==0.11.2',
     'sqlalchemy-utils>=0.31.0',
     'reana-commons>=0.1.0',
+    'jsonpickle>=0.9.6',
 ]
 
 packages = find_packages()

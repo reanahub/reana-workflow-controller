@@ -22,15 +22,31 @@
 
 """REANA Workflow Controller Instance."""
 
-from flask import current_app
+import threading
 
 from reana_workflow_controller.factory import create_app
+from reana_workflow_controller.tasks import consume_job_queue
+
+
+class JobQueueConsumer(object):
+    """Job queue consumer class.
+
+    The run() method will be started and it will run in the background
+    until the application exits.
+    """
+
+    def __init__(self):
+        """Initialize JobQueueConsumer."""
+        thread = threading.Thread(target=self.run, args=())
+        thread.daemon = True  # Daemonize thread
+        thread.start()        # Start the execution
+
+    def run(self):
+        """Run forever."""
+        while True:
+            consume_job_queue()
+
+
+job_queue_consumer = JobQueueConsumer()
 
 app = create_app()
-
-
-@app.teardown_appcontext
-def shutdown_session(response_or_exc):
-    """Close session on app teardown."""
-    current_app.session.remove()
-    return response_or_exc

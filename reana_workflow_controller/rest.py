@@ -283,7 +283,6 @@ def create_workflow():  # noqa
             return jsonify(
                 {'message': 'User with id:{} does not exist'.
                  format(user_uuid)}), 404
-
         workflow_uuid = str(uuid4())
         workflow_workspace, _ = create_workflow_workspace(
             organization,
