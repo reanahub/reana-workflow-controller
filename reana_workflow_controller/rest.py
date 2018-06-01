@@ -29,7 +29,7 @@ from uuid import UUID, uuid4
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (User, UserOrganization, Workflow,
+from reana_commons.models import (Job, User, UserOrganization, Workflow,
                                   WorkflowStatus)
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
@@ -1093,6 +1093,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 type: string
               user:
                 type: string
+              logs:
+                type: string
           examples:
             application/json:
               {
@@ -1144,7 +1146,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         user_uuid = request.args['user']
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-
+        workflow_logs = _get_workflow_logs(workflow)
         if not str(workflow.owner_id) == user_uuid:
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
@@ -1156,7 +1158,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         'name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'organization': organization,
-                        'user': user_uuid}), 200
+                        'user': user_uuid,
+                        'logs': workflow_logs}), 200
     except WorkflowInexistentError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
@@ -1593,3 +1596,12 @@ def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
                 format(workflow_name, run_number))
 
         return workflow
+
+
+def _get_workflow_logs(workflow):
+    """Return the logs for all jobs of a workflow."""
+    jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
+    all_logs = ''
+    for job in jobs:
+        all_logs += job.logs
+    return all_logs
