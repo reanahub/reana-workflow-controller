@@ -1160,7 +1160,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         'name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'progress': {'current_step': run_info.current_step,
-                                     'current_commnand': run_info.current_commnand,
+                                     'current_commnand': run_info.current_command,
                                      'run_started_at': run_info.created,
                                      'total_steps': run_info.total_steps},
                         'organization': organization,
@@ -1447,7 +1447,7 @@ def run_serial_workflow_from_spec(organization, workflow):
                 kwargs=kwargs,
                 queue='serial-{}'.format(queue))
         return jsonify({'message': 'Workflow successfully launched',
-                        'workflow_id': workflow.id_,
+                        'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'organization': organization,
@@ -1617,6 +1617,6 @@ def _get_workflow_logs(workflow):
     return all_logs
 
 
-def _get_run_info(workflow):
+def _get_run_info(workflow_uuid):
     """Return progress info about workflow run."""
-    return Session.query(Run).filter_by(workflow_uuid=workflow.id_).first()
+    return Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()

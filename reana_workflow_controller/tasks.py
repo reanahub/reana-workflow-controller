@@ -63,7 +63,7 @@ def consume_job_queue():
             Workflow.update_workflow_status(Session, workflow_uuid,
                                             status, log, None)
             if 'message' in body_dict and \
-                    'current_step' in body_dict['message']:
+                    'current_step' in body_dict.get('message'):
                 Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
                     update(dict(
                         current_step=body_dict['message']['current_step'],
