@@ -426,6 +426,9 @@
                 "organization": {
                   "type": "string"
                 },
+                "progress": {
+                  "type": "object"
+                },
                 "status": {
                   "type": "string"
                 },
