@@ -63,15 +63,17 @@ def users_create_default(email, organization_name, id_, key):
         if not organization:
             organization = Organization(**organization_characteristics)
             Session.add(organization)
+            Session.commit()
         if not user:
             user = User(**user_characteristics)
             create_user_space(id_, organization_name)
             Session.add(user)
+            Session.commit()
         if not user_organization:
             user_organization = UserOrganization(
                 **user_organization_characteristics)
             Session.add(user_organization)
-        Session.commit()
+            Session.commit()
         click.echo(user.id_)
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
