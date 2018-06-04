@@ -30,7 +30,7 @@ import jsonpickle
 import pika
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Workflow, WorkflowStatus
+from reana_commons.models import Run, Workflow, WorkflowStatus
 
 from reana_workflow_controller.config import (BROKER, BROKER_PASS, BROKER_PORT,
                                               BROKER_URL, BROKER_USER)
@@ -49,8 +49,7 @@ run_serial_workflow = celery.signature('tasks.run_serial_workflow')
 
 def consume_job_queue():
     """Consumes job queue and updates job status."""
-    def _callback(ch, method, properties, body):
-
+    def _callback_job_status(ch, method, properties, body):
         body_dict = json.loads(body)
         workflow_uuid = body_dict.get('workflow_uuid')
         if workflow_uuid:
@@ -60,9 +59,14 @@ def consume_job_queue():
             log = body_dict.get('log')
             if log:
                 log = jsonpickle.decode(body_dict.get('log'))
-            message = body_dict.get('message')
             Workflow.update_workflow_status(Session, workflow_uuid,
-                                            status, log, message)
+                                            status, log, None)
+            if 'message' in body_dict and body_dict.get('message'):
+                msg = body_dict['message']
+                Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
+                    update(msg)
+                print('Updated Run table')
+            Session.commit()
 
     broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,
                                                            BROKER_PASS)
@@ -73,7 +77,7 @@ def consume_job_queue():
                                   broker_credentials))
     channel = connection.channel()
     channel.queue_declare(queue='jobs-status')
-    channel.basic_consume(_callback,
+    channel.basic_consume(_callback_job_status,
                           queue='jobs-status',
                           no_ack=True)
     print(' [*] Waiting for messages. To exit press CTRL+C')

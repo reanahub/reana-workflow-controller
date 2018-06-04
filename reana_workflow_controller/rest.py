@@ -29,8 +29,8 @@ from uuid import UUID, uuid4
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (User, UserOrganization, Workflow,
-                                  WorkflowStatus, Job)
+from reana_commons.models import (Job, Run, User, UserOrganization, Workflow,
+                                  WorkflowStatus)
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
@@ -1092,6 +1092,10 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 type: string
               user:
                 type: string
+              logs:
+                type: string
+              progress:
+                type: object
           examples:
             application/json:
               {
@@ -1149,11 +1153,24 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
 
+        run_info = _get_run_info(workflow.id_)
+        if run_info:
+            progress = {'current_step': run_info.current_step,
+                        'current_command_idx': run_info.current_command_idx,
+                        'current_command':
+                        run_info.current_command,
+                        'total_commands': run_info.total_commands,
+                        'run_started_at': run_info.created,
+                        'total_steps': run_info.total_steps}
+        else:
+            progress = {}
+
         # TODO:
         # Returned JSON doesn't match the style of other endpoints
         return jsonify({'id': workflow.id_,
                         'name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
+                        'progress': progress,
                         'organization': organization,
                         'user': user_uuid,
                         'logs': workflow_logs}), 200
@@ -1331,8 +1348,12 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 def start_workflow(organization, workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
+        new_run = Run(id_=str(uuid4()),
+                      workflow_uuid=workflow.id_,
+                      run_number=workflow.run_number)
         workflow.status = WorkflowStatus.running
         current_db_sessions = Session.object_session(workflow)
+        current_db_sessions.add(new_run)
         current_db_sessions.add(workflow)
         current_db_sessions.commit()
         if workflow.type_ == 'yadage':
@@ -1434,7 +1455,7 @@ def run_serial_workflow_from_spec(organization, workflow):
                 kwargs=kwargs,
                 queue='serial-{}'.format(queue))
         return jsonify({'message': 'Workflow successfully launched',
-                        'workflow_id': workflow.id_,
+                        'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'organization': organization,
@@ -1600,5 +1621,10 @@ def _get_workflow_logs(workflow):
     jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
     all_logs = ''
     for job in jobs:
-        all_logs += job.logs
+        all_logs += job.logs or ''
     return all_logs
+
+
+def _get_run_info(workflow_uuid):
+    """Return progress info about workflow run."""
+    return Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
