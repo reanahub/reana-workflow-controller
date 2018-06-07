@@ -23,24 +23,7 @@
 
 import fs
 from flask import current_app as app
-
-
-def get_user_analyses_dir(org, user):
-    """Build the analyses directory path for certain user and organization.
-
-    :param org: Organization which user is part of.
-    :param user: Working directory owner.
-    :return: Path to the user's analyses directory.
-    """
-    return fs.path.join(org, user, 'analyses')
-
-
-def create_user_space(user_id, org):
-    """Create analyses directory for `user_id`."""
-    reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    user_analyses_dir = get_user_analyses_dir(org, user_id)
-    if not reana_fs.exists(user_analyses_dir):
-        reana_fs.makedirs(user_analyses_dir)
+from reana_commons.utils import get_user_analyses_dir
 
 
 def create_workflow_workspace(org, user, workflow_uuid):
