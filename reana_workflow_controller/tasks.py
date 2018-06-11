@@ -26,11 +26,10 @@ from __future__ import absolute_import
 
 import json
 
-import jsonpickle
 import pika
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Run, Workflow, WorkflowStatus
+from reana_commons.models import Job, Run, Workflow, WorkflowStatus
 
 from reana_workflow_controller.config import (BROKER, BROKER_PASS, BROKER_PORT,
                                               BROKER_URL, BROKER_USER)
@@ -56,16 +55,19 @@ def consume_job_queue():
             status = WorkflowStatus(body_dict.get('status'))
             print(" [x] Received workflow_uuid:{0} status: {1}".
                   format(workflow_uuid, status))
-            log = body_dict.get('log')
-            if log:
-                log = jsonpickle.decode(body_dict.get('log'))
+            logs = body_dict.get('logs') or ''
             Workflow.update_workflow_status(Session, workflow_uuid,
-                                            status, log, None)
+                                            status, logs, None)
             if 'message' in body_dict and body_dict.get('message'):
                 msg = body_dict['message']
-                Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
-                    update(msg)
-                print('Updated Run table')
+                if 'job_id' in msg:
+                    job_id = msg.get('job_id')
+                    Session.query(Job).filter_by(
+                        id_=job_id).update({'workflow_uuid': workflow_uuid})
+                    del msg['job_id']
+                if msg:
+                    Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
+                        update(msg)
             Session.commit()
 
     broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,
