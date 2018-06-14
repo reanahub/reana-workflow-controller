@@ -113,6 +113,12 @@ def get_workflows():  # noqa
                   type: string
                 user:
                   type: string
+                created:
+                  type: string
+                started:
+                  type: string
+                finished:
+                  type: string
           examples:
             application/json:
               [
@@ -121,28 +127,40 @@ def get_workflows():  # noqa
                   "name": "mytest-1",
                   "organization": "default_org",
                   "status": "running",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13 09:47:35.66097",
+                  "started": "2018-06-13 09:48:35.66097",
+                  "finished": "2018-06-13 09:49:35.66097",
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest-2",
                   "organization": "default_org",
                   "status": "finished",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13 09:47:35.66097",
+                  "started": "2018-06-13 09:48:35.66097",
+                  "finished": "2018-06-13 09:49:35.66097"
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest-3",
                   "organization": "default_org",
                   "status": "waiting",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13 09:47:35.66097",
+                  "started": "2018-06-13 09:48:35.66097",
+                  "finished": "2018-06-13 09:49:35.66097"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest-4",
                   "organization": "default_org",
                   "status": "waiting",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13 09:47:35.66097",
+                  "started": "No",
+                  "finished": "No"
                 }
               ]
         400:
@@ -177,11 +195,23 @@ def get_workflows():  # noqa
                 {'message': 'User {} does not exist'.format(user)}), 404
         workflows = []
         for workflow in user.workflows:
-            workflows.append({'id': workflow.id_,
-                              'name': _get_workflow_name(workflow),
-                              'status': workflow.status.name,
-                              'organization': organization,
-                              'user': user_uuid})
+            jobs = Job.query.filter_by(workflow_uuid=workflow.id_).\
+                order_by(Job.created).all()
+            workflow_response = {'id': workflow.id_,
+                                 'name': _get_workflow_name(workflow),
+                                 'status': workflow.status.name,
+                                 'organization': organization,
+                                 'user': user_uuid,
+                                 'created': workflow.created}
+            if jobs.get(0):
+                workflow_response['started'] = jobs.get(0).created
+            else:
+                workflow_response['started'] = 'No'
+            if workflow.status.name == WorkflowStatus.finished:
+                workflow_response['finished'] = jobs.get(-1).updated
+            else:
+                workflow_response['finished'] = 'No'
+            workflows.append(workflow_response)
 
         return jsonify(workflows), 200
     except ValueError:
@@ -1086,6 +1116,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 type: string
               name:
                 type: string
+              created:
+                type: string
               organization:
                 type: string
               status:
@@ -1101,6 +1133,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
               {
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "name": "mytest-1",
+                "created": "2018-06-13 09:47:35.66097",
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -1154,6 +1187,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                  .format(user_uuid, workflow_id_or_name)}), 403
 
         run_info = _get_run_info(workflow.id_)
+        current_job = _get_current_job(run_info.current_job)
         if run_info:
             progress = {'current_step': run_info.current_step,
                         'current_command_idx': run_info.current_command_idx,
@@ -1161,7 +1195,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         run_info.current_command,
                         'total_commands': run_info.total_commands,
                         'run_started_at': run_info.created,
-                        'total_steps': run_info.total_steps}
+                        'total_steps': run_info.total_steps,
+                        'current_command_started_at': current_job.created}
         else:
             progress = {}
 
@@ -1169,6 +1204,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         # Returned JSON doesn't match the style of other endpoints
         return jsonify({'id': workflow.id_,
                         'name': _get_workflow_name(workflow),
+                        'created': workflow.created,
                         'status': workflow.status.name,
                         'progress': progress,
                         'organization': organization,
@@ -1348,9 +1384,17 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 def start_workflow(organization, workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
+        total_commands = 0
+        for step in workflow.specification['steps']:
+            total_commands += len(step['commands'])
         new_run = Run(id_=str(uuid4()),
                       workflow_uuid=workflow.id_,
-                      run_number=workflow.run_number)
+                      run_number=workflow.run_number,
+                      total_commands=total_commands,
+                      current_step=0,
+                      current_command='',
+                      current_command_idx=0,
+                      total_steps=len(workflow.specification['steps']))
         workflow.status = WorkflowStatus.running
         current_db_sessions = Session.object_session(workflow)
         current_db_sessions.add(new_run)
@@ -1628,3 +1672,8 @@ def _get_workflow_logs(workflow):
 def _get_run_info(workflow_uuid):
     """Return progress info about workflow run."""
     return Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
+
+
+def _get_current_job(job_id):
+    """Return job."""
+    return Session.query(Job).filter_by(id_=job_id).one_or_none()

@@ -53,7 +53,7 @@ def consume_job_queue():
         workflow_uuid = body_dict.get('workflow_uuid')
         if workflow_uuid:
             status = WorkflowStatus(body_dict.get('status'))
-            print(" [x] Received workflow_uuid:{0} status: {1}".
+            print(" [x] Received workflow_uuid: {0} status: {1}".
                   format(workflow_uuid, status))
             logs = body_dict.get('logs') or ''
             Workflow.update_workflow_status(Session, workflow_uuid,
@@ -64,11 +64,13 @@ def consume_job_queue():
                     job_id = msg.get('job_id')
                     Session.query(Job).filter_by(
                         id_=job_id).update({'workflow_uuid': workflow_uuid})
+                    Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
+                        update({'current_job': job_id})
                     del msg['job_id']
                 if msg:
                     Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
                         update(msg)
-            Session.commit()
+                Session.commit()
 
     broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,
                                                            BROKER_PASS)
