@@ -67,3 +67,7 @@ DEFAULT_NAME_FOR_WORKFLOWS = 'workflow'
 """
 
 ORGANIZATIONS = ['atlas', 'alice', 'cms', 'default', 'lhcb']
+
+
+WORKFLOW_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
+"""Time format for workflow starting time, created time etc."""

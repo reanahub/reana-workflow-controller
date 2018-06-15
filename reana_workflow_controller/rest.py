@@ -35,7 +35,8 @@ from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
-                                              SHARED_VOLUME_PATH)
+                                              SHARED_VOLUME_PATH,
+                                              WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
                                               WorkflowInexistentError,
@@ -128,7 +129,7 @@ def get_workflows():  # noqa
                   "organization": "default_org",
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000",
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "started": "2018-06-13 09:48:35.66097",
                   "finished": "2018-06-13 09:49:35.66097",
                 },
@@ -138,7 +139,7 @@ def get_workflows():  # noqa
                   "organization": "default_org",
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000",
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "started": "2018-06-13 09:48:35.66097",
                   "finished": "2018-06-13 09:49:35.66097"
                 },
@@ -148,7 +149,7 @@ def get_workflows():  # noqa
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000",
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "started": "2018-06-13 09:48:35.66097",
                   "finished": "2018-06-13 09:49:35.66097"
                 },
@@ -158,7 +159,7 @@ def get_workflows():  # noqa
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000",
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "started": "No",
                   "finished": "No"
                 }
@@ -195,22 +196,12 @@ def get_workflows():  # noqa
                 {'message': 'User {} does not exist'.format(user)}), 404
         workflows = []
         for workflow in user.workflows:
-            jobs = Job.query.filter_by(workflow_uuid=workflow.id_).\
-                order_by(Job.created).all()
             workflow_response = {'id': workflow.id_,
                                  'name': _get_workflow_name(workflow),
                                  'status': workflow.status.name,
                                  'organization': organization,
                                  'user': user_uuid,
                                  'created': workflow.created}
-            if jobs.get(0):
-                workflow_response['started'] = jobs.get(0).created
-            else:
-                workflow_response['started'] = 'No'
-            if workflow.status.name == WorkflowStatus.finished:
-                workflow_response['finished'] = jobs.get(-1).updated
-            else:
-                workflow_response['finished'] = 'No'
             workflows.append(workflow_response)
 
         return jsonify(workflows), 200
@@ -1133,7 +1124,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
               {
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "name": "mytest-1",
-                "created": "2018-06-13 09:47:35.66097",
+                "created": "2018-06-13T09:47:35.66097",
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -1187,16 +1178,18 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                  .format(user_uuid, workflow_id_or_name)}), 403
 
         run_info = _get_run_info(workflow.id_)
-        current_job = _get_current_job(run_info.current_job)
         if run_info:
+            current_job = _get_current_job(run_info.current_job)
             progress = {'current_step': run_info.current_step,
                         'current_command_idx': run_info.current_command_idx,
                         'current_command':
                         run_info.current_command,
                         'total_commands': run_info.total_commands,
-                        'run_started_at': run_info.created,
+                        'run_started_at':
+                        run_info.created.strftime(WORKFLOW_TIME_FORMAT),
                         'total_steps': run_info.total_steps,
-                        'current_command_started_at': current_job.created}
+                        'current_command_started_at':
+                        current_job.created.strftime(WORKFLOW_TIME_FORMAT)}
         else:
             progress = {}
 
@@ -1204,7 +1197,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         # Returned JSON doesn't match the style of other endpoints
         return jsonify({'id': workflow.id_,
                         'name': _get_workflow_name(workflow),
-                        'created': workflow.created,
+                        'created':
+                        workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                         'status': workflow.status.name,
                         'progress': progress,
                         'organization': organization,
@@ -1349,7 +1343,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         user_uuid = request.args['user']
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-
         status = request.json
         if not (status in STATUSES):
             return jsonify({'message': 'Status {0} is not one of: {1}'.
@@ -1385,8 +1378,9 @@ def start_workflow(organization, workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         total_commands = 0
-        for step in workflow.specification['steps']:
-            total_commands += len(step['commands'])
+        if workflow.type_ == 'serial':
+            for step in workflow.specification['steps']:
+                total_commands += len(step['commands'])
         new_run = Run(id_=str(uuid4()),
                       workflow_uuid=workflow.id_,
                       run_number=workflow.run_number,
@@ -1394,7 +1388,8 @@ def start_workflow(organization, workflow):
                       current_step=0,
                       current_command='',
                       current_command_idx=0,
-                      total_steps=len(workflow.specification['steps']))
+                      total_steps=len(
+                          workflow.specification.get('steps') or []))
         workflow.status = WorkflowStatus.running
         current_db_sessions = Session.object_session(workflow)
         current_db_sessions.add(new_run)

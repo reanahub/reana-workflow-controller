@@ -37,4 +37,5 @@ RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip in
 
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
-CMD flask run --host=0.0.0.0
+CMD flask --help &&\
+    flask run --host=0.0.0.0
