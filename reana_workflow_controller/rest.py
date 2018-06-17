@@ -1378,18 +1378,13 @@ def start_workflow(organization, workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         total_commands = 0
-        if workflow.type_ == 'serial':
-            for step in workflow.specification['steps']:
-                total_commands += len(step['commands'])
         new_run = Run(id_=str(uuid4()),
                       workflow_uuid=workflow.id_,
                       run_number=workflow.run_number,
-                      total_commands=total_commands,
-                      current_step=0,
-                      current_command='',
-                      current_command_idx=0,
-                      total_steps=len(
-                          workflow.specification.get('steps') or []))
+                      planned=0,
+                      submitted=0,
+                      succeeded=0,
+                      failed=0)
         workflow.status = WorkflowStatus.running
         current_db_sessions = Session.object_session(workflow)
         current_db_sessions.add(new_run)

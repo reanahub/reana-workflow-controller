@@ -25,11 +25,12 @@
 from __future__ import absolute_import
 
 import json
+import uuid
 
 import pika
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Job, Run, Workflow, WorkflowStatus
+from reana_commons.models import Job, Run, Workflow, WorkflowStatus, RunJobs
 
 from reana_workflow_controller.config import (BROKER, BROKER_PASS, BROKER_PORT,
                                               BROKER_URL, BROKER_USER)
@@ -48,6 +49,30 @@ run_serial_workflow = celery.signature('tasks.run_serial_workflow')
 
 def consume_job_queue():
     """Consumes job queue and updates job status."""
+    job_statuses = ['submitted', 'succeeded', 'failed', 'planned']
+
+    def _update_run_progress(workflow_uuid, msg):
+        """Register succeeded Jobs to DB."""
+        Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
+            update({status: msg['progress'][status]['total']
+                    for status in job_statuses})
+
+    def _update_job_progress(workflow_uuid, msg):
+        """Update job progress for jobs in received message."""
+        run_id = Session.query(Run).filter_by(
+            workflow_uuid=workflow_uuid).one_or_none()
+        for status in job_statuses:
+            status_progress = msg['progress'][status]
+            for job_id in status_progress['job_ids']:
+                Session.query(Job).filter_by(id_=job_id).\
+                    update({'workflow_uuid': workflow_uuid,
+                            'status': status})
+                run_job = RunJobs()
+                run_job.id_ = uuid.UUID()
+                run_job.run_id = run_id.id_
+                run_job.job_id = job_id
+                Session.add(run_job)
+
     def _callback_job_status(ch, method, properties, body):
         body_dict = json.loads(body)
         workflow_uuid = body_dict.get('workflow_uuid')
@@ -60,17 +85,10 @@ def consume_job_queue():
                                             status, logs, None)
             if 'message' in body_dict and body_dict.get('message'):
                 msg = body_dict['message']
-                if 'job_id' in msg:
-                    job_id = msg.get('job_id')
-                    Session.query(Job).filter_by(
-                        id_=job_id).update({'workflow_uuid': workflow_uuid})
-                    Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
-                        update({'current_job': job_id})
-                    del msg['job_id']
-                if msg:
-                    Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
-                        update(msg)
-                Session.commit()
+                if 'progress' in msg:
+                    _update_run_progress(workflow_uuid, msg)
+                    _update_job_progress(workflow_uuid, msg)
+                    Session.commit()
 
     broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,
                                                            BROKER_PASS)
