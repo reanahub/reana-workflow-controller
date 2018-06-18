@@ -30,7 +30,7 @@ import uuid
 import pika
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Job, Run, Workflow, WorkflowStatus, RunJobs
+from reana_commons.models import Job, Run, RunJobs, Workflow, WorkflowStatus
 
 from reana_workflow_controller.config import (BROKER, BROKER_PASS, BROKER_PORT,
                                               BROKER_URL, BROKER_USER)

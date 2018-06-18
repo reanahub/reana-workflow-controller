@@ -29,8 +29,8 @@ from uuid import UUID, uuid4
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (Job, Run, User, UserOrganization, Workflow,
-                                  WorkflowStatus)
+from reana_commons.models import (Job, Run, RunJobs, User, UserOrganization,
+                                  Workflow, WorkflowStatus)
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
@@ -1177,19 +1177,19 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
 
+
         run_info = _get_run_info(workflow.id_)
+        current_job_commands = _get_current_job_commands(run_info.id_)
         if run_info:
-            current_job = _get_current_job(run_info.current_job)
-            progress = {'current_step': run_info.current_step,
-                        'current_command_idx': run_info.current_command_idx,
-                        'current_command':
-                        run_info.current_command,
-                        'total_commands': run_info.total_commands,
+            progress = {'planned': run_info.planned,
+                        'submitted': run_info.submitted,
+                        'succeeded':
+                        run_info.succeeded,
+                        'failed': run_info.failed,
+                        'current_commands': current_job_commands,
                         'run_started_at':
                         run_info.created.strftime(WORKFLOW_TIME_FORMAT),
-                        'total_steps': run_info.total_steps,
-                        'current_command_started_at':
-                        current_job.created.strftime(WORKFLOW_TIME_FORMAT)}
+                        'engine_specific': run_info.engine_specific}
         else:
             progress = {}
 
@@ -1664,6 +1664,11 @@ def _get_run_info(workflow_uuid):
     return Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
 
 
-def _get_current_job(job_id):
+def _get_current_job_commands(run_id):
     """Return job."""
-    return Session.query(Job).filter_by(id_=job_id).one_or_none()
+    current_job_commands = {}
+    run_jobs = Session.query(RunJobs).filter_by(run_id=run_id).all()
+    for run_job in run_jobs:
+        job = Session.query(Job).filter_by(id_=run_job.job_id).first()
+        current_job_commands[str(job.id_)] = job.cmd
+    return current_job_commands
