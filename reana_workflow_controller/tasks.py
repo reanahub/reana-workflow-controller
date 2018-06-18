@@ -59,7 +59,7 @@ def consume_job_queue():
 
     def _update_job_progress(workflow_uuid, msg):
         """Update job progress for jobs in received message."""
-        run_id = Session.query(Run).filter_by(
+        current_run = Session.query(Run).filter_by(
             workflow_uuid=workflow_uuid).one_or_none()
         for status in job_statuses:
             status_progress = msg['progress'][status]
@@ -67,11 +67,15 @@ def consume_job_queue():
                 Session.query(Job).filter_by(id_=job_id).\
                     update({'workflow_uuid': workflow_uuid,
                             'status': status})
-                run_job = RunJobs()
-                run_job.id_ = uuid.UUID()
-                run_job.run_id = run_id.id_
-                run_job.job_id = job_id
-                Session.add(run_job)
+                run_job = Session.query(RunJobs).filter_by(
+                    run_id=current_run.id_,
+                    job_id=job_id).first()
+                if not run_job:
+                    run_job = RunJobs()
+                    run_job.id_ = uuid.uuid4()
+                    run_job.run_id = current_run.id_
+                    run_job.job_id = job_id
+                    Session.add(run_job)
 
     def _callback_job_status(ch, method, properties, body):
         body_dict = json.loads(body)
