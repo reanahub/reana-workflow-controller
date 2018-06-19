@@ -53,6 +53,7 @@ job_queue_consumer = JobQueueConsumer()
 
 app = create_app()
 
+
 @app.teardown_appcontext
 def shutdown_session(response_or_exc):
     """Close session on app teardown."""

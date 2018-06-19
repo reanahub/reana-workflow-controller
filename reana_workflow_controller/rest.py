@@ -1177,10 +1177,9 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
 
-
         run_info = _get_run_info(workflow.id_)
-        current_job_commands = _get_current_job_commands(run_info.id_)
         if run_info:
+            current_job_commands = _get_current_job_commands(run_info.id_)
             progress = {'planned': run_info.planned,
                         'submitted': run_info.submitted,
                         'succeeded':
