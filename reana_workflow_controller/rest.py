@@ -201,7 +201,8 @@ def get_workflows():  # noqa
                                  'status': workflow.status.name,
                                  'organization': organization,
                                  'user': user_uuid,
-                                 'created': workflow.created}
+                                 'created': workflow.created.
+                                 strftime(WORKFLOW_TIME_FORMAT)}
             workflows.append(workflow_response)
 
         return jsonify(workflows), 200
@@ -1178,17 +1179,30 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                  .format(user_uuid, workflow_id_or_name)}), 403
 
         run_info = _get_run_info(workflow.id_)
+
         if run_info:
-            current_job_commands = _get_current_job_commands(run_info.id_)
+            current_command = ''
+            if workflow.type_ == 'serial':
+                total_jobs = run_info.planned
+                current_job_commands = _get_current_job_commands(run_info.id_)
+                try:
+                    current_job_id, current_command = current_job_commands.\
+                        popitem()
+                except Exception:
+                    pass
+            else:
+                total_jobs = run_info.planned + run_info.succeeded \
+                             + run_info.submitted + run_info.failed
+            # all_run_job_ids = _get_all_run_job_ids(run_info)
             progress = {'planned': run_info.planned,
                         'submitted': run_info.submitted,
                         'succeeded':
                         run_info.succeeded,
                         'failed': run_info.failed,
-                        'current_commands': current_job_commands,
+                        'current_command': current_command,
+                        'total_jobs': total_jobs,
                         'run_started_at':
-                        run_info.created.strftime(WORKFLOW_TIME_FORMAT),
-                        'engine_specific': run_info.engine_specific}
+                        run_info.created.strftime(WORKFLOW_TIME_FORMAT)}
         else:
             progress = {}
 
@@ -1668,6 +1682,8 @@ def _get_current_job_commands(run_id):
     current_job_commands = {}
     run_jobs = Session.query(RunJobs).filter_by(run_id=run_id).all()
     for run_job in run_jobs:
-        job = Session.query(Job).filter_by(id_=run_job.job_id).first()
-        current_job_commands[str(job.id_)] = job.cmd
+        job = Session.query(Job).filter_by(id_=run_job.job_id).\
+            order_by(Job.created.desc()).first()
+        if job:
+            current_job_commands[str(job.id_)] = job.cmd
     return current_job_commands
