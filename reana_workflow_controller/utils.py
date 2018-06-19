@@ -22,6 +22,7 @@
 """Workflow persistence management."""
 
 import fs
+import fs.path as fs_path
 from flask import current_app as app
 from reana_commons.utils import get_user_analyses_dir
 
@@ -39,23 +40,23 @@ def create_workflow_workspace(org, user, workflow_uuid):
     :return: Workflow and analysis workspace path.
     """
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    analysis_workspace = fs.path.join(get_user_analyses_dir(org, user),
+    analysis_workspace = fs_path.join(get_user_analyses_dir(org, user),
                                       workflow_uuid)
 
     if not reana_fs.exists(analysis_workspace):
         reana_fs.makedirs(analysis_workspace)
 
-    workflow_workspace = fs.path.join(analysis_workspace, 'workspace')
+    workflow_workspace = fs_path.join(analysis_workspace, 'workspace')
     if not reana_fs.exists(workflow_workspace):
         reana_fs.makedirs(workflow_workspace)
         reana_fs.makedirs(
-            fs.path.join(analysis_workspace,
+            fs_path.join(analysis_workspace,
                          app.config['INPUTS_RELATIVE_PATH']))
         reana_fs.makedirs(
-            fs.path.join(analysis_workspace,
+            fs_path.join(analysis_workspace,
                          app.config['OUTPUTS_RELATIVE_PATH']))
         reana_fs.makedirs(
-            fs.path.join(analysis_workspace,
+            fs_path.join(analysis_workspace,
                          app.config['CODE_RELATIVE_PATH']))
 
     return workflow_workspace, analysis_workspace
@@ -64,8 +65,8 @@ def create_workflow_workspace(org, user, workflow_uuid):
 def get_analysis_dir(workflow):
     """Given a workflow, returns its analysis directory."""
     # remove workflow workspace (/workspace) directory from path
-    analysis_workspace = fs.path.dirname(workflow.workspace_path)
-    return fs.path.join(app.config['SHARED_VOLUME_PATH'],
+    analysis_workspace = fs_path.dirname(workflow.workspace_path)
+    return fs_path.join(app.config['SHARED_VOLUME_PATH'],
                         analysis_workspace)
 
 
@@ -73,10 +74,10 @@ def get_analysis_files_dir(workflow, file_type, action='list'):
     """Given a workflow and a file type, returns path to the file type dir."""
     analysis_workspace = get_analysis_dir(workflow)
     if action == 'list':
-        return fs.path.join(analysis_workspace,
+        return fs_path.join(analysis_workspace,
                             app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
     elif action == 'seed':
-        return fs.path.join(analysis_workspace,
+        return fs_path.join(analysis_workspace,
                             app.config['ALLOWED_SEED_DIRECTORIES'][file_type])
 
 
