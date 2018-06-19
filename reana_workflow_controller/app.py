@@ -24,6 +24,8 @@
 
 import threading
 
+from flask import current_app
+
 from reana_workflow_controller.factory import create_app
 from reana_workflow_controller.tasks import consume_job_queue
 
@@ -50,3 +52,9 @@ class JobQueueConsumer(object):
 job_queue_consumer = JobQueueConsumer()
 
 app = create_app()
+
+@app.teardown_appcontext
+def shutdown_session(response_or_exc):
+    """Close session on app teardown."""
+    current_app.session.remove()
+    return response_or_exc
