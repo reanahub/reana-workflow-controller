@@ -98,6 +98,12 @@ setup(
     url='https://github.com/reanahub/reana-workflow-controller',
     packages=['reana_workflow_controller', ],
     zip_safe=False,
+    entry_points={
+        'flask.commands': [
+            'consume-job-queue = reana_workflow_controller.'
+            'cli:consume_job_queue',
+        ]
+    },
     extras_require=extras_require,
     install_requires=install_requires,
     setup_requires=setup_requires,
