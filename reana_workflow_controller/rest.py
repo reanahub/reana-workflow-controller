@@ -1182,17 +1182,13 @@ def get_workflow_status(workflow_id_or_name):  # noqa
 
         if run_info:
             current_command = ''
-            if workflow.type_ == 'serial':
-                total_jobs = run_info.planned
-                current_job_commands = _get_current_job_commands(run_info.id_)
-                try:
-                    current_job_id, current_command = current_job_commands.\
-                        popitem()
-                except Exception:
-                    pass
-            else:
-                total_jobs = run_info.planned + run_info.succeeded \
-                             + run_info.submitted + run_info.failed
+            total_jobs = run_info.planned
+            current_job_commands = _get_current_job_commands(run_info.id_)
+            try:
+                current_job_id, current_command = current_job_commands.\
+                    popitem()
+            except Exception:
+                pass
             # all_run_job_ids = _get_all_run_job_ids(run_info)
             progress = {'planned': run_info.planned,
                         'submitted': run_info.submitted,

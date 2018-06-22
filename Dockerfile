@@ -42,6 +42,7 @@ ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
 ARG UWSGI_THREADS=2
 ENV UWSGI_THREADS ${UWSGI_THREADS:-2}
 ENV TERM=xterm
+ENV PYTHONPATH=/workdir
 
 CMD uwsgi --module reana_workflow_controller.app:app \
     --http-socket 0.0.0.0:5000 --master \
