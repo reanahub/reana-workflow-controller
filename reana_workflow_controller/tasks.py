@@ -24,15 +24,113 @@
 
 from __future__ import absolute_import
 
+import json
+import uuid
+
+import pika
 from celery import Celery
+from reana_commons.database import Session
+from reana_commons.models import Job, Run, RunJobs, Workflow, WorkflowStatus
 
-from reana_workflow_controller.config import BROKER
+from reana_workflow_controller.config import (BROKER, BROKER_PASS, BROKER_PORT,
+                                              BROKER_URL, BROKER_USER)
 
-celery = Celery('tasks', broker=BROKER)
+celery = Celery('tasks',
+                broker=BROKER)
 
 celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
                    CELERY_TASK_SERIALIZER='json')
 
+
 run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
 run_cwl_workflow = celery.signature('tasks.run_cwl_workflow')
 run_serial_workflow = celery.signature('tasks.run_serial_workflow')
+
+
+def consume_job_queue():
+    """Consumes job queue and updates job status."""
+    job_statuses = ['submitted', 'succeeded', 'failed', 'planned']
+
+    def _update_run_progress(workflow_uuid, msg):
+        """Register succeeded Jobs to DB."""
+        run = Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
+        for status in job_statuses:
+            if status in msg['progress']:
+                previous_total = getattr(run, status)
+                if status == 'planned':
+                    if previous_total > 0:
+                        continue
+                    else:
+                        setattr(run, status,
+                                msg['progress']['planned']['total'])
+                else:
+                    new_total = 0
+                    for job_id in msg['progress'][status]['job_ids']:
+                        job = Session.query(Job).\
+                            filter_by(id_=job_id).one_or_none()
+                        if job:
+                            if job.status != status:
+                                new_total += 1
+                    new_total = previous_total + new_total
+                    setattr(run, status, new_total)
+        Session.add(run)
+
+    def _update_job_progress(workflow_uuid, msg):
+        """Update job progress for jobs in received message."""
+        current_run = Session.query(Run).filter_by(
+            workflow_uuid=workflow_uuid).one_or_none()
+        for status in job_statuses:
+            if status in msg['progress']:
+                status_progress = msg['progress'][status]
+                for job_id in status_progress['job_ids']:
+                    try:
+                        uuid.UUID(job_id)
+                    except Exception:
+                        continue
+                    print('updating job_id:', job_id)
+                    Session.query(Job).filter_by(id_=job_id).\
+                        update({'workflow_uuid': workflow_uuid,
+                                'status': status})
+                    run_job = Session.query(RunJobs).filter_by(
+                        run_id=current_run.id_,
+                        job_id=job_id).first()
+                    if not run_job and current_run:
+                        run_job = RunJobs()
+                        run_job.id_ = uuid.uuid4()
+                        run_job.run_id = current_run.id_
+                        run_job.job_id = job_id
+                        Session.add(run_job)
+
+    def _callback_job_status(ch, method, properties, body):
+        body_dict = json.loads(body)
+        workflow_uuid = body_dict.get('workflow_uuid')
+        if workflow_uuid:
+            status = body_dict.get('status')
+            if status:
+                status = WorkflowStatus(status)
+                print(" [x] Received workflow_uuid: {0} status: {1}".
+                      format(workflow_uuid, status))
+            logs = body_dict.get('logs') or ''
+            Workflow.update_workflow_status(Session, workflow_uuid,
+                                            status, logs, None)
+            if 'message' in body_dict and body_dict.get('message'):
+                msg = body_dict['message']
+                if 'progress' in msg:
+                    _update_run_progress(workflow_uuid, msg)
+                    _update_job_progress(workflow_uuid, msg)
+                    Session.commit()
+
+    broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,
+                                                           BROKER_PASS)
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(BROKER_URL,
+                                  BROKER_PORT,
+                                  '/',
+                                  broker_credentials))
+    channel = connection.channel()
+    channel.queue_declare(queue='jobs-status')
+    channel.basic_consume(_callback_job_status,
+                          queue='jobs-status',
+                          no_ack=True)
+    print(' [*] Waiting for messages. To exit press CTRL+C')
+    channel.start_consuming()
