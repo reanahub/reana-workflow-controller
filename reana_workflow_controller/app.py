@@ -36,3 +36,7 @@ def shutdown_session(response_or_exc):
     """Close session on app teardown."""
     current_app.session.remove()
     return response_or_exc
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0')

@@ -67,15 +67,18 @@ setup_requires = [
 
 install_requires = [
     'celery==3.1.17',
-    'fs>=2.0',
-    'Flask>=0.12',
     'Flask-SQLAlchemy>=2.2',
-    'marshmallow>=2.13',
-    'requests==2.11.1',
-    'pika==0.11.2',
-    'sqlalchemy-utils>=0.31.0',
-    'reana-commons>=0.1.0',
+    'Flask>=0.12',
+    'fs>=2.0',
     'jsonpickle>=0.9.6',
+    'marshmallow>=2.13',
+    'pika==0.11.2',
+    'reana-commons>=0.1.0',
+    'requests==2.11.1',
+    'sqlalchemy-utils>=0.31.0',
+    'uwsgi-tools>=1.1.1',
+    'uWSGI>=2.0.17',
+    'uwsgitop>=0.10',
 ]
 
 packages = find_packages()

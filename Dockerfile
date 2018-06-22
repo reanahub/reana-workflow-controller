@@ -20,7 +20,6 @@
 
 FROM python:3.6
 
-ENV TERM=xterm
 RUN apt-get update && \
     apt-get install -y vim-tiny && \
     pip install --upgrade pip
@@ -37,5 +36,14 @@ RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip in
 
 EXPOSE 5000
 ENV FLASK_APP reana_workflow_controller/app.py
-CMD flask --help &&\
-    flask run --host=0.0.0.0
+
+ARG UWSGI_PROCESSES=2
+ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
+ARG UWSGI_THREADS=2
+ENV UWSGI_THREADS ${UWSGI_THREADS:-2}
+ENV TERM=xterm
+
+CMD uwsgi --module reana_workflow_controller.app:app \
+    --http-socket 0.0.0.0:5000 --master \
+    --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
+    --stats /tmp/stats.socket
