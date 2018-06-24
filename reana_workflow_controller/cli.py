@@ -54,12 +54,12 @@ def consume_job_queue():
                 print(" [x] Received workflow_uuid: {0} status: {1}".
                       format(workflow_uuid, status))
             logs = body_dict.get('logs') or ''
-            _update_workflow_status(workflow_uuid, status, logs, None)
+            _update_workflow_status.delay(workflow_uuid, status, logs, None)
             if 'message' in body_dict and body_dict.get('message'):
                 msg = body_dict['message']
                 if 'progress' in msg:
-                    _update_run_progress(workflow_uuid, msg)
-                    _update_job_progress(workflow_uuid, msg)
+                    _update_run_progress.delay(workflow_uuid, msg)
+                    _update_job_progress.delay(workflow_uuid, msg)
                     Session.commit()
 
     broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,

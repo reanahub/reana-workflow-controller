@@ -30,6 +30,7 @@ from celery import Celery
 from reana_commons.database import Session
 from reana_commons.models import Job, Run, RunJobs, Workflow
 
+from reana_workflow_controller.celeryapp import app
 from reana_workflow_controller.config import BROKER, POSSIBLE_JOB_STATUSES
 
 celery = Celery('tasks',
@@ -44,12 +45,14 @@ run_cwl_workflow = celery.signature('tasks.run_cwl_workflow')
 run_serial_workflow = celery.signature('tasks.run_serial_workflow')
 
 
+@app.task()
 def _update_workflow_status(workflow_uuid, status, logs):
     """Update workflow status in DB."""
     Workflow.update_workflow_status(Session, workflow_uuid,
                                     status, logs, None)
 
 
+@app.task()
 def _update_run_progress(workflow_uuid, msg):
     """Register succeeded Jobs to DB."""
     run = Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
@@ -75,6 +78,7 @@ def _update_run_progress(workflow_uuid, msg):
     Session.add(run)
 
 
+@app.task()
 def _update_job_progress(workflow_uuid, msg):
     """Update job progress for jobs in received message."""
     current_run = Session.query(Run).filter_by(
@@ -87,6 +91,7 @@ def _update_job_progress(workflow_uuid, msg):
                     uuid.UUID(job_id)
                 except Exception:
                     continue
+                print('updating job_id:', job_id)
                 Session.query(Job).filter_by(id_=job_id).\
                     update({'workflow_uuid': workflow_uuid,
                             'status': status})
