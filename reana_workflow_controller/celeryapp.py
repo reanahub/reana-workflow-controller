@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
+#
 # This file is part of REANA.
-# Copyright (C) 2017, 2018 CERN.
+# Copyright (C) 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -18,33 +20,19 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-FROM python:3.6
+from __future__ import absolute_import
 
-RUN apt-get update && \
-    apt-get install -y vim-tiny && \
-    pip install --upgrade pip
+from celery import Celery
 
-RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
+from .config import BROKER
 
-ADD . /code
-WORKDIR /code
+app = Celery('tasks',
+             broker=BROKER,
+             include=['reana_workflow_controller.tasks'])
 
-# Debug off by default
-ARG DEBUG=false
 
-RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
+app.conf.update(CELERY_ACCEPT_CONTENT=['json'],
+                CELERY_TASK_SERIALIZER='json')
 
-EXPOSE 5000
-ENV FLASK_APP reana_workflow_controller/app.py
-
-ARG UWSGI_PROCESSES=2
-ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
-ARG UWSGI_THREADS=2
-ENV UWSGI_THREADS ${UWSGI_THREADS:-2}
-ENV TERM=xterm
-ENV PYTHONPATH=/workdir
-
-CMD uwsgi --module reana_workflow_controller.app:app \
-    --http-socket 0.0.0.0:5000 --master \
-    --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
-    --stats /tmp/stats.socket
+if __name__ == '__main__':
+    app.start()

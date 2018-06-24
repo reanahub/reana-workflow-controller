@@ -24,15 +24,16 @@
 
 import json
 import logging
-import uuid
 
 import click
 import pika
 from reana_commons.database import Session
-from reana_commons.models import Job, Run, RunJobs, Workflow, WorkflowStatus
+from reana_commons.models import Workflow, WorkflowStatus
 
-from reana_workflow_controller.config import (BROKER, BROKER_PASS, BROKER_PORT,
-                                              BROKER_URL, BROKER_USER)
+from reana_workflow_controller.config import BROKER_USER, BROKER_PASS, \
+    BROKER_URL, BROKER_PORT
+from reana_workflow_controller.tasks import _update_job_progress, \
+    _update_run_progress
 
 
 @click.command('consume-job-queue')
@@ -43,47 +44,15 @@ def consume_job_queue():
         format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
     )
 
-    job_statuses = ['submitted', 'succeeded', 'failed', 'planned']
-
-    def _update_run_progress(workflow_uuid, msg):
-        """Register succeeded Jobs to DB."""
-        logging.info(
-            'Updating progress for workflow {0}:\n {1}'.format(workflow_uuid,
-                                                               msg))
-        Session.query(Run).filter_by(workflow_uuid=workflow_uuid).\
-            update({status: msg['progress'][status]['total']
-                    for status in job_statuses})
-
-    def _update_job_progress(workflow_uuid, msg):
-        """Update job progress for jobs in received message."""
-        current_run = Session.query(Run).filter_by(
-            workflow_uuid=workflow_uuid).one_or_none()
-        for status in job_statuses:
-            status_progress = msg['progress'][status]
-            for job_id in status_progress['job_ids']:
-                Session.query(Job).filter_by(id_=job_id).\
-                    update({'workflow_uuid': workflow_uuid,
-                            'status': status})
-                run_job = Session.query(RunJobs).filter_by(
-                    run_id=current_run.id_,
-                    job_id=job_id).first()
-                if not run_job:
-                    run_job = RunJobs()
-                    run_job.id_ = uuid.uuid4()
-                    run_job.run_id = current_run.id_
-                    run_job.job_id = job_id
-                    Session.add(run_job)
-                    logging.info(
-                        'Registering job {0} to run {1}.'.format(
-                            job_id, current_run.id_))
-
     def _callback_job_status(ch, method, properties, body):
         body_dict = json.loads(body)
         workflow_uuid = body_dict.get('workflow_uuid')
         if workflow_uuid:
-            status = WorkflowStatus(body_dict.get('status'))
-            logging.info("Received workflow_uuid: {0} status: {1}".
-                         format(workflow_uuid, status))
+            status = body_dict.get('status')
+            if status:
+                status = WorkflowStatus(status)
+                print(" [x] Received workflow_uuid: {0} status: {1}".
+                      format(workflow_uuid, status))
             logs = body_dict.get('logs') or ''
             Workflow.update_workflow_status(Session, workflow_uuid,
                                             status, logs, None)

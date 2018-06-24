@@ -71,3 +71,5 @@ ORGANIZATIONS = ['atlas', 'alice', 'cms', 'default', 'lhcb']
 
 WORKFLOW_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 """Time format for workflow starting time, created time etc."""
+
+POSSIBLE_JOB_STATUSES = ['submitted', 'succeeded', 'failed', 'planned']
