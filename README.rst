@@ -1,5 +1,5 @@
 ===========================
- REANA Workflow Controller
+ REANA-Workflow-Controller
 ===========================
 
 .. image:: https://img.shields.io/travis/reanahub/reana-workflow-controller.svg
@@ -23,9 +23,9 @@
 About
 -----
 
-REANA-Workflow-Controller is a component of the `REANA <http://reanahub.io/>`_
-reusable analysis platform. It takes care of instantiating and managing
-computational workflows.
+REANA-Workflow-Controller is a component of the `REANA <http://www.reana.io/>`_
+reusable and reproducible research data analysis platform. It takes care of
+instantiating and managing computational workflows.
 
 Features
 --------
@@ -43,4 +43,5 @@ Useful links
 - `source code <https://github.com/reanahub/reana-workflow-controller>`_
 
 For more information about the REANA reusable analysis platform, please see the
-general `REANA documentation <http://reana.readthedocs.io/>`_.
+`REANA project <http://www.reana.io>`_ home page and the general `REANA
+documentation <http://reana.readthedocs.io/>`_ pages.
