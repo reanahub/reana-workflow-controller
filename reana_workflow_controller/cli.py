@@ -28,12 +28,12 @@ import logging
 import click
 import pika
 from reana_commons.database import Session
-from reana_commons.models import Workflow, WorkflowStatus
+from reana_commons.models import WorkflowStatus
 
 from reana_workflow_controller.config import BROKER_USER, BROKER_PASS, \
     BROKER_URL, BROKER_PORT
 from reana_workflow_controller.tasks import _update_job_progress, \
-    _update_run_progress
+    _update_run_progress, _update_workflow_status
 
 
 @click.command('consume-job-queue')
@@ -54,8 +54,7 @@ def consume_job_queue():
                 print(" [x] Received workflow_uuid: {0} status: {1}".
                       format(workflow_uuid, status))
             logs = body_dict.get('logs') or ''
-            Workflow.update_workflow_status(Session, workflow_uuid,
-                                            status, logs, None)
+            _update_workflow_status(workflow_uuid, status, logs, None)
             if 'message' in body_dict and body_dict.get('message'):
                 msg = body_dict['message']
                 if 'progress' in msg:

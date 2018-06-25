@@ -28,7 +28,7 @@ import uuid
 
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Job, Run, RunJobs
+from reana_commons.models import Job, Run, RunJobs, Workflow
 
 from reana_workflow_controller.config import BROKER, POSSIBLE_JOB_STATUSES
 
@@ -42,6 +42,12 @@ celery.conf.update(CELERY_ACCEPT_CONTENT=['json'],
 run_yadage_workflow = celery.signature('tasks.run_yadage_workflow')
 run_cwl_workflow = celery.signature('tasks.run_cwl_workflow')
 run_serial_workflow = celery.signature('tasks.run_serial_workflow')
+
+
+def _update_workflow_status(workflow_uuid, status, logs):
+    """Update workflow status in DB."""
+    Workflow.update_workflow_status(Session, workflow_uuid,
+                                    status, logs, None)
 
 
 def _update_run_progress(workflow_uuid, msg):
