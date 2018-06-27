@@ -22,19 +22,11 @@
 
 """REANA Workflow Controller command line interface."""
 
-import json
 import logging
 
 import click
-import pika
-from reana_commons.database import Session
-from reana_commons.models import WorkflowStatus
 
-from reana_workflow_controller.config import (BROKER_PASS, BROKER_PORT,
-                                              BROKER_URL, BROKER_USER)
-from reana_workflow_controller.tasks import (_update_job_progress,
-                                             _update_run_progress,
-                                             _update_workflow_status)
+from reana_workflow_controller.consumer import Consumer
 
 
 @click.command('consume-job-queue')
@@ -44,36 +36,5 @@ def consume_job_queue():
         level=logging.INFO,
         format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
     )
-
-    def _callback_job_status(ch, method, properties, body):
-        body_dict = json.loads(body)
-        workflow_uuid = body_dict.get('workflow_uuid')
-        if workflow_uuid:
-            status = body_dict.get('status')
-            if status:
-                status = WorkflowStatus(status)
-                print(" [x] Received workflow_uuid: {0} status: {1}".
-                      format(workflow_uuid, status))
-            logs = body_dict.get('logs') or ''
-            _update_workflow_status(workflow_uuid, status, logs)
-            if 'message' in body_dict and body_dict.get('message'):
-                msg = body_dict['message']
-                if 'progress' in msg:
-                    _update_run_progress(workflow_uuid, msg)
-                    _update_job_progress(workflow_uuid, msg)
-                    Session.commit()
-
-    broker_credentials = pika.credentials.PlainCredentials(BROKER_USER,
-                                                           BROKER_PASS)
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(BROKER_URL,
-                                  BROKER_PORT,
-                                  '/',
-                                  broker_credentials))
-    channel = connection.channel()
-    channel.queue_declare(queue='jobs-status')
-    channel.basic_consume(_callback_job_status,
-                          queue='jobs-status',
-                          no_ack=True)
-    logging.info(' [*] Waiting for messages. To exit press CTRL+C')
-    channel.start_consuming()
+    consumer = Consumer()
+    consumer.consume()
