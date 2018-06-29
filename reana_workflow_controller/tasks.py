@@ -24,11 +24,14 @@
 
 from __future__ import absolute_import
 
+import json
 import uuid
 
+import hashlib
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Job, Run, RunJobs, Workflow
+from reana_commons.models import Job, JobCache, Run, RunJobs, Workflow
+from reana_commons.utils import calculate_hash_of_dir
 
 from reana_workflow_controller.config import BROKER, POSSIBLE_JOB_STATUSES
 
@@ -70,7 +73,7 @@ def _update_run_progress(workflow_uuid, msg):
                     if job:
                         if job.status != status:
                             new_total += 1
-                new_total = previous_total + new_total
+                new_total += previous_total
                 setattr(run, status, new_total)
     Session.add(run)
 
@@ -99,3 +102,22 @@ def _update_job_progress(workflow_uuid, msg):
                     run_job.run_id = current_run.id_
                     run_job.job_id = job_id
                     Session.add(run_job)
+
+
+def _update_job_cache(msg):
+    """Update caching information for finished job."""
+    job_md5_buffer = hashlib.md5()
+    job_md5_buffer.update(json.dumps(
+        msg['caching_info']['job_spec']).encode('utf-8'))
+    job_md5_buffer.update(json.dumps(
+        msg['caching_info']['workflow_json']).encode('utf-8'))
+    input_hash = job_md5_buffer.digest()
+
+    cached_job = JobCache(
+        job_id=msg['caching_info'].get('job_id'),
+        parameters=input_hash,
+        result_path=msg['caching_info'].get('result_path'),
+        workspace_hash=calculate_hash_of_dir(
+            msg['caching_info'].get('workflow_workspace').
+            replace('data', 'reana/default')))
+    Session.add(cached_job)

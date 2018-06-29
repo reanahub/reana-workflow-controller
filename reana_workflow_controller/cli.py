@@ -33,7 +33,7 @@ from reana_workflow_controller.consumer import JobStatusConsumer
 def consume_job_queue():
     """Consumes job queue and updates job status."""
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
     )
     consumer = JobStatusConsumer()

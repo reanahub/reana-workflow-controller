@@ -24,13 +24,14 @@
 
 import json
 
+import pika
 from reana_commons.database import Session
 from reana_commons.models import WorkflowStatus
 from reana_workflow_commons.consumer import Consumer
 
 from .config import STATUS_QUEUE
-from .tasks import (_update_job_progress, _update_run_progress,
-                    _update_workflow_status)
+from .tasks import (_update_job_cache, _update_job_progress,
+                    _update_run_progress, _update_workflow_status)
 
 
 class JobStatusConsumer(Consumer):
@@ -58,4 +59,25 @@ class JobStatusConsumer(Consumer):
                 if 'progress' in msg:
                     _update_run_progress(workflow_uuid, msg)
                     _update_job_progress(workflow_uuid, msg)
-                    Session.commit()
+                # Caching: calculate input hash and store in JobCache
+                if 'caching_info' in msg:
+                    _update_job_cache(msg)
+                Session.commit()
+
+    def consume(self):
+        """Start consuming incoming messages."""
+        while True:
+            self.connect()
+            self._channel.basic_consume(self.on_message, STATUS_QUEUE)
+            try:
+                self._channel.start_consuming()
+            except KeyboardInterrupt:
+                self._channel.stop_consuming()
+                self._conn.close()
+            except pika.exceptions.ConnectionClosed:
+                # Uncomment this to make the example not attempt recovery
+                # from server-initiated connection closure, including
+                # when the node is stopped cleanly
+                # except pika.exceptions.ConnectionClosedByBroker:
+                #     pass
+                continue
