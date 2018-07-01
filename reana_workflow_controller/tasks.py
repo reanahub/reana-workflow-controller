@@ -24,14 +24,12 @@
 
 from __future__ import absolute_import
 
-import json
 import uuid
 
-import hashlib
 from celery import Celery
 from reana_commons.database import Session
 from reana_commons.models import Job, JobCache, Run, RunJobs, Workflow
-from reana_commons.utils import calculate_hash_of_dir
+from reana_commons.utils import calculate_hash_of_dir, calculate_job_input_hash
 
 from reana_workflow_controller.config import BROKER, POSSIBLE_JOB_STATUSES
 
@@ -56,6 +54,9 @@ def _update_workflow_status(workflow_uuid, status, logs):
 def _update_run_progress(workflow_uuid, msg):
     """Register succeeded Jobs to DB."""
     run = Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
+    cached_jobs = None
+    if "cached" in msg['progress']:
+        cached_jobs = msg['progress']['cached']
     for status in POSSIBLE_JOB_STATUSES:
         if status in msg['progress']:
             previous_total = getattr(run, status)
@@ -71,7 +72,9 @@ def _update_run_progress(workflow_uuid, msg):
                     job = Session.query(Job).\
                         filter_by(id_=job_id).one_or_none()
                     if job:
-                        if job.status != status:
+                        if job.status != status or \
+                                (cached_jobs and
+                                 str(job.id_) in cached_jobs['job_ids']):
                             new_total += 1
                 new_total += previous_total
                 setattr(run, status, new_total)
@@ -106,13 +109,11 @@ def _update_job_progress(workflow_uuid, msg):
 
 def _update_job_cache(msg):
     """Update caching information for finished job."""
-    job_md5_buffer = hashlib.md5()
-    job_md5_buffer.update(json.dumps(
-        msg['caching_info']['job_spec']).encode('utf-8'))
-    job_md5_buffer.update(json.dumps(
-        msg['caching_info']['workflow_json']).encode('utf-8'))
-    input_hash = job_md5_buffer.digest()
-
+    cmd = msg['caching_info']['job_spec']['cmd']
+    clean_cmd = cmd.split(';')[1]
+    msg['caching_info']['job_spec']['cmd'] = clean_cmd
+    input_hash = calculate_job_input_hash(msg['caching_info']['job_spec'],
+                                          msg['caching_info']['workflow_json'])
     cached_job = JobCache(
         job_id=msg['caching_info'].get('job_id'),
         parameters=input_hash,
