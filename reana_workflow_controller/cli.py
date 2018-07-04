@@ -26,7 +26,7 @@ import logging
 
 import click
 
-from reana_workflow_controller.consumer import Consumer
+from reana_workflow_controller.consumer import JobStatusConsumer
 
 
 @click.command('consume-job-queue')
@@ -36,5 +36,5 @@ def consume_job_queue():
         level=logging.INFO,
         format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
     )
-    consumer = Consumer()
+    consumer = JobStatusConsumer()
     consumer.consume()

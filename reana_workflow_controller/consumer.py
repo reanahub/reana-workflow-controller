@@ -24,35 +24,21 @@
 
 import json
 
-import pika
 from reana_commons.database import Session
 from reana_commons.models import WorkflowStatus
+from reana_workflow_commons.consumer import Consumer
 
-from .config import (BROKER_PASS, BROKER_PORT, BROKER_URL, BROKER_USER,
-                     STATUS_QUEUE)
+from .config import STATUS_QUEUE
 from .tasks import (_update_job_progress, _update_run_progress,
                     _update_workflow_status)
 
 
-class Consumer:
-    """Consumer of MQ job status updates."""
+class JobStatusConsumer(Consumer):
+    """Consumer of jobs-status queue."""
 
     def __init__(self):
         """Constructor."""
-        self.broker_credentials = pika.PlainCredentials(BROKER_USER,
-                                                        BROKER_PASS)
-        self._params = pika.connection.ConnectionParameters(
-            BROKER_URL, BROKER_PORT, '/', self.broker_credentials)
-        self._conn = None
-        self._channel = None
-
-    def connect(self):
-        """Connect to MQ channel."""
-        if not self._conn or self._conn.is_closed:
-            self._conn = pika.BlockingConnection(self._params)
-            self._channel = self._conn.channel()
-            self._channel.basic_qos(prefetch_count=1)
-            self._channel.queue_declare(queue=STATUS_QUEUE)
+        super(JobStatusConsumer, self).__init__(STATUS_QUEUE)
 
     def on_message(self, channel, method_frame, header_frame, body):
         """On new message event handler."""
@@ -73,21 +59,3 @@ class Consumer:
                     _update_run_progress(workflow_uuid, msg)
                     _update_job_progress(workflow_uuid, msg)
                     Session.commit()
-
-    def consume(self):
-        """Start consuming incoming messages."""
-        while True:
-            self.connect()
-            self._channel.basic_consume(self.on_message, STATUS_QUEUE)
-            try:
-                self._channel.start_consuming()
-            except KeyboardInterrupt:
-                self._channel.stop_consuming()
-                self._conn.close()
-            except pika.exceptions.ConnectionClosedByBroker:
-                # Uncomment this to make the example not attempt recovery
-                # from server-initiated connection closure, including
-                # when the node is stopped cleanly
-                # except pika.exceptions.ConnectionClosedByBroker:
-                #     pass
-                continue
