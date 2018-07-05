@@ -110,15 +110,19 @@ def _update_job_progress(workflow_uuid, msg):
 def _update_job_cache(msg):
     """Update caching information for finished job."""
     cmd = msg['caching_info']['job_spec']['cmd']
+    # removes cd to workspace, to be refactored
     clean_cmd = cmd.split(';')[1]
     msg['caching_info']['job_spec']['cmd'] = clean_cmd
     input_hash = calculate_job_input_hash(msg['caching_info']['job_spec'],
                                           msg['caching_info']['workflow_json'])
+    directory_hash = calculate_hash_of_dir(
+        msg['caching_info'].get('workflow_workspace').
+        replace('data', 'reana/default'))
+    if directory_hash == -1:
+        return
     cached_job = JobCache(
         job_id=msg['caching_info'].get('job_id'),
         parameters=input_hash,
         result_path=msg['caching_info'].get('result_path'),
-        workspace_hash=calculate_hash_of_dir(
-            msg['caching_info'].get('workflow_workspace').
-            replace('data', 'reana/default')))
+        workspace_hash=directory_hash)
     Session.add(cached_job)
