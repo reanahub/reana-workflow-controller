@@ -41,8 +41,7 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
 from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
                                              run_yadage_workflow)
-from reana_workflow_controller.utils import (create_workflow_workspace,
-                                             get_workflow_files_dir,
+from reana_workflow_controller.utils import (create_workflow_run_workspace,
                                              list_directory_files)
 
 START = 'start'
@@ -303,10 +302,6 @@ def create_workflow():  # noqa
                 {'message': 'User with id:{} does not exist'.
                  format(user_uuid)}), 404
         workflow_uuid = str(uuid4())
-        workflow_workspace, _ = create_workflow_workspace(
-            organization,
-            user_uuid,
-            workflow_uuid)
 
         # Use name prefix user specified or use default name prefix
         # Actual name is prefix + autoincremented run_number.
@@ -323,7 +318,6 @@ def create_workflow():  # noqa
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,
                             name=workflow_name,
-                            workspace_path=workflow_workspace,
                             owner_id=request.args['user'],
                             specification=request.json['specification'],
                             parameters=request.json['parameters'],
@@ -331,8 +325,7 @@ def create_workflow():  # noqa
                             logs='')
         Session.add(workflow)
         Session.commit()
-        # Should workflow_workspace be destroyed in case creation of Workflow
-        # doesn't complete successfully?
+        create_workflow_run_workspace(workflow.get_workflow_run_workspace())
         return jsonify({'message': 'Workflow workspace created',
                         'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow)}), 201
@@ -385,14 +378,6 @@ def seed_workflow_workspace(workflow_id_or_name):
           description: Required. File name.
           required: true
           type: string
-        - name: file_type
-          in: query
-          description: Required. If set to `input`, the file will be placed
-                       under `workspace/inputs/` whereas if it is of type
-                       `code` it will live under `workspace/code/`. By default
-                       it set to `input`.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -435,9 +420,6 @@ def seed_workflow_workspace(workflow_id_or_name):
         if not full_file_name:
             raise ValueError('The file transferred needs to have name.')
 
-        file_type = request.args.get('file_type') \
-            if request.args.get('file_type') else 'input'
-
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
 
@@ -448,15 +430,14 @@ def seed_workflow_workspace(workflow_id_or_name):
             full_file_name = full_file_name[1:]
         elif '..' in full_file_name.split("/"):
             raise UploadPathError('Path cannot contain "..".')
-        path = get_workflow_files_dir(workflow, file_type,
-                                      'seed')
+        workspace_path = workflow.get_workflow_run_workspace()
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
-            path = os.path.join(path, "/".join(dirs))
-            if not os.path.exists(path):
-                os.makedirs(path)
+            workspace_path = os.path.join(workspace_path, "/".join(dirs))
+            if not os.path.exists(workspace_path):
+                os.makedirs(workspace_path)
 
-        file_.save(os.path.join(path, filename))
+        file_.save(os.path.join(workspace_path, filename))
         return jsonify({'message': 'File successfully transferred'}), 200
 
     except WorkflowInexistentError:

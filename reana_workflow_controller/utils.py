@@ -24,65 +24,23 @@
 import fs
 import fs.path as fs_path
 from flask import current_app as app
-from reana_commons.utils import get_user_workflows_dir
 
 
-def create_workflow_workspace(org, user, workflow_uuid):
-    """Create analysis and workflow workspaces.
+def create_workflow_run_workspace(workflow_run_workspace_path):
+    """Create workflow run workspace.
 
-    A directory structure will be created where `/:analysis_uuid` represents
-    the analysis workspace and `/:analysis_uuid/workspace` the workflow
-    workspace.
-
-    :param org: Organization which user is part of.
-    :param user: Workspaces owner.
-    :param workflow_uuid: Analysis UUID.
-    :return: Workflow and analysis workspace path.
+    :param workflow_run_workspace_path: Relative path to workflow run dir.
+    :return: Workflow run workspace path.
     """
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    analysis_workspace = fs_path.join(get_user_workflows_dir(org, user),
-                                      workflow_uuid)
+    if not reana_fs.exists(workflow_run_workspace_path):
+        reana_fs.makedirs(workflow_run_workspace_path)
 
-    if not reana_fs.exists(analysis_workspace):
-        reana_fs.makedirs(analysis_workspace)
-
-    workflow_workspace = fs_path.join(analysis_workspace, 'workspace')
-    if not reana_fs.exists(workflow_workspace):
-        reana_fs.makedirs(workflow_workspace)
-        reana_fs.makedirs(
-            fs_path.join(analysis_workspace,
-                         app.config['INPUTS_RELATIVE_PATH']))
-        reana_fs.makedirs(
-            fs_path.join(analysis_workspace,
-                         app.config['OUTPUTS_RELATIVE_PATH']))
-        reana_fs.makedirs(
-            fs_path.join(analysis_workspace,
-                         app.config['CODE_RELATIVE_PATH']))
-
-    return workflow_workspace, analysis_workspace
-
-
-def get_workflow_dir(workflow):
-    """Given a workflow, returns its analysis directory."""
-    # remove workflow workspace (/workspace) directory from path
-    analysis_workspace = fs_path.dirname(workflow.workspace_path)
-    return fs_path.join(app.config['SHARED_VOLUME_PATH'],
-                        analysis_workspace)
-
-
-def get_workflow_files_dir(workflow, file_type, action='list'):
-    """Given a workflow and a file type, returns path to the file type dir."""
-    workspace = get_workflow_dir(workflow)
-    if action == 'list':
-        return fs_path.join(workspace,
-                            app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
-    elif action == 'seed':
-        return fs_path.join(workspace,
-                            app.config['ALLOWED_SEED_DIRECTORIES'][file_type])
+    return workflow_run_workspace_path
 
 
 def list_directory_files(directory):
-    """Return a list of files of a given type for an analysis."""
+    """Return a list of files inside a given directory."""
     fs_ = fs.open_fs(directory)
     file_list = []
     for file_name in fs_.walk.files():

@@ -739,13 +739,6 @@
             "name": "file_name",
             "required": true,
             "type": "string"
-          },
-          {
-            "description": "Required. If set to `input`, the file will be placed under `workspace/inputs/` whereas if it is of type `code` it will live under `workspace/code/`. By default it set to `input`.",
-            "in": "query",
-            "name": "file_type",
-            "required": false,
-            "type": "string"
           }
         ],
         "produces": [
