@@ -29,7 +29,9 @@ import uuid
 from celery import Celery
 from reana_commons.database import Session
 from reana_commons.models import Job, JobCache, Run, RunJobs, Workflow
-from reana_commons.utils import calculate_hash_of_dir, calculate_job_input_hash
+from reana_commons.utils import (calculate_file_access_time,
+                                 calculate_hash_of_dir,
+                                 calculate_job_input_hash)
 
 from reana_workflow_controller.config import BROKER, POSSIBLE_JOB_STATUSES
 
@@ -109,20 +111,38 @@ def _update_job_progress(workflow_uuid, msg):
 
 def _update_job_cache(msg):
     """Update caching information for finished job."""
+    cached_job = Session.query(JobCache).filter_by(
+        job_id=msg['caching_info'].get('job_id')).first()
+
+    input_files = []
+    if cached_job:
+        file_access_times = calculate_file_access_time(
+            msg['caching_info'].
+            get('workflow_workspace').
+            replace('data', 'reana/default'))
+        for filename in cached_job.access_times:
+            if filename in file_access_times and \
+                    file_access_times[filename] > \
+                    cached_job.access_times[filename]:
+                input_files.append(filename)
+    else:
+        return
     cmd = msg['caching_info']['job_spec']['cmd']
     # removes cd to workspace, to be refactored
-    clean_cmd = cmd.split(';')[1]
+    clean_cmd = ';'.join(cmd.split(';')[1:])
     msg['caching_info']['job_spec']['cmd'] = clean_cmd
+
+    if 'workflow_workspace' in msg['caching_info']['job_spec']:
+        del msg['caching_info']['job_spec']['workflow_workspace']
     input_hash = calculate_job_input_hash(msg['caching_info']['job_spec'],
                                           msg['caching_info']['workflow_json'])
-    directory_hash = calculate_hash_of_dir(
+    workspace_hash = calculate_hash_of_dir(
         msg['caching_info'].get('workflow_workspace').
-        replace('data', 'reana/default'))
-    if directory_hash == -1:
+        replace('data', 'reana/default'), input_files)
+    if workspace_hash == -1:
         return
-    cached_job = JobCache(
-        job_id=msg['caching_info'].get('job_id'),
-        parameters=input_hash,
-        result_path=msg['caching_info'].get('result_path'),
-        workspace_hash=directory_hash)
+
+    cached_job.parameters = input_hash
+    cached_job.result_path = msg['caching_info'].get('result_path')
+    cached_job.workspace_hash = workspace_hash
     Session.add(cached_job)
