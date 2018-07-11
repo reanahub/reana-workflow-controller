@@ -546,16 +546,15 @@ def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
 @restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['GET'])
 def get_workflow_files(workflow_id_or_name):  # noqa
-    r"""List all workflow code/input/output files.
+    r"""List all files contained in a workflow run workspace.
 
     ---
     get:
-      summary: Returns the list of code|input|output files for a specific
-               workflow.
+      summary: Returns the file list for a specific workflow run workspace.
       description: >-
-        This resource is expecting a workflow UUID and a filename to return
-        its list of code|input|output files.
-      operationId: get_workflow_files
+        This resource is expecting a workflow run UUID which workspace file
+        list will be retrieved.
+      operationId: list_workflow_files
       produces:
         - multipart/form-data
       parameters:
@@ -573,14 +572,6 @@ def get_workflow_files(workflow_id_or_name):  # noqa
           in: path
           description: Required. Workflow UUID or name.
           required: true
-          type: string
-        - name: file_type
-          in: query
-          description: Required. The file will be retrieved from the
-                       corresponding directory `workspace/<file_type>`.
-                       Possible values are `code`, `input` and `output`.
-                       `input` is the default value.
-          required: false
           type: string
       responses:
         200:
@@ -634,7 +625,7 @@ def get_workflow_files(workflow_id_or_name):  # noqa
                                                    user_uuid)
 
         file_list = list_directory_files(
-            get_workflow_files_dir(workflow, file_type))
+          workflow.get_workflow_run_workspace())
         return jsonify(file_list), 200
 
     except WorkflowInexistentError:

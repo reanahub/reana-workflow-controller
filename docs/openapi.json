@@ -619,8 +619,8 @@
     },
     "/api/workflows/{workflow_id_or_name}/workspace": {
       "get": {
-        "description": "This resource is expecting a workflow UUID and a filename to return its list of code|input|output files.",
-        "operationId": "get_workflow_files",
+        "description": "This resource is expecting a workflow run UUID which workspace file list will be retrieved.",
+        "operationId": "list_workflow_files",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
@@ -641,13 +641,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "Required. The file will be retrieved from the corresponding directory `workspace/<file_type>`. Possible values are `code`, `input` and `output`. `input` is the default value.",
-            "in": "query",
-            "name": "file_type",
-            "required": false,
             "type": "string"
           }
         ],
@@ -696,7 +689,7 @@
             }
           }
         },
-        "summary": "Returns the list of code|input|output files for a specific workflow."
+        "summary": "Returns the file list for a specific workflow run workspace."
       },
       "post": {
         "consumes": [
