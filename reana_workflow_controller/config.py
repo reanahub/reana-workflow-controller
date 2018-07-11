@@ -43,24 +43,6 @@ SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
 
-INPUTS_RELATIVE_PATH = 'inputs'
-"""Inputs directory name."""
-
-OUTPUTS_RELATIVE_PATH = 'outputs'
-"""Outputs directory name."""
-
-CODE_RELATIVE_PATH = 'code'
-"""Code directory name."""
-
-ALLOWED_SEED_DIRECTORIES = {'input': INPUTS_RELATIVE_PATH,
-                            'code': CODE_RELATIVE_PATH}
-"""Directories allowed to be seeded."""
-
-ALLOWED_LIST_DIRECTORIES = {'input': INPUTS_RELATIVE_PATH,
-                            'code': CODE_RELATIVE_PATH,
-                            'output': OUTPUTS_RELATIVE_PATH}
-"""Directories allowed to be listed."""
-
 DEFAULT_NAME_FOR_WORKFLOWS = 'workflow'
 """The default prefix used to name workflow(s): e.g. reana-1, reana-2, etc.
    If workflow is manually named by the user that prefix will used instead.
