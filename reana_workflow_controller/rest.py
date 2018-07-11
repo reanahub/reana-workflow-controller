@@ -453,10 +453,10 @@ def seed_workflow_workspace(workflow_id_or_name):
 
 
 @restapi_blueprint.route(
-    '/workflows/<workflow_id_or_name>/workspace/outputs/<path:file_name>',
+    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
     methods=['GET'])
-def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
-    r"""Get all workflows.
+def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
+    r"""Get a file contained in the workflow run workspace.
 
     ---
     get:
@@ -464,7 +464,7 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
       description: >-
         This resource is expecting a workflow UUID and a filename to return
         its content.
-      operationId: get_workflow_outputs_file
+      operationId: get_workflow_workspace_file
       produces:
         - multipart/form-data
       parameters:
@@ -523,8 +523,7 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-        outputs_directory = get_workflow_files_dir(workflow, 'output')
-        return send_from_directory(outputs_directory,
+        return send_from_directory(workflow.get_workflow_run_workspace(),
                                    file_name,
                                    mimetype='multipart/form-data',
                                    as_attachment=True), 200

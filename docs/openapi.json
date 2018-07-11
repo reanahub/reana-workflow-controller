@@ -787,10 +787,10 @@
         "summary": "Adds a file to the workflow workspace."
       }
     },
-    "/api/workflows/{workflow_id_or_name}/workspace/outputs/{file_name}": {
+    "/api/workflows/{workflow_id_or_name}/workspace/{file_name}": {
       "get": {
         "description": "This resource is expecting a workflow UUID and a filename to return its content.",
-        "operationId": "get_workflow_outputs_file",
+        "operationId": "get_workflow_workspace_file",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
