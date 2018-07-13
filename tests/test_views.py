@@ -35,8 +35,8 @@ from werkzeug.utils import secure_filename
 from reana_workflow_controller.config import (ALLOWED_LIST_DIRECTORIES,
                                               ALLOWED_SEED_DIRECTORIES)
 from reana_workflow_controller.rest import START, STOP
-from reana_workflow_controller.utils import (get_analysis_files_dir,
-                                             get_user_analyses_dir)
+from reana_workflow_controller.utils import (get_user_workflows_dir,
+                                             get_workflow_files_dir)
 
 status_dict = {
     START: WorkflowStatus.running,
@@ -160,11 +160,11 @@ def test_create_workflow_with_name(app, session, default_user,
         workflow.type_ == cwl_workflow_with_name['type']
 
         # Check that workflow workspace exist
-        user_analyses_workspace = get_user_analyses_dir(
+        user_workflows_dir = get_user_workflows_dir(
             organization, str(default_user.id_))
         workflow_workspace = os.path.join(
             tmp_shared_volume_path,
-            user_analyses_workspace,
+            user_workflows_dir,
             str(workflow.id_))
         assert os.path.exists(workflow_workspace)
 
@@ -209,11 +209,11 @@ def test_create_workflow_without_name(app, session, default_user,
         workflow.type_ == cwl_workflow_without_name['type']
 
         # Check that workflow workspace exist
-        user_analyses_workspace = get_user_analyses_dir(
+        user_workflows_dir = get_user_workflows_dir(
             organization, str(default_user.id_))
         workflow_workspace = os.path.join(
             tmp_shared_volume_path,
-            user_analyses_workspace,
+            user_workflows_dir,
             str(workflow.id_))
         assert os.path.exists(workflow_workspace)
 
@@ -238,11 +238,11 @@ def test_create_workflow_wrong_user(app, session, tmp_shared_volume_path,
         # workflow exist in DB
         assert not workflow
         # workflow workspace exist
-        user_analyses_workspace = get_user_analyses_dir(
+        user_workflows_dir = get_user_workflows_dir(
             organization, str(random_user_uuid))
         workflow_workspace = os.path.join(
             tmp_shared_volume_path,
-            user_analyses_workspace)
+            user_workflows_dir)
         assert not os.path.exists(workflow_workspace)
 
 
@@ -297,7 +297,7 @@ def test_get_workflow_outputs_file(app, session, default_user,
         # create file
         file_name = 'output name.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        outputs_directory = get_workflow_files_dir(workflow, 'output')
         # write file in the workflow workspace under `outputs` directory:
         # we use `secure_filename` here because
         # we use it in server side when adding
@@ -338,7 +338,7 @@ def test_get_workflow_outputs_file_with_path(app, session, default_user,
         # create file
         file_name = 'first/1991/output.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        outputs_directory = get_workflow_files_dir(workflow, 'output')
         # write file in the workflow workspace under `outputs` directory:
         # we use `secure_filename` here because
         # we use it in server side when adding
@@ -743,7 +743,7 @@ def test_seed_workflow_workspace(app, session, default_user, file_type,
                                    file_name)})
         assert res.status_code == 200
         # remove workspace directory from path
-        files_directory = get_analysis_files_dir(workflow, file_type, 'seed')
+        files_directory = get_workflow_files_dir(workflow, file_type, 'seed')
 
         # we use `secure_filename` here because
         # we use it in server side when adding

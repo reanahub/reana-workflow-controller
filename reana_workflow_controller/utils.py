@@ -24,7 +24,7 @@
 import fs
 import fs.path as fs_path
 from flask import current_app as app
-from reana_commons.utils import get_user_analyses_dir
+from reana_commons.utils import get_user_workflows_dir
 
 
 def create_workflow_workspace(org, user, workflow_uuid):
@@ -40,7 +40,7 @@ def create_workflow_workspace(org, user, workflow_uuid):
     :return: Workflow and analysis workspace path.
     """
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    analysis_workspace = fs_path.join(get_user_analyses_dir(org, user),
+    analysis_workspace = fs_path.join(get_user_workflows_dir(org, user),
                                       workflow_uuid)
 
     if not reana_fs.exists(analysis_workspace):
@@ -62,7 +62,7 @@ def create_workflow_workspace(org, user, workflow_uuid):
     return workflow_workspace, analysis_workspace
 
 
-def get_analysis_dir(workflow):
+def get_workflow_dir(workflow):
     """Given a workflow, returns its analysis directory."""
     # remove workflow workspace (/workspace) directory from path
     analysis_workspace = fs_path.dirname(workflow.workspace_path)
@@ -70,14 +70,14 @@ def get_analysis_dir(workflow):
                         analysis_workspace)
 
 
-def get_analysis_files_dir(workflow, file_type, action='list'):
+def get_workflow_files_dir(workflow, file_type, action='list'):
     """Given a workflow and a file type, returns path to the file type dir."""
-    analysis_workspace = get_analysis_dir(workflow)
+    workspace = get_workflow_dir(workflow)
     if action == 'list':
-        return fs_path.join(analysis_workspace,
+        return fs_path.join(workspace,
                             app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
     elif action == 'seed':
-        return fs_path.join(analysis_workspace,
+        return fs_path.join(workspace,
                             app.config['ALLOWED_SEED_DIRECTORIES'][file_type])
 
 

@@ -26,16 +26,13 @@ import os
 import traceback
 from uuid import UUID, uuid4
 
-from flask import (Blueprint, abort, current_app, jsonify, request,
-                   send_from_directory)
+from flask import Blueprint, abort, jsonify, request, send_from_directory
 from reana_commons.database import Session
 from reana_commons.models import (Job, Run, RunJobs, User, UserOrganization,
                                   Workflow, WorkflowStatus)
 from werkzeug.exceptions import NotFound
-from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
-                                              SHARED_VOLUME_PATH,
                                               WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
@@ -45,7 +42,7 @@ from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
                                              run_yadage_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
-                                             get_analysis_files_dir,
+                                             get_workflow_files_dir,
                                              list_directory_files)
 
 START = 'start'
@@ -451,7 +448,7 @@ def seed_workflow_workspace(workflow_id_or_name):
             full_file_name = full_file_name[1:]
         elif '..' in full_file_name.split("/"):
             raise UploadPathError('Path cannot contain "..".')
-        path = get_analysis_files_dir(workflow, file_type,
+        path = get_workflow_files_dir(workflow, file_type,
                                       'seed')
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
@@ -545,7 +542,7 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-        outputs_directory = get_analysis_files_dir(workflow, 'output')
+        outputs_directory = get_workflow_files_dir(workflow, 'output')
         return send_from_directory(outputs_directory,
                                    file_name,
                                    mimetype='multipart/form-data',
@@ -657,7 +654,7 @@ def get_workflow_files(workflow_id_or_name):  # noqa
                                                    user_uuid)
 
         file_list = list_directory_files(
-            get_analysis_files_dir(workflow, file_type))
+            get_workflow_files_dir(workflow, file_type))
         return jsonify(file_list), 200
 
     except WorkflowInexistentError:
