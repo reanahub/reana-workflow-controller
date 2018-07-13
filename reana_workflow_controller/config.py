@@ -48,9 +48,6 @@ DEFAULT_NAME_FOR_WORKFLOWS = 'workflow'
    If workflow is manually named by the user that prefix will used instead.
 """
 
-ORGANIZATIONS = ['atlas', 'alice', 'cms', 'default', 'lhcb']
-
-
 WORKFLOW_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 """Time format for workflow starting time, created time etc."""
 
@@ -63,3 +60,10 @@ STATUS_QUEUE = 'jobs-status'
 ROUTING_KEY = 'jobs-status'
 
 POSSIBLE_JOB_STATUSES = ['submitted', 'succeeded', 'failed', 'planned']
+
+
+CWL_WORKFLOW_QUEUE = 'cwl-workflow-queue'
+
+YADAGE_WORKFLOW_QUEUE = 'yadage-workflow-queue'
+
+SERIAL_WORKFLOW_QUEUE = 'serial-workflow-queue'

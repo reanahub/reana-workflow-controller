@@ -26,15 +26,18 @@ import os
 import traceback
 from uuid import UUID, uuid4
 
-from flask import (Blueprint, abort, current_app, jsonify, request,
+from flask import (Blueprint, abort, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (Job, Run, RunJobs, User, UserOrganization,
+from reana_commons.models import (Job, Run, RunJobs, User,
                                   Workflow, WorkflowStatus)
 from werkzeug.exceptions import NotFound
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
-                                              WORKFLOW_TIME_FORMAT)
+                                              WORKFLOW_TIME_FORMAT,
+                                              CWL_WORKFLOW_QUEUE,
+                                              SERIAL_WORKFLOW_QUEUE,
+                                              YADAGE_WORKFLOW_QUEUE)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
                                               WorkflowInexistentError,
@@ -43,20 +46,13 @@ from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
                                              run_yadage_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
+                                             get_workflow_files_dir,
                                              list_directory_files)
 
 START = 'start'
 STOP = 'stop'
 PAUSE = 'pause'
 STATUSES = {START, STOP, PAUSE}
-
-organization_to_queue = {
-    'alice': 'alice-queue',
-    'atlas': 'atlas-queue',
-    'lhcb': 'lhcb-queue',
-    'cms': 'cms-queue',
-    'default': 'default-queue'
-}
 
 workflow_spec_to_task = {
     "yadage": run_yadage_workflow,
@@ -74,18 +70,13 @@ def get_workflows():  # noqa
     get:
       summary: Returns all workflows.
       description: >-
-        This resource is expecting an organization name and an user UUID. The
+        This resource is expecting a user UUID. The
         information related to all workflows for a given user will be served
         as JSON
       operationId: get_workflows
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -95,7 +86,7 @@ def get_workflows():  # noqa
         200:
           description: >-
             Requests succeeded. The response contains the current workflows
-            for a given user and organization.
+            for a given user.
           schema:
             type: array
             items:
@@ -104,8 +95,6 @@ def get_workflows():  # noqa
                 id:
                   type: string
                 name:
-                  type: string
-                organization:
                   type: string
                 status:
                   type: string
@@ -123,7 +112,6 @@ def get_workflows():  # noqa
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "name": "mytest-1",
-                  "organization": "default_org",
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
@@ -133,7 +121,6 @@ def get_workflows():  # noqa
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest-2",
-                  "organization": "default_org",
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
@@ -143,7 +130,6 @@ def get_workflows():  # noqa
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest-3",
-                  "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
@@ -153,7 +139,6 @@ def get_workflows():  # noqa
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest-4",
-                  "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
@@ -179,15 +164,12 @@ def get_workflows():  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user does not exist."
+                "message": "Internal workflow controller error."
               }
     """
     try:
-        organization = request.args['organization']
         user_uuid = request.args['user']
-        user = User.query.\
-            filter(User.id_ == user_uuid,
-                   UserOrganization.name == organization).first()
+        user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
@@ -196,7 +178,6 @@ def get_workflows():  # noqa
             workflow_response = {'id': workflow.id_,
                                  'name': _get_workflow_name(workflow),
                                  'status': workflow.status.name,
-                                 'organization': organization,
                                  'user': user_uuid,
                                  'created': workflow.created.
                                  strftime(WORKFLOW_TIME_FORMAT)}
@@ -225,11 +206,6 @@ def create_workflow():  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -293,17 +269,15 @@ def create_workflow():  # noqa
               }
     """
     try:
-        organization = request.args['organization']
         user_uuid = request.args['user']
-        user = User.query.\
-            filter(User.id_ == user_uuid,
-                   UserOrganization.name ==
-                   organization).first()
+        user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify(
                 {'message': 'User with id:{} does not exist'.
                  format(user_uuid)}), 404
         workflow_uuid = str(uuid4())
+        workflow_workspace, _ = create_workflow_workspace(
+            user_uuid, workflow_uuid)
 
         # Use name prefix user specified or use default name prefix
         # Actual name is prefix + autoincremented run_number.
@@ -355,11 +329,6 @@ def upload_file(workflow_id_or_name):
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -475,11 +444,6 @@ def download_file(workflow_id_or_name, file_name):  # noqa
       produces:
         - multipart/form-data
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -518,7 +482,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user does not exist."
+                "message": "Internal workflow controller error."
               }
     """
     try:
@@ -569,11 +533,6 @@ def get_files(workflow_id_or_name):  # noqa
       produces:
         - multipart/form-data
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -619,7 +578,7 @@ def get_files(workflow_id_or_name):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user does not exist."
+                "message": "Internal workflow controller error."
               }
     """
     try:
@@ -667,11 +626,6 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -694,8 +648,6 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
                 type: string
               workflow_name:
                 type: string
-              organization:
-                type: string
               logs:
                 type: string
               user:
@@ -705,7 +657,6 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "workflow_name": "mytest-1",
-                "organization": "default_org",
                 "logs": "<Workflow engine log output>",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
@@ -727,11 +678,10 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user does not exist."
+                "message": "Internal workflow controller error."
               }
     """
     try:
-        organization = request.args['organization']
         user_uuid = request.args['user']
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
@@ -745,7 +695,6 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         return jsonify({'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow),
                         'logs': workflow.logs or "",
-                        'organization': organization,
                         'user': user_uuid}), 200
 
     except WorkflowInexistentError:
@@ -776,11 +725,6 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -846,11 +790,9 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
                 "toplevel": request.json['toplevel'],
                 "parameters": request.json['preset_pars']
             }
-            queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
-                queue='yadage-{}'.format(queue)
-            )
+                queue=YADAGE_WORKFLOW_QUEUE)
             # TODO: Check if _get_workflow_name(resultobject) should be used to
             # get the name
             return jsonify({'message': 'Workflow successfully launched',
@@ -876,11 +818,6 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -938,10 +875,9 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
                 "workflow_json": request.json['workflow_spec'],
                 "parameters": request.json['parameters']
             }
-            queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
-                queue='yadage-{}'.format(queue)
+                queue=YADAGE_WORKFLOW_QUEUE
             )
             # TODO: Check if _get_workflow_name(resultobject) should be used to
             # get the name
@@ -970,11 +906,6 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the worklow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -1031,10 +962,9 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
     """
     try:
         if request.json:
-            queue = organization_to_queue[request.args.get('organization')]
             resultobject = run_cwl_workflow.apply_async(
                 args=[request.json],
-                queue='cwl-{}'.format(queue)
+                queue=CWL_WORKFLOW_QUEUE
             )
             # TODO: Check if _get_workflow_name(resultobject) should be used to
             # get the name
@@ -1061,11 +991,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the workflow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -1090,8 +1015,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 type: string
               created:
                 type: string
-              organization:
-                type: string
               status:
                 type: string
               user:
@@ -1106,7 +1029,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "name": "mytest-1",
                 "created": "2018-06-13T09:47:35.66097",
-                "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
@@ -1148,7 +1070,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
     """
 
     try:
-        organization = request.args['organization']
         user_uuid = request.args['user']
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
@@ -1190,7 +1111,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                         'status': workflow.status.name,
                         'progress': progress,
-                        'organization': organization,
                         'user': user_uuid,
                         'logs': workflow_logs}), 200
     except WorkflowInexistentError:
@@ -1219,11 +1139,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
       produces:
         - application/json
       parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the workflow belongs to.
-          required: true
-          type: string
         - name: user
           in: query
           description: Required. UUID of workflow owner.
@@ -1255,8 +1170,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                 type: string
               workflow_name:
                 type: string
-              organization:
-                type: string
               status:
                 type: string
               user:
@@ -1267,7 +1180,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                 "message": "Workflow successfully launched",
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "workflow_name": "mytest-1",
-                "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
@@ -1328,7 +1240,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
     """
 
     try:
-        organization = request.args['organization']
         user_uuid = request.args['user']
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
@@ -1343,7 +1254,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                  .format(user_uuid, workflow_id_or_name)}), 403
 
         if status == START:
-            return start_workflow(organization, workflow)
+            return start_workflow(workflow)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1363,10 +1274,9 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def start_workflow(organization, workflow):
+def start_workflow(workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
-        total_commands = 0
         new_run = Run(id_=str(uuid4()),
                       workflow_uuid=workflow.id_,
                       run_number=workflow.run_number,
@@ -1380,14 +1290,11 @@ def start_workflow(organization, workflow):
         current_db_sessions.add(workflow)
         current_db_sessions.commit()
         if workflow.type_ == 'yadage':
-            return run_yadage_workflow_from_spec(organization,
-                                                 workflow)
+            return run_yadage_workflow_from_spec(workflow)
         elif workflow.type_ == 'cwl':
-            return run_cwl_workflow_from_spec_endpoint(organization,
-                                                       workflow)
+            return run_cwl_workflow_from_spec_endpoint(workflow)
         elif workflow.type_ == 'serial':
-            return run_serial_workflow_from_spec(organization,
-                                                 workflow)
+            return run_serial_workflow_from_spec(workflow)
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))
@@ -1400,7 +1307,7 @@ def start_workflow(organization, workflow):
         raise REANAWorkflowControllerError(message)
 
 
-def run_yadage_workflow_from_spec(organization, workflow):
+def run_yadage_workflow_from_spec(workflow):
     """Run a yadage workflow."""
     try:
         kwargs = {
@@ -1409,17 +1316,15 @@ def run_yadage_workflow_from_spec(organization, workflow):
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
         }
-        queue = organization_to_queue[organization]
         if not os.environ.get("TESTS"):
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
-                queue='yadage-{}'.format(queue)
+                queue=YADAGE_WORKFLOW_QUEUE
             )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
-                        'organization': organization,
                         'user': str(workflow.owner_id)}), 200
 
     except(KeyError, ValueError):
@@ -1427,7 +1332,7 @@ def run_yadage_workflow_from_spec(organization, workflow):
         abort(400)
 
 
-def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
+def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
     """Run a CWL workflow."""
     try:
         kwargs = {
@@ -1436,17 +1341,15 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters['input']
         }
-        queue = organization_to_queue[organization]
         if not os.environ.get("TESTS"):
             resultobject = run_cwl_workflow.apply_async(
                 kwargs=kwargs,
-                queue='cwl-{}'.format(queue)
+                queue=CWL_WORKFLOW_QUEUE
             )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
-                        'organization': organization,
                         'user': str(workflow.owner_id)}), 200
 
     except (KeyError, ValueError) as e:
@@ -1455,7 +1358,7 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
         abort(400)
 
 
-def run_serial_workflow_from_spec(organization, workflow):
+def run_serial_workflow_from_spec(workflow):
     """Run a serial workflow."""
     try:
         kwargs = {
@@ -1464,16 +1367,14 @@ def run_serial_workflow_from_spec(organization, workflow):
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
         }
-        queue = organization_to_queue[organization]
         if not os.environ.get("TESTS"):
             resultobject = run_serial_workflow.apply_async(
                 kwargs=kwargs,
-                queue='serial-{}'.format(queue))
+                queue=SERIAL_WORKFLOW_QUEUE)
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
-                        'organization': organization,
                         'user': str(workflow.owner_id)}), 200
 
     except(KeyError, ValueError):
