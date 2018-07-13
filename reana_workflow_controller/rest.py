@@ -430,14 +430,17 @@ def seed_workflow_workspace(workflow_id_or_name):
             full_file_name = full_file_name[1:]
         elif '..' in full_file_name.split("/"):
             raise UploadPathError('Path cannot contain "..".')
-        workspace_path = workflow.get_workflow_run_workspace()
+        absolute_workspace_path = os.path.join(
+          current_app.config['SHARED_VOLUME_PATH'],
+          workflow.get_workflow_run_workspace())
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
-            workspace_path = os.path.join(workspace_path, "/".join(dirs))
-            if not os.path.exists(workspace_path):
-                os.makedirs(workspace_path)
+            absolute_workspace_path = os.path.join(absolute_workspace_path,
+                                                   "/".join(dirs))
+            if not os.path.exists(absolute_workspace_path):
+                os.makedirs(absolute_workspace_path)
 
-        file_.save(os.path.join(workspace_path, filename))
+        file_.save(os.path.join(absolute_workspace_path, filename))
         return jsonify({'message': 'File successfully transferred'}), 200
 
     except WorkflowInexistentError:
@@ -523,7 +526,11 @@ def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-        return send_from_directory(workflow.get_workflow_run_workspace(),
+
+        absolute_workflow_workspace_path = os.path.join(
+          current_app.config['SHARED_VOLUME_PATH'],
+          workflow.get_workflow_run_workspace())
+        return send_from_directory(absolute_workflow_workspace_path,
                                    file_name,
                                    mimetype='multipart/form-data',
                                    as_attachment=True), 200
@@ -545,7 +552,7 @@ def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
 
 @restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['GET'])
-def get_workflow_files(workflow_id_or_name):  # noqa
+def list_workflow_workspace_files(workflow_id_or_name):  # noqa
     r"""List all files contained in a workflow run workspace.
 
     ---
@@ -624,8 +631,9 @@ def get_workflow_files(workflow_id_or_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
 
-        file_list = list_directory_files(
-          workflow.get_workflow_run_workspace())
+        file_list = list_directory_files(os.path.join(
+          current_app.config['SHARED_VOLUME_PATH'],
+          workflow.get_workflow_run_workspace()))
         return jsonify(file_list), 200
 
     except WorkflowInexistentError:
@@ -1394,7 +1402,8 @@ def run_yadage_workflow_from_spec(organization, workflow):
         # Remove organization from workspace path since workflow
         # engines already work in its organization folder.
         workspace_path_without_organization = \
-            '/'.join(workflow.workspace_path.strip('/').split('/')[1:])
+            '/'.join(
+              workflow.get_workflow_run_workspace().strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workspace_path_without_organization,
@@ -1424,7 +1433,7 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
     try:
         kwargs = {
             "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.workspace_path,
+            "workflow_workspace": workflow.get_workflow_run_workspace(),
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters['input']
         }
@@ -1453,7 +1462,8 @@ def run_serial_workflow_from_spec(organization, workflow):
         # Remove organization from workspace path since workflow
         # engines already work in its organization folder.
         workspace_path_without_organization = \
-            '/'.join(workflow.workspace_path.strip('/').split('/')[1:])
+            '/'.join(
+              workflow.get_workflow_run_workspace().strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workspace_path_without_organization,
