@@ -41,7 +41,7 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
 from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
                                              run_yadage_workflow)
-from reana_workflow_controller.utils import (create_workflow_run_workspace,
+from reana_workflow_controller.utils import (create_workflow_workspace,
                                              list_directory_files)
 
 START = 'start'
@@ -218,7 +218,8 @@ def create_workflow():  # noqa
     post:
       summary: Create workflow and its workspace.
       description: >-
-        This resource expects a POST call to create a new workflow workspace.
+        This resource expects all necessary data to represent a workflow so
+        it is stored in database and its workspace is created.
       operationId: create_workflow
       produces:
         - application/json
@@ -325,7 +326,7 @@ def create_workflow():  # noqa
                             logs='')
         Session.add(workflow)
         Session.commit()
-        create_workflow_run_workspace(workflow.get_workflow_run_workspace())
+        create_workflow_workspace(workflow.get_workspace())
         return jsonify({'message': 'Workflow workspace created',
                         'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow)}), 201
@@ -338,16 +339,16 @@ def create_workflow():  # noqa
 
 @restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['POST'])
-def seed_workflow_workspace(workflow_id_or_name):
-    r"""Seed workflow workspace.
+def upload_file(workflow_id_or_name):
+    r"""Upload file to workspace.
 
     ---
     post:
-      summary: Adds a file to the workflow workspace.
+      summary: Adds a file to the workspace.
       description: >-
         This resource is expecting a workflow UUID and a file to place in the
-        workflow workspace.
-      operationId: seed_workflow_files
+        workspace.
+      operationId: upload_file
       consumes:
         - multipart/form-data
       produces:
@@ -370,7 +371,7 @@ def seed_workflow_workspace(workflow_id_or_name):
           type: string
         - name: file_content
           in: formData
-          description: Required. File to add to the workflow workspace.
+          description: Required. File to add to the workspace.
           required: true
           type: file
         - name: file_name
@@ -390,7 +391,7 @@ def seed_workflow_workspace(workflow_id_or_name):
           examples:
             application/json:
               {
-                "message": "input.csv has been successfully transferred.",
+                "message": "`file_name` has been successfully uploaded.",
               }
         400:
           description: >-
@@ -432,7 +433,7 @@ def seed_workflow_workspace(workflow_id_or_name):
             raise UploadPathError('Path cannot contain "..".')
         absolute_workspace_path = os.path.join(
           current_app.config['SHARED_VOLUME_PATH'],
-          workflow.get_workflow_run_workspace())
+          workflow.get_workspace())
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
             absolute_workspace_path = os.path.join(absolute_workspace_path,
@@ -441,7 +442,9 @@ def seed_workflow_workspace(workflow_id_or_name):
                 os.makedirs(absolute_workspace_path)
 
         file_.save(os.path.join(absolute_workspace_path, filename))
-        return jsonify({'message': 'File successfully transferred'}), 200
+        return jsonify(
+          {'message': '{} has been successfully uploaded.'.format(
+            full_file_name)}), 200
 
     except WorkflowInexistentError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
@@ -458,16 +461,16 @@ def seed_workflow_workspace(workflow_id_or_name):
 @restapi_blueprint.route(
     '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
     methods=['GET'])
-def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
-    r"""Get a file contained in the workflow run workspace.
+def download_file(workflow_id_or_name, file_name):  # noqa
+    r"""Download a file from the workspace.
 
     ---
     get:
       summary: Returns the requested file.
       description: >-
-        This resource is expecting a workflow UUID and a filename to return
-        its content.
-      operationId: get_workflow_workspace_file
+        This resource is expecting a workflow UUID and a filename existing
+        inside the workspace to return its content.
+      operationId: download_file
       produces:
         - multipart/form-data
       parameters:
@@ -529,7 +532,7 @@ def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
 
         absolute_workflow_workspace_path = os.path.join(
           current_app.config['SHARED_VOLUME_PATH'],
-          workflow.get_workflow_run_workspace())
+          workflow.get_workspace())
         return send_from_directory(absolute_workflow_workspace_path,
                                    file_name,
                                    mimetype='multipart/form-data',
@@ -552,16 +555,16 @@ def get_workflow_workspace_file(workflow_id_or_name, file_name):  # noqa
 
 @restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['GET'])
-def list_workflow_workspace_files(workflow_id_or_name):  # noqa
-    r"""List all files contained in a workflow run workspace.
+def get_files(workflow_id_or_name):  # noqa
+    r"""List all files contained in a workspace.
 
     ---
     get:
-      summary: Returns the file list for a specific workflow run workspace.
+      summary: Returns the workspace file list.
       description: >-
-        This resource is expecting a workflow run UUID which workspace file
-        list will be retrieved.
-      operationId: list_workflow_files
+        This resource retrieves the file list of a workspace, given
+        its workflow UUID.
+      operationId: get_files
       produces:
         - multipart/form-data
       parameters:
@@ -633,7 +636,7 @@ def list_workflow_workspace_files(workflow_id_or_name):  # noqa
 
         file_list = list_directory_files(os.path.join(
           current_app.config['SHARED_VOLUME_PATH'],
-          workflow.get_workflow_run_workspace()))
+          workflow.get_workspace()))
         return jsonify(file_list), 200
 
     except WorkflowInexistentError:
@@ -1403,7 +1406,7 @@ def run_yadage_workflow_from_spec(organization, workflow):
         # engines already work in its organization folder.
         workspace_path_without_organization = \
             '/'.join(
-              workflow.get_workflow_run_workspace().strip('/').split('/')[1:])
+              workflow.get_workspace().strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workspace_path_without_organization,
@@ -1433,7 +1436,7 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
     try:
         kwargs = {
             "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.get_workflow_run_workspace(),
+            "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters['input']
         }
@@ -1463,7 +1466,7 @@ def run_serial_workflow_from_spec(organization, workflow):
         # engines already work in its organization folder.
         workspace_path_without_organization = \
             '/'.join(
-              workflow.get_workflow_run_workspace().strip('/').split('/')[1:])
+              workflow.get_workspace().strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workspace_path_without_organization,
@@ -1647,7 +1650,7 @@ def _get_workflow_logs(workflow):
 
 
 def _get_run_info(workflow_uuid):
-    """Return progress info about workflow run."""
+    """Return progress info about workflow."""
     return Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
 
 

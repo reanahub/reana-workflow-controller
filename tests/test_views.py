@@ -156,7 +156,7 @@ def test_create_workflow_with_name(app, session, default_user,
 
         # Check that workflow workspace exist
         absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.get_workflow_run_workspace())
+            tmp_shared_volume_path, workflow.get_workspace())
         assert os.path.exists(absolute_workflow_workspace)
 
 
@@ -201,7 +201,7 @@ def test_create_workflow_without_name(app, session, default_user,
 
         # Check that workflow workspace exist
         absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.get_workflow_run_workspace())
+            tmp_shared_volume_path, workflow.get_workspace())
         assert os.path.exists(absolute_workflow_workspace)
 
 
@@ -226,9 +226,9 @@ def test_create_workflow_wrong_user(app, session, tmp_shared_volume_path,
         assert not workflow
 
 
-def test_get_workflow_workspace_absent_file(app, default_user,
-                                            cwl_workflow_with_name):
-    """Test download output file."""
+def test_download_missing_file(app, default_user,
+                               cwl_workflow_with_name):
+    """Test download missing file."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
@@ -244,7 +244,7 @@ def test_get_workflow_workspace_absent_file(app, default_user,
         workflow_uuid = response_data.get('workflow_id')
         file_name = 'input.csv'
         res = client.get(
-            url_for('api.get_workflow_workspace_file',
+            url_for('api.download_file',
                     workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_,
@@ -257,9 +257,9 @@ def test_get_workflow_workspace_absent_file(app, default_user,
         assert response_data == {'message': 'input.csv does not exist.'}
 
 
-def test_get_workflow_workspace_file(app, session, default_user,
-                                     tmp_shared_volume_path,
-                                     cwl_workflow_with_name):
+def test_download_file(app, session, default_user,
+                       tmp_shared_volume_path,
+                       cwl_workflow_with_name):
     """Test download file from workspace."""
     with app.test_client() as client:
         # create workflow
@@ -283,7 +283,7 @@ def test_get_workflow_workspace_file(app, session, default_user,
         # files
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.get_workflow_run_workspace())
+                         workflow.get_workspace())
         file_path = os.path.join(absolute_path_workflow_workspace,
                                  file_name)
         # because outputs directory doesn't exist by default
@@ -291,7 +291,7 @@ def test_get_workflow_workspace_file(app, session, default_user,
         with open(file_path, 'wb+') as f:
             f.write(file_binary_content)
         res = client.get(
-            url_for('api.get_workflow_workspace_file',
+            url_for('api.download_file',
                     workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_,
@@ -301,10 +301,10 @@ def test_get_workflow_workspace_file(app, session, default_user,
         assert res.data == file_binary_content
 
 
-def test_get_workflow_workspace_file_with_path(app, session, default_user,
-                                               tmp_shared_volume_path,
-                                               cwl_workflow_with_name):
-    """Test download output file prepended with path."""
+def test_download_file_with_path(app, session, default_user,
+                                 tmp_shared_volume_path,
+                                 cwl_workflow_with_name):
+    """Test download file prepended with path."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
@@ -327,14 +327,14 @@ def test_get_workflow_workspace_file_with_path(app, session, default_user,
         # files
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.get_workflow_run_workspace())
+                         workflow.get_workspace())
         file_path = os.path.join(absolute_path_workflow_workspace, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb+') as f:
             f.write(file_binary_content)
         res = client.get(
-            url_for('api.get_workflow_workspace_file',
+            url_for('api.download_file',
                     workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_,
@@ -344,10 +344,10 @@ def test_get_workflow_workspace_file_with_path(app, session, default_user,
         assert res.data == file_binary_content
 
 
-def test_list_workflow_workspace_files(app, session, default_user,
-                                       tmp_shared_volume_path,
-                                       cwl_workflow_with_name):
-    """Test get list of input files."""
+def test_get_files(app, session, default_user,
+                   tmp_shared_volume_path,
+                   cwl_workflow_with_name):
+    """Test get files list."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
@@ -365,7 +365,7 @@ def test_list_workflow_workspace_files(app, session, default_user,
         # create file
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.get_workflow_run_workspace())
+                         workflow.get_workspace())
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
         test_files = []
         for i in range(5):
@@ -377,7 +377,7 @@ def test_list_workflow_workspace_files(app, session, default_user,
             test_files.append(os.path.join(subdir_name, file_name))
 
         res = client.get(
-            url_for('api.list_workflow_workspace_files',
+            url_for('api.get_files',
                     workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization},
@@ -387,15 +387,15 @@ def test_list_workflow_workspace_files(app, session, default_user,
             assert file_.get('name') in test_files
 
 
-def test_get_unknown_workflow_files(app, default_user):
-    """Test get list of input files for non existing workflow."""
+def test_get_files_unknown_workflow(app, default_user):
+    """Test get list of files for non existing workflow."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
         random_workflow_uuid = str(uuid.uuid4())
 
         res = client.get(
-            url_for('api.list_workflow_workspace_files',
+            url_for('api.get_files',
                     workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization},
@@ -686,10 +686,10 @@ def test_set_workflow_status_unknown_workflow(app, default_user,
         assert res.status_code == 404
 
 
-def test_seed_workflow_workspace(app, session, default_user,
-                                 tmp_shared_volume_path,
-                                 cwl_workflow_with_name):
-    """Test download output file."""
+def test_upload_file(app, session, default_user,
+                     tmp_shared_volume_path,
+                     cwl_workflow_with_name):
+    """Test upload file."""
     with app.test_client() as client:
         # create workflow
         organization = 'default'
@@ -709,7 +709,7 @@ def test_seed_workflow_workspace(app, session, default_user,
         file_binary_content = b'1,2,3,4\n5,6,7,8'
 
         res = client.post(
-            url_for('api.seed_workflow_workspace',
+            url_for('api.upload_file',
                     workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": organization,
@@ -719,7 +719,7 @@ def test_seed_workflow_workspace(app, session, default_user,
                                    file_name)})
         assert res.status_code == 200
         # remove workspace directory from path
-        workflow_workspace = workflow.get_workflow_run_workspace()
+        workflow_workspace = workflow.get_workspace()
 
         # we use `secure_filename` here because
         # we use it in server side when adding
@@ -732,8 +732,8 @@ def test_seed_workflow_workspace(app, session, default_user,
             assert f.read() == file_binary_content
 
 
-def test_seed_unknown_workflow_workspace(app, default_user):
-    """Test download output file."""
+def test_upload_file_unknown_workflow(app, default_user):
+    """Test upload file to non existing workflow."""
     with app.test_client() as client:
         random_workflow_uuid = uuid.uuid4()
         # create file
@@ -741,7 +741,7 @@ def test_seed_unknown_workflow_workspace(app, default_user):
         file_binary_content = b'1,2,3,4\n5,6,7,8'
 
         res = client.post(
-            url_for('api.seed_workflow_workspace',
+            url_for('api.upload_file',
                     workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "organization": "default",

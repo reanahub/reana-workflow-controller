@@ -26,17 +26,17 @@ import fs.path as fs_path
 from flask import current_app as app
 
 
-def create_workflow_run_workspace(workflow_run_workspace_path):
-    """Create workflow run workspace.
+def create_workflow_workspace(path):
+    """Create workflow workspace.
 
-    :param workflow_run_workspace_path: Relative path to workflow run dir.
-    :return: Workflow run workspace path.
+    :param path: Relative path to workspace directory.
+    :return: Absolute workspace path.
     """
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    if not reana_fs.exists(workflow_run_workspace_path):
-        reana_fs.makedirs(workflow_run_workspace_path)
+    if not reana_fs.exists(path):
+        reana_fs.makedirs(path)
 
-    return workflow_run_workspace_path
+    return path
 
 
 def list_directory_files(directory):
