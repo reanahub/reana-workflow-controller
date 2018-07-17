@@ -26,7 +26,8 @@ import os
 import traceback
 from uuid import UUID, uuid4
 
-from flask import Blueprint, abort, jsonify, request, send_from_directory
+from flask import (Blueprint, abort, current_app, jsonify, request,
+                   send_from_directory)
 from reana_commons.database import Session
 from reana_commons.models import (Job, Run, RunJobs, User, UserOrganization,
                                   Workflow, WorkflowStatus)
@@ -1402,14 +1403,9 @@ def start_workflow(organization, workflow):
 def run_yadage_workflow_from_spec(organization, workflow):
     """Run a yadage workflow."""
     try:
-        # Remove organization from workspace path since workflow
-        # engines already work in its organization folder.
-        workspace_path_without_organization = \
-            '/'.join(
-              workflow.get_workspace().strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workspace_path_without_organization,
+            "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
         }
@@ -1462,14 +1458,9 @@ def run_cwl_workflow_from_spec_endpoint(organization, workflow):  # noqa
 def run_serial_workflow_from_spec(organization, workflow):
     """Run a serial workflow."""
     try:
-        # Remove organization from workspace path since workflow
-        # engines already work in its organization folder.
-        workspace_path_without_organization = \
-            '/'.join(
-              workflow.get_workspace().strip('/').split('/')[1:])
         kwargs = {
             "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workspace_path_without_organization,
+            "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.specification,
             "parameters": workflow.parameters
         }
