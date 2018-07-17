@@ -26,18 +26,16 @@ import os
 import traceback
 from uuid import UUID, uuid4
 
-from flask import (Blueprint, abort, jsonify, request,
+from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (Job, Run, RunJobs, User,
-                                  Workflow, WorkflowStatus)
+from reana_commons.models import (Job, Run, RunJobs, User, Workflow,
+                                  WorkflowStatus)
 from werkzeug.exceptions import NotFound
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
-                                              WORKFLOW_TIME_FORMAT,
-                                              CWL_WORKFLOW_QUEUE,
-                                              SERIAL_WORKFLOW_QUEUE,
-                                              YADAGE_WORKFLOW_QUEUE)
+                                              WORKFLOW_QUEUES,
+                                              WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
                                               WorkflowInexistentError,
@@ -46,7 +44,6 @@ from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
                                              run_yadage_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
-                                             get_workflow_files_dir,
                                              list_directory_files)
 
 START = 'start'
@@ -276,8 +273,6 @@ def create_workflow():  # noqa
                 {'message': 'User with id:{} does not exist'.
                  format(user_uuid)}), 404
         workflow_uuid = str(uuid4())
-        workflow_workspace, _ = create_workflow_workspace(
-            user_uuid, workflow_uuid)
 
         # Use name prefix user specified or use default name prefix
         # Actual name is prefix + autoincremented run_number.
@@ -792,7 +787,7 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
             }
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
-                queue=YADAGE_WORKFLOW_QUEUE)
+                queue=WORKFLOW_QUEUES['yadage'])
             # TODO: Check if _get_workflow_name(resultobject) should be used to
             # get the name
             return jsonify({'message': 'Workflow successfully launched',
@@ -877,7 +872,7 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
             }
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
-                queue=YADAGE_WORKFLOW_QUEUE
+                queue=WORKFLOW_QUEUES['yadage']
             )
             # TODO: Check if _get_workflow_name(resultobject) should be used to
             # get the name
@@ -964,7 +959,7 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
         if request.json:
             resultobject = run_cwl_workflow.apply_async(
                 args=[request.json],
-                queue=CWL_WORKFLOW_QUEUE
+                queue=WORKFLOW_QUEUES['cwl']
             )
             # TODO: Check if _get_workflow_name(resultobject) should be used to
             # get the name
@@ -1319,7 +1314,7 @@ def run_yadage_workflow_from_spec(workflow):
         if not os.environ.get("TESTS"):
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
-                queue=YADAGE_WORKFLOW_QUEUE
+                queue=WORKFLOW_QUEUES['yadage']
             )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': workflow.id_,
@@ -1344,7 +1339,7 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         if not os.environ.get("TESTS"):
             resultobject = run_cwl_workflow.apply_async(
                 kwargs=kwargs,
-                queue=CWL_WORKFLOW_QUEUE
+                queue=WORKFLOW_QUEUES['cwl']
             )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
@@ -1370,7 +1365,7 @@ def run_serial_workflow_from_spec(workflow):
         if not os.environ.get("TESTS"):
             resultobject = run_serial_workflow.apply_async(
                 kwargs=kwargs,
-                queue=SERIAL_WORKFLOW_QUEUE)
+                queue=WORKFLOW_QUEUES['serial'])
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),

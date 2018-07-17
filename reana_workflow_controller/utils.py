@@ -24,7 +24,6 @@
 import fs
 import fs.path as fs_path
 from flask import current_app as app
-from reana_commons.utils import get_user_workflows_dir
 
 
 def create_workflow_workspace(path):
@@ -36,17 +35,6 @@ def create_workflow_workspace(path):
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
     if not reana_fs.exists(path):
         reana_fs.makedirs(path)
-
-
-def get_workflow_files_dir(workflow, file_type, action='list'):
-    """Given a workflow and a file type, returns path to the file type dir."""
-    workspace = get_workflow_dir(workflow)
-    if action == 'list':
-        return fs_path.join(workspace,
-                            app.config['ALLOWED_LIST_DIRECTORIES'][file_type])
-    elif action == 'seed':
-        return fs_path.join(workspace,
-                            app.config['ALLOWED_SEED_DIRECTORIES'][file_type])
 
 
 def list_directory_files(directory):

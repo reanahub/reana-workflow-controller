@@ -61,9 +61,6 @@ ROUTING_KEY = 'jobs-status'
 
 POSSIBLE_JOB_STATUSES = ['submitted', 'succeeded', 'failed', 'planned']
 
-
-CWL_WORKFLOW_QUEUE = 'cwl-workflow-queue'
-
-YADAGE_WORKFLOW_QUEUE = 'yadage-workflow-queue'
-
-SERIAL_WORKFLOW_QUEUE = 'serial-workflow-queue'
+WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
+                   'yadage': 'yadage-default-queue',
+                   'serial': 'serial-default-queue'}

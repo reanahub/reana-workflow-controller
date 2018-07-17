@@ -33,8 +33,6 @@ from reana_commons.models import Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.rest import START, STOP
-from reana_workflow_controller.utils import (get_workflow_files_dir,
-                                             get_user_workflows_dir)
 
 status_dict = {
     START: WorkflowStatus.running,
@@ -256,7 +254,6 @@ def test_download_file(app, session, default_user,
         # create file
         file_name = 'output name.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        outputs_directory = get_workflow_files_dir(workflow, 'output')
         # write file in the workflow workspace under `outputs` directory:
         # we use `secure_filename` here because
         # we use it in server side when adding
@@ -298,7 +295,6 @@ def test_download_file_with_path(app, session, default_user,
         # create file
         file_name = 'first/1991/output.csv'
         file_binary_content = b'1,2,3,4\n5,6,7,8'
-        outputs_directory = get_workflow_files_dir(workflow, 'output')
         # write file in the workflow workspace under `outputs` directory:
         # we use `secure_filename` here because
         # we use it in server side when adding
