@@ -117,9 +117,7 @@ def _update_job_cache(msg):
     input_files = []
     if cached_job:
         file_access_times = calculate_file_access_time(
-            msg['caching_info'].
-            get('workflow_workspace').
-            replace('data', 'reana/default'))
+            msg['caching_info'].get('workflow_workspace'))
         for filename in cached_job.access_times:
             if filename in file_access_times and \
                     file_access_times[filename] > \
@@ -137,8 +135,7 @@ def _update_job_cache(msg):
     input_hash = calculate_job_input_hash(msg['caching_info']['job_spec'],
                                           msg['caching_info']['workflow_json'])
     workspace_hash = calculate_hash_of_dir(
-        msg['caching_info'].get('workflow_workspace').
-        replace('data', 'reana/default'), input_files)
+        msg['caching_info'].get('workflow_workspace'), input_files)
     if workspace_hash == -1:
         return
 
