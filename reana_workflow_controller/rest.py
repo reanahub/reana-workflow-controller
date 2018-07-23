@@ -231,6 +231,7 @@ def create_workflow():  # noqa
               name:
                 type: string
                 description: Workflow name. If empty name will be generated.
+            required: [specification, type, name]
       responses:
         201:
           description: >-
@@ -291,7 +292,7 @@ def create_workflow():  # noqa
                             name=workflow_name,
                             owner_id=request.args['user'],
                             specification=request.json['specification'],
-                            parameters=request.json['parameters'],
+                            parameters=request.json.get('parameters'),
                             type_=request.json['type'],
                             logs='')
         Session.add(workflow)
@@ -1330,11 +1331,15 @@ def run_yadage_workflow_from_spec(workflow):
 def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
     """Run a CWL workflow."""
     try:
+        parameters = None
+        if workflow.parameters:
+            if 'input' in workflow.parameters:
+                parameters = workflow.parameters['input']
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.specification,
-            "parameters": workflow.parameters['input']
+            "parameters": parameters
         }
         if not os.environ.get("TESTS"):
             resultobject = run_cwl_workflow.apply_async(
