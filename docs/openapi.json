@@ -45,6 +45,11 @@
                   "type": "string"
                 }
               },
+              "required": [
+                "specification",
+                "type",
+                "name"
+              ],
               "type": "object"
             }
           }
