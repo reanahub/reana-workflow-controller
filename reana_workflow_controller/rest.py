@@ -1549,5 +1549,5 @@ def _get_current_job_commands(run_id):
         job = Session.query(Job).filter_by(id_=run_job.job_id).\
             order_by(Job.created.desc()).first()
         if job:
-            current_job_commands[str(job.id_)] = job.cmd
+            current_job_commands[str(job.id_)] = job.prettified_cmd
     return current_job_commands
