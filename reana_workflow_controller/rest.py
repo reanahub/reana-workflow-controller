@@ -1079,11 +1079,14 @@ def get_workflow_status(workflow_id_or_name):  # noqa
 
         if run_info:
             current_command = ''
+            current_job_name = ''
             total_jobs = run_info.planned
             current_job_commands = _get_current_job_commands(run_info.id_)
+            current_job_names = _get_current_job_names(run_info.id_)
             try:
                 current_job_id, current_command = current_job_commands.\
                     popitem()
+                _, current_job_name = current_job_names.popitem()
             except Exception:
                 pass
             # all_run_job_ids = _get_all_run_job_ids(run_info)
@@ -1093,6 +1096,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         run_info.succeeded,
                         'failed': run_info.failed,
                         'current_command': current_command,
+                        'current_step_name': current_job_name,
                         'total_jobs': total_jobs,
                         'run_started_at':
                         run_info.created.strftime(WORKFLOW_TIME_FORMAT)}
@@ -1554,5 +1558,17 @@ def _get_current_job_commands(run_id):
         job = Session.query(Job).filter_by(id_=run_job.job_id).\
             order_by(Job.created.desc()).first()
         if job:
-            current_job_commands[str(job.id_)] = job.cmd
+            current_job_commands[str(job.id_)] = job.prettified_cmd
     return current_job_commands
+
+
+def _get_current_job_names(run_id):
+    """Return job."""
+    current_job_names = {}
+    run_jobs = Session.query(RunJobs).filter_by(run_id=run_id).all()
+    for run_job in run_jobs:
+        job = Session.query(Job).filter_by(id_=run_job.job_id).\
+            order_by(Job.created.desc()).first()
+        if job:
+            current_job_names[str(job.id_)] = job.name
+    return current_job_names
