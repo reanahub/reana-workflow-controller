@@ -28,7 +28,7 @@ import uuid
 
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Job, JobCache, Run, RunJobs, Workflow
+from reana_commons.models import Job, JobCache, Workflow, WorkflowJobs
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
                                  calculate_job_input_hash)
@@ -55,18 +55,21 @@ def _update_workflow_status(workflow_uuid, status, logs):
 
 def _update_run_progress(workflow_uuid, msg):
     """Register succeeded Jobs to DB."""
-    run = Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
+    workflow = Session.query(Workflow).filter_by(id_=workflow_uuid).\
+        one_or_none()
     cached_jobs = None
     if "cached" in msg['progress']:
         cached_jobs = msg['progress']['cached']
     for status in POSSIBLE_JOB_STATUSES:
         if status in msg['progress']:
-            previous_total = getattr(run, status)
+            previous_total = getattr(
+                workflow,
+                'jobs_{}'.format(status))
             if status == 'planned':
                 if previous_total > 0:
                     continue
                 else:
-                    setattr(run, status,
+                    setattr(workflow, 'jobs_{}'.format(status),
                             msg['progress']['planned']['total'])
             else:
                 new_total = 0
@@ -79,14 +82,14 @@ def _update_run_progress(workflow_uuid, msg):
                                  str(job.id_) in cached_jobs['job_ids']):
                             new_total += 1
                 new_total += previous_total
-                setattr(run, status, new_total)
-    Session.add(run)
+                setattr(workflow, 'jobs_{}'.format(status), new_total)
+    Session.add(workflow)
 
 
 def _update_job_progress(workflow_uuid, msg):
     """Update job progress for jobs in received message."""
-    current_run = Session.query(Run).filter_by(
-        workflow_uuid=workflow_uuid).one_or_none()
+    workflow = Session.query(Workflow).filter_by(
+        id_=workflow_uuid).one_or_none()
     for status in POSSIBLE_JOB_STATUSES:
         if status in msg['progress']:
             status_progress = msg['progress'][status]
@@ -98,15 +101,15 @@ def _update_job_progress(workflow_uuid, msg):
                 Session.query(Job).filter_by(id_=job_id).\
                     update({'workflow_uuid': workflow_uuid,
                             'status': status})
-                run_job = Session.query(RunJobs).filter_by(
-                    run_id=current_run.id_,
+                workflow_job = Session.query(WorkflowJobs).filter_by(
+                    workflow_id=workflow.id_,
                     job_id=job_id).first()
-                if not run_job and current_run:
-                    run_job = RunJobs()
-                    run_job.id_ = uuid.uuid4()
-                    run_job.run_id = current_run.id_
-                    run_job.job_id = job_id
-                    Session.add(run_job)
+                if not workflow_job and workflow:
+                    workflow_job = WorkflowJobs()
+                    workflow_job.id_ = uuid.uuid4()
+                    workflow_job.workflow_id = workflow.id_
+                    workflow_job.job_id = job_id
+                    Session.add(workflow_job)
 
 
 def _update_job_cache(msg):

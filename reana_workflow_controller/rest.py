@@ -22,6 +22,7 @@
 
 """REANA Workflow Controller REST API."""
 
+from datetime import datetime
 import os
 import traceback
 from uuid import UUID, uuid4
@@ -29,7 +30,7 @@ from uuid import UUID, uuid4
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (Job, Run, RunJobs, User, Workflow,
+from reana_commons.models import (Job, WorkflowJobs, User, Workflow,
                                   WorkflowStatus)
 from werkzeug.exceptions import NotFound
 
@@ -1075,33 +1076,26 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
 
-        run_info = _get_run_info(workflow.id_)
-
-        if run_info:
-            current_command = ''
-            current_job_name = ''
-            total_jobs = run_info.planned
-            current_job_commands = _get_current_job_commands(run_info.id_)
-            current_job_names = _get_current_job_names(run_info.id_)
-            try:
-                current_job_id, current_command = current_job_commands.\
-                    popitem()
-                _, current_job_name = current_job_names.popitem()
-            except Exception:
-                pass
-            # all_run_job_ids = _get_all_run_job_ids(run_info)
-            progress = {'planned': run_info.planned,
-                        'submitted': run_info.submitted,
-                        'succeeded':
-                        run_info.succeeded,
-                        'failed': run_info.failed,
-                        'current_command': current_command,
-                        'current_step_name': current_job_name,
-                        'total_jobs': total_jobs,
-                        'run_started_at':
-                        run_info.created.strftime(WORKFLOW_TIME_FORMAT)}
-        else:
-            progress = {}
+        current_job_progress = _get_current_job_progress(workflow.id_)
+        cmd_and_step_name = {}
+        try:
+            current_job_id, cmd_and_step_name = current_job_progress.\
+                popitem()
+        except Exception:
+            pass
+        # all_run_job_ids = _get_all_run_job_ids(run_info)
+        progress = {'planned': workflow.jobs_planned or 0,
+                    'submitted': workflow.jobs_processing or 0,
+                    'succeeded':
+                    workflow.jobs_succeeded or 0,
+                    'failed': workflow.jobs_failed or 0,
+                    'current_command':
+                    cmd_and_step_name.get('prettified_cmd'),
+                    'current_step_name':
+                    cmd_and_step_name.get('current_job_name'),
+                    'total_jobs': workflow.jobs_planned or 0,
+                    'run_started_at':
+                    workflow.run_started_at.strftime(WORKFLOW_TIME_FORMAT)}
 
         # TODO:
         # Returned JSON doesn't match the style of other endpoints
@@ -1277,18 +1271,14 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 def start_workflow(workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
-        new_run = Run(id_=str(uuid4()),
-                      workflow_uuid=workflow.id_,
-                      run_number=workflow.run_number,
-                      planned=0,
-                      submitted=0,
-                      succeeded=0,
-                      failed=0)
+        workflow.jobs_planned = 0
+        workflow.jobs_processing = 0
+        workflow.jobs_succeeded = 0
+        workflow.jobs_failed = 0        
+        workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
-        current_db_sessions = Session.object_session(workflow)
-        current_db_sessions.add(new_run)
-        current_db_sessions.add(workflow)
-        current_db_sessions.commit()
+        Session.add(workflow)
+        Session.commit()
         if workflow.type_ == 'yadage':
             return run_yadage_workflow_from_spec(workflow)
         elif workflow.type_ == 'cwl':
@@ -1545,20 +1535,18 @@ def _get_workflow_logs(workflow):
     return all_logs
 
 
-def _get_run_info(workflow_uuid):
-    """Return progress info about workflow."""
-    return Session.query(Run).filter_by(workflow_uuid=workflow_uuid).first()
-
-
-def _get_current_job_commands(run_id):
+def _get_current_job_progress(workflow_id):
     """Return job."""
     current_job_commands = {}
-    run_jobs = Session.query(RunJobs).filter_by(run_id=run_id).all()
-    for run_job in run_jobs:
-        job = Session.query(Job).filter_by(id_=run_job.job_id).\
+    workflow_jobs = Session.query(WorkflowJobs).filter_by(
+        workflow_id=workflow_id).all()
+    for workflow_job in workflow_jobs:
+        job = Session.query(Job).filter_by(id_=workflow_job.job_id).\
             order_by(Job.created.desc()).first()
         if job:
-            current_job_commands[str(job.id_)] = job.prettified_cmd
+            current_job_commands[str(job.id_)] = {
+                'prettified_cmd': job.prettified_cmd,
+                'current_job_name': job.name}
     return current_job_commands
 
 
