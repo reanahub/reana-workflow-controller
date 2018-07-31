@@ -28,12 +28,12 @@ import uuid
 
 from celery import Celery
 from reana_commons.database import Session
-from reana_commons.models import Job, JobCache, Workflow, WorkflowJobs
+from reana_commons.models import Job, JobCache, Workflow
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
                                  calculate_job_input_hash)
 
-from reana_workflow_controller.config import BROKER, POSSIBLE_JOB_STATUSES
+from reana_workflow_controller.config import BROKER, PROGRESS_STATUSES
 
 celery = Celery('tasks',
                 broker=BROKER)
@@ -58,19 +58,18 @@ def _update_run_progress(workflow_uuid, msg):
     workflow = Session.query(Workflow).filter_by(id_=workflow_uuid).\
         one_or_none()
     cached_jobs = None
+    job_progress = {}
     if "cached" in msg['progress']:
         cached_jobs = msg['progress']['cached']
-    for status in POSSIBLE_JOB_STATUSES:
+    for status in PROGRESS_STATUSES:
         if status in msg['progress']:
-            previous_total = getattr(
-                workflow,
-                'jobs_{}'.format(status))
+            previous_total = workflow.job_progress.get('total') or 0
             if status == 'planned':
                 if previous_total > 0:
                     continue
                 else:
-                    setattr(workflow, 'jobs_{}'.format(status),
-                            msg['progress']['planned']['total'])
+                    job_progress['total'] = \
+                        msg['progress']['planned']['total']
             else:
                 new_total = 0
                 for job_id in msg['progress'][status]['job_ids']:
@@ -82,7 +81,11 @@ def _update_run_progress(workflow_uuid, msg):
                                  str(job.id_) in cached_jobs['job_ids']):
                             new_total += 1
                 new_total += previous_total
-                setattr(workflow, 'jobs_{}'.format(status), new_total)
+                new_job_ids = set(job_progress.get(status) or 0) + \
+                              set(msg['progress'][status]['job_ids'])
+                job_progress[status] = {'total': new_total,
+                                        'job_ids': new_job_ids}
+    workflow.job_progress = job_progress
     Session.add(workflow)
 
 
@@ -90,7 +93,7 @@ def _update_job_progress(workflow_uuid, msg):
     """Update job progress for jobs in received message."""
     workflow = Session.query(Workflow).filter_by(
         id_=workflow_uuid).one_or_none()
-    for status in POSSIBLE_JOB_STATUSES:
+    for status in PROGRESS_STATUSES:
         if status in msg['progress']:
             status_progress = msg['progress'][status]
             for job_id in status_progress['job_ids']:
@@ -101,15 +104,6 @@ def _update_job_progress(workflow_uuid, msg):
                 Session.query(Job).filter_by(id_=job_id).\
                     update({'workflow_uuid': workflow_uuid,
                             'status': status})
-                workflow_job = Session.query(WorkflowJobs).filter_by(
-                    workflow_id=workflow.id_,
-                    job_id=job_id).first()
-                if not workflow_job and workflow:
-                    workflow_job = WorkflowJobs()
-                    workflow_job.id_ = uuid.uuid4()
-                    workflow_job.workflow_id = workflow.id_
-                    workflow_job.job_id = job_id
-                    Session.add(workflow_job)
 
 
 def _update_job_cache(msg):

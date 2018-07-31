@@ -59,7 +59,7 @@ STATUS_QUEUE = 'jobs-status'
 
 ROUTING_KEY = 'jobs-status'
 
-POSSIBLE_JOB_STATUSES = ['submitted', 'succeeded', 'failed', 'planned']
+PROGRESS_STATUSES = ['running', 'finished', 'failed', 'total']
 
 WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
                    'yadage': 'yadage-default-queue',

@@ -30,7 +30,7 @@ from uuid import UUID, uuid4
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (Job, WorkflowJobs, User, Workflow,
+from reana_commons.models import (Job, User, Workflow,
                                   WorkflowStatus)
 from werkzeug.exceptions import NotFound
 
@@ -1084,16 +1084,16 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         except Exception:
             pass
         # all_run_job_ids = _get_all_run_job_ids(run_info)
-        progress = {'planned': workflow.jobs_planned or 0,
-                    'submitted': workflow.jobs_processing or 0,
-                    'succeeded':
-                    workflow.jobs_succeeded or 0,
-                    'failed': workflow.jobs_failed or 0,
+        progress = {'total': workflow.job_progress.get('total') or 0,
+                    'running': workflow.job_progress.get('running') or 0,
+                    'finished':
+                    workflow.job_progress.get('finished') or 0,
+                    'failed': workflow.job_progress.get('failed') or 0,
                     'current_command':
                     cmd_and_step_name.get('prettified_cmd'),
                     'current_step_name':
                     cmd_and_step_name.get('current_job_name'),
-                    'total_jobs': workflow.jobs_planned or 0,
+                    'total_jobs': workflow.job_progress.get('total') or 0,
                     'run_started_at':
                     workflow.run_started_at.strftime(WORKFLOW_TIME_FORMAT)}
 
@@ -1538,8 +1538,8 @@ def _get_workflow_logs(workflow):
 def _get_current_job_progress(workflow_id):
     """Return job."""
     current_job_commands = {}
-    workflow_jobs = Session.query(WorkflowJobs).filter_by(
-        workflow_id=workflow_id).all()
+    workflow_jobs = Session.query(Job).filter_by(
+        workflow_uuid=workflow_id).all()
     for workflow_job in workflow_jobs:
         job = Session.query(Job).filter_by(id_=workflow_job.job_id).\
             order_by(Job.created.desc()).first()
