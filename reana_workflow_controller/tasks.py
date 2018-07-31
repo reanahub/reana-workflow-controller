@@ -32,6 +32,7 @@ from reana_commons.models import Job, JobCache, Workflow
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
                                  calculate_job_input_hash)
+from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import BROKER, PROGRESS_STATUSES
 
@@ -58,18 +59,21 @@ def _update_run_progress(workflow_uuid, msg):
     workflow = Session.query(Workflow).filter_by(id_=workflow_uuid).\
         one_or_none()
     cached_jobs = None
-    job_progress = {}
+    job_progress = workflow.job_progress
     if "cached" in msg['progress']:
         cached_jobs = msg['progress']['cached']
     for status in PROGRESS_STATUSES:
         if status in msg['progress']:
-            previous_total = workflow.job_progress.get('total') or 0
-            if status == 'planned':
+            previous_status = workflow.job_progress.get(status)
+            previous_total = 0
+            if previous_status:
+                previous_total = previous_status.get('total') or 0
+            if status == 'total':
                 if previous_total > 0:
                     continue
                 else:
                     job_progress['total'] = \
-                        msg['progress']['planned']['total']
+                        msg['progress']['total']
             else:
                 new_total = 0
                 for job_id in msg['progress'][status]['job_ids']:
@@ -81,11 +85,16 @@ def _update_run_progress(workflow_uuid, msg):
                                  str(job.id_) in cached_jobs['job_ids']):
                             new_total += 1
                 new_total += previous_total
-                new_job_ids = set(job_progress.get(status) or 0) + \
-                              set(msg['progress'][status]['job_ids'])
+                if previous_status:
+                    new_job_ids = set(previous_status.get('job_ids') or \
+                        set()) | \
+                        set(msg['progress'][status]['job_ids'])
+                else:
+                    new_job_ids = set(msg['progress'][status]['job_ids'])
                 job_progress[status] = {'total': new_total,
-                                        'job_ids': new_job_ids}
+                                        'job_ids': list(new_job_ids)}
     workflow.job_progress = job_progress
+    flag_modified(workflow, 'job_progress')
     Session.add(workflow)
 
 

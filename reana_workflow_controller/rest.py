@@ -22,16 +22,15 @@
 
 """REANA Workflow Controller REST API."""
 
-from datetime import datetime
 import os
 import traceback
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from reana_commons.database import Session
-from reana_commons.models import (Job, User, Workflow,
-                                  WorkflowStatus)
+from reana_commons.models import Job, User, Workflow, WorkflowStatus
 from werkzeug.exceptions import NotFound
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
@@ -1083,7 +1082,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 popitem()
         except Exception:
             pass
-        # all_run_job_ids = _get_all_run_job_ids(run_info)
         progress = {'total': workflow.job_progress.get('total') or 0,
                     'running': workflow.job_progress.get('running') or 0,
                     'finished':
