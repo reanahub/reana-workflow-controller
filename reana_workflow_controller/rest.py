@@ -1082,6 +1082,10 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 popitem()
         except Exception:
             pass
+        run_started_at = None
+        if workflow.run_started_at:
+            run_started_at = workflow.run_started_at.\
+                strftime(WORKFLOW_TIME_FORMAT)
         progress = {'total': workflow.job_progress.get('total') or 0,
                     'running': workflow.job_progress.get('running') or 0,
                     'finished':
@@ -1092,8 +1096,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                     'current_step_name':
                     cmd_and_step_name.get('current_job_name'),
                     'total_jobs': workflow.job_progress.get('total') or 0,
-                    'run_started_at':
-                    workflow.run_started_at.strftime(WORKFLOW_TIME_FORMAT)}
+                    'run_started_at': run_started_at
+                    }
 
         # TODO:
         # Returned JSON doesn't match the style of other endpoints
@@ -1271,8 +1275,9 @@ def start_workflow(workflow):
     if workflow.status == WorkflowStatus.created:
         workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
-        Session.add(workflow)
-        Session.commit()
+        current_db_sessions = Session.object_session(workflow)
+        current_db_sessions.add(workflow)
+        current_db_sessions.commit()
         if workflow.type_ == 'yadage':
             return run_yadage_workflow_from_spec(workflow)
         elif workflow.type_ == 'cwl':
