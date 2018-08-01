@@ -87,7 +87,7 @@ def _update_run_progress(workflow_uuid, msg):
                 new_total += previous_total
                 if previous_status:
                     new_job_ids = set(previous_status.get('job_ids') or
-                        set()) | \
+                                      set()) | \
                         set(msg['progress'][status]['job_ids'])
                 else:
                     new_job_ids = set(msg['progress'][status]['job_ids'])
