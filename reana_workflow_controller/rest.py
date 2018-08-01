@@ -1269,10 +1269,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 def start_workflow(workflow):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
-        workflow.jobs_planned = 0
-        workflow.jobs_processing = 0
-        workflow.jobs_succeeded = 0
-        workflow.jobs_failed = 0        
         workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
         Session.add(workflow)
@@ -1539,22 +1535,10 @@ def _get_current_job_progress(workflow_id):
     workflow_jobs = Session.query(Job).filter_by(
         workflow_uuid=workflow_id).all()
     for workflow_job in workflow_jobs:
-        job = Session.query(Job).filter_by(id_=workflow_job.job_id).\
+        job = Session.query(Job).filter_by(id_=workflow_job.id_).\
             order_by(Job.created.desc()).first()
         if job:
             current_job_commands[str(job.id_)] = {
                 'prettified_cmd': job.prettified_cmd,
                 'current_job_name': job.name}
     return current_job_commands
-
-
-def _get_current_job_names(run_id):
-    """Return job."""
-    current_job_names = {}
-    run_jobs = Session.query(RunJobs).filter_by(run_id=run_id).all()
-    for run_job in run_jobs:
-        job = Session.query(Job).filter_by(id_=run_job.job_id).\
-            order_by(Job.created.desc()).first()
-        if job:
-            current_job_names[str(job.id_)] = job.name
-    return current_job_names
