@@ -25,9 +25,9 @@
 from __future__ import absolute_import
 
 from flask import Flask
-from reana_commons.database import Session
+from reana_db.database import Session
 
-from reana_commons.models import Base  # isort:skip  # noqa
+from reana_db.models import Base  # isort:skip  # noqa
 
 
 def create_app(config_mapping=None):

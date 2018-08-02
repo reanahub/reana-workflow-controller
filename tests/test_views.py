@@ -29,7 +29,7 @@ import uuid
 import fs
 import pytest
 from flask import url_for
-from reana_commons.models import Workflow, WorkflowStatus
+from reana_db.models import Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.rest import START, STOP

@@ -24,7 +24,8 @@ RUN apt-get update && \
     apt-get install -y vim-tiny && \
     pip install --upgrade pip
 RUN pip install -e git://github.com/reanahub/reana-workflow-commons.git@master#egg=reana-workflow-commons
-RUN pip install -e git://github.com/dinosk/reana-commons.git@24-merge-workflow-run#egg=reana-commons
+RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
+RUN pip install -e git://github.com/reanahub/reana-db.git@master#egg=reana-db
 
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_workflow_controller/version.py /code/reana_workflow_controller/

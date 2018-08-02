@@ -29,8 +29,8 @@ from uuid import UUID, uuid4
 
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
-from reana_commons.database import Session
-from reana_commons.models import Job, User, Workflow, WorkflowStatus
+from reana_db.database import Session
+from reana_db.models import Job, User, Workflow, WorkflowStatus
 from werkzeug.exceptions import NotFound
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,

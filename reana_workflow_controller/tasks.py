@@ -27,11 +27,11 @@ from __future__ import absolute_import
 import uuid
 
 from celery import Celery
-from reana_commons.database import Session
-from reana_commons.models import Job, JobCache, Workflow
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
                                  calculate_job_input_hash)
+from reana_db.database import Session
+from reana_db.models import Job, JobCache, Workflow
 from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import BROKER, PROGRESS_STATUSES
