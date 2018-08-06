@@ -1086,17 +1086,25 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         if workflow.run_started_at:
             run_started_at = workflow.run_started_at.\
                 strftime(WORKFLOW_TIME_FORMAT)
-        progress = {'total': workflow.job_progress.get('total') or 0,
-                    'running': workflow.job_progress.get('running') or 0,
+        initial_progress_status = {'total': 0, 'job_ids': []}
+        progress = {'total':
+                    workflow.job_progress.get('total') or
+                    initial_progress_status,
+                    'running':
+                    workflow.job_progress.get('running') or
+                    initial_progress_status,
                     'finished':
-                    workflow.job_progress.get('finished') or 0,
-                    'failed': workflow.job_progress.get('failed') or 0,
+                    workflow.job_progress.get('finished') or
+                    initial_progress_status,
+                    'failed':
+                    workflow.job_progress.get('failed') or
+                    initial_progress_status,
                     'current_command':
                     cmd_and_step_name.get('prettified_cmd'),
                     'current_step_name':
                     cmd_and_step_name.get('current_job_name'),
-                    'total_jobs': workflow.job_progress.get('total') or 0,
-                    'run_started_at': run_started_at
+                    'run_started_at':
+                    run_started_at
                     }
 
         # TODO:
