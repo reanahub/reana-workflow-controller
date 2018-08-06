@@ -25,9 +25,9 @@
 import json
 
 import pika
+from reana_commons.consumer import Consumer
 from reana_db.database import Session
 from reana_db.models import WorkflowStatus
-from reana_workflow_commons.consumer import Consumer
 
 from .config import STATUS_QUEUE
 from .tasks import (_update_job_cache, _update_job_progress,

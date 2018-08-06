@@ -23,7 +23,6 @@ FROM python:3.6
 RUN apt-get update && \
     apt-get install -y vim-tiny && \
     pip install --upgrade pip
-RUN pip install -e git://github.com/reanahub/reana-workflow-commons.git@master#egg=reana-workflow-commons
 RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
 RUN pip install -e git://github.com/reanahub/reana-db.git@master#egg=reana-db
 
