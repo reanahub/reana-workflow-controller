@@ -1154,12 +1154,16 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           required: true
           type: string
         - name: status
-          in: body
+          in: query
           description: Required. New status.
           required: true
+          type: string
+        - name: parameters
+          in: body
+          description: Optional. Extra parameters for workflow status.
+          required: false
           schema:
-              type: string
-              description: Required. New status.
+            type: object
       responses:
         200:
           description: >-
@@ -1247,7 +1251,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         user_uuid = request.args['user']
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-        status = request.json
+        status = request.args.get('status')
         if not (status in STATUSES):
             return jsonify({'message': 'Status {0} is not one of: {1}'.
                             format(status, ", ".join(STATUSES))}), 400
@@ -1256,9 +1260,11 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
-
+        parameters = None
+        if request.json:
+            parameters = request.json.get('parameters')
         if status == START:
-            return start_workflow(workflow)
+            return start_workflow(workflow, parameters)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1278,7 +1284,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def start_workflow(workflow):
+def start_workflow(workflow, parameters):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         workflow.run_started_at = datetime.now()
@@ -1291,7 +1297,7 @@ def start_workflow(workflow):
         elif workflow.type_ == 'cwl':
             return run_cwl_workflow_from_spec_endpoint(workflow)
         elif workflow.type_ == 'serial':
-            return run_serial_workflow_from_spec(workflow)
+            return run_serial_workflow_from_spec(workflow, parameters)
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))
@@ -1359,14 +1365,14 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         abort(400)
 
 
-def run_serial_workflow_from_spec(workflow):
+def run_serial_workflow_from_spec(workflow, parameters):
     """Run a serial workflow."""
     try:
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.specification,
-            "parameters": workflow.parameters
+            "parameters": {**workflow.parameters, **parameters},
         }
         if not os.environ.get("TESTS"):
             resultobject = run_serial_workflow.apply_async(

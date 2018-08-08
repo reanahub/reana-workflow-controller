@@ -512,9 +512,8 @@ def test_set_workflow_status(app, session, default_user,
         payload = START
         res = client.put(url_for('api.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": default_user.id_},
-                         content_type='application/json',
-                         data=json.dumps(payload))
+                         query_string={"user": default_user.id_,
+                                       "status": "start"})
         json_response = json.loads(res.data.decode())
         assert json_response.get('status') == status_dict[payload].name
 
@@ -541,16 +540,14 @@ def test_start_already_started_workflow(app, session, default_user):
         payload = START
         res = client.put(url_for('api.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": default_user.id_},
-                         content_type='application/json',
-                         data=json.dumps(payload))
+                         query_string={"user": default_user.id_,
+                                       "status": "start"})
         json_response = json.loads(res.data.decode())
         assert json_response.get('status') == status_dict[payload].name
         res = client.put(url_for('api.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": default_user.id_},
-                         content_type='application/json',
-                         data=json.dumps(payload))
+                         query_string={"user": default_user.id_,
+                                       "status": "start"})
         json_response = json.loads(res.data.decode())
         assert res.status_code == 409
         expected_message = ("Workflow {0} could not be started because it is"
@@ -574,9 +571,9 @@ def test_set_workflow_status_unauthorized(app, default_user,
         payload = START
         res = client.put(url_for('api.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": random_user_uuid},
-                         content_type='application/json',
-                         data=json.dumps(payload))
+                         query_string={"user": random_user_uuid,
+                                       "status": payload},
+                         content_type='application/json')
         assert res.status_code == 403
 
 
