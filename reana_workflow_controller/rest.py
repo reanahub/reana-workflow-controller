@@ -789,8 +789,6 @@ def run_yadage_workflow_from_remote_endpoint():  # noqa
             resultobject = run_yadage_workflow.apply_async(
                 kwargs=kwargs,
                 queue=WORKFLOW_QUEUES['yadage'])
-            # TODO: Check if _get_workflow_name(resultobject) should be used to
-            # get the name
             return jsonify({'message': 'Workflow successfully launched',
                             'workflow_id': resultobject.id,
                             'workflow_name': resultobject.name}), 200
@@ -875,8 +873,6 @@ def run_yadage_workflow_from_spec_endpoint():  # noqa
                 kwargs=kwargs,
                 queue=WORKFLOW_QUEUES['yadage']
             )
-            # TODO: Check if _get_workflow_name(resultobject) should be used to
-            # get the name
             return jsonify({'message': 'Workflow successfully launched',
                             'workflow_id': resultobject.id,
                             'workflow_name': resultobject.name}), 200
@@ -962,8 +958,6 @@ def run_cwl_workflow_from_remote_endpoint():  # noqa
                 args=[request.json],
                 queue=WORKFLOW_QUEUES['cwl']
             )
-            # TODO: Check if _get_workflow_name(resultobject) should be used to
-            # get the name
             return jsonify({'message': 'Workflow successfully launched',
                             'workflow_id': resultobject.id,
                             'workflow_name': resultobject.name}), 200
@@ -1107,8 +1101,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                     run_started_at
                     }
 
-        # TODO:
-        # Returned JSON doesn't match the style of other endpoints
         return jsonify({'id': workflow.id_,
                         'name': _get_workflow_name(workflow),
                         'created':

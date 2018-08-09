@@ -1,6 +1,15 @@
 Changes
 =======
 
+Version 0.3.0 (2018-08-10)
+--------------------------
+
+- Adds support for
+  `Serial workflows <http://reana-workflow-engine-serial.readthedocs.io/en/latest/>`_.
+- Tracks progress of workflow runs.
+- Adds uwsgi for production deployments.
+- Allows downloading of any file from a workflow workspace.
+
 Version 0.2.0 (2018-04-19)
 --------------------------
 
