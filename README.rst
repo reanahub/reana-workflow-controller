@@ -5,6 +5,9 @@
 .. image:: https://img.shields.io/travis/reanahub/reana-workflow-controller.svg
       :target: https://travis-ci.org/reanahub/reana-workflow-controller
 
+.. image:: https://img.shields.io/pypi/pyversions/reana-workflow-controller.svg
+      :target: https://pypi.org/pypi/reana-workflow-controller
+
 .. image:: https://img.shields.io/coveralls/reanahub/reana-workflow-controller.svg
       :target: https://coveralls.io/r/reanahub/reana-workflow-controller
 
