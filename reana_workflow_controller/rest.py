@@ -99,10 +99,6 @@ def get_workflows():  # noqa
                   type: string
                 created:
                   type: string
-                started:
-                  type: string
-                finished:
-                  type: string
           examples:
             application/json:
               [
@@ -112,8 +108,6 @@ def get_workflows():  # noqa
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
-                  "started": "2018-06-13 09:48:35.66097",
-                  "finished": "2018-06-13 09:49:35.66097",
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
@@ -121,8 +115,6 @@ def get_workflows():  # noqa
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
-                  "started": "2018-06-13 09:48:35.66097",
-                  "finished": "2018-06-13 09:49:35.66097"
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
@@ -130,8 +122,6 @@ def get_workflows():  # noqa
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
-                  "started": "2018-06-13 09:48:35.66097",
-                  "finished": "2018-06-13 09:49:35.66097"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
@@ -139,8 +129,6 @@ def get_workflows():  # noqa
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
-                  "started": "No",
-                  "finished": "No"
                 }
               ]
         400:
@@ -553,7 +541,6 @@ def get_files(workflow_id_or_name):  # noqa
                   type: string
                 last-modified:
                   type: string
-                  format: date-time
                 size:
                   type: integer
         400:

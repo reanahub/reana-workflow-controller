@@ -25,6 +25,8 @@ import fs
 import fs.path as fs_path
 from flask import current_app as app
 
+from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
+
 
 def create_workflow_workspace(path):
     """Create workflow workspace.
@@ -44,6 +46,7 @@ def list_directory_files(directory):
     for file_name in fs_.walk.files():
         file_details = fs_.getinfo(file_name, namespaces=['details'])
         file_list.append({'name': file_name.lstrip('/'),
-                          'last-modified': file_details.modified.isoformat(),
+                          'last-modified': file_details.modified.
+                          strftime(WORKFLOW_TIME_FORMAT),
                           'size': file_details.size})
     return file_list
