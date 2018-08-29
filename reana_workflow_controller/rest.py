@@ -1357,14 +1357,15 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         abort(400)
 
 
-def run_serial_workflow_from_spec(workflow, parameters):
+def run_serial_workflow_from_spec(workflow, engine_parameters):
     """Run a serial workflow."""
     try:
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.specification,
-            "parameters": {**workflow.parameters, **parameters},
+            "workflow_parameters": workflow.parameters,
+            "engine_parameters": engine_parameters,
         }
         if not os.environ.get("TESTS"):
             resultobject = run_serial_workflow.apply_async(
