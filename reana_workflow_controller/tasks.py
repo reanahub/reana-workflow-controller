@@ -125,9 +125,7 @@ def _update_job_cache(msg):
         file_access_times = calculate_file_access_time(
             msg['caching_info'].get('workflow_workspace'))
         for filename in cached_job.access_times:
-            if filename in file_access_times and \
-                    file_access_times[filename] > \
-                    cached_job.access_times[filename]:
+            if filename in file_access_times:
                 input_files.append(filename)
     else:
         return
