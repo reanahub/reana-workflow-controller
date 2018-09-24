@@ -192,20 +192,17 @@ def create_workflow():  # noqa
           schema:
             type: object
             properties:
-              parameters:
+              operational_parameters:
                 type: object
-                description: Workflow parameters.
-              specification:
+                description: Operational parameters.
+              reana_specification:
                 type: object
                 description: >-
-                  Yadage specification in JSON format.
-              type:
-                type: string
-                description: Workflow type.
-              name:
+                  Workflow specification in JSON format.
+              workflow_name:
                 type: string
                 description: Workflow name. If empty name will be generated.
-            required: [specification, type, name]
+            required: [reana_specification, workflow_name, operational_parameters]
       responses:
         201:
           description: >-
@@ -248,10 +245,9 @@ def create_workflow():  # noqa
                 {'message': 'User with id:{} does not exist'.
                  format(user_uuid)}), 404
         workflow_uuid = str(uuid4())
-
         # Use name prefix user specified or use default name prefix
         # Actual name is prefix + autoincremented run_number.
-        workflow_name = request.json.get('name', '')
+        workflow_name = request.json.get('workflow_name', '')
         if workflow_name == '':
             workflow_name = DEFAULT_NAME_FOR_WORKFLOWS
         else:
@@ -265,9 +261,12 @@ def create_workflow():  # noqa
         workflow = Workflow(id_=workflow_uuid,
                             name=workflow_name,
                             owner_id=request.args['user'],
-                            specification=request.json['specification'],
-                            parameters=request.json.get('parameters'),
-                            type_=request.json['type'],
+                            reana_specification=request.json[
+                                'reana_specification'],
+                            operational_parameters=request.json.get(
+                                'operational_parameters'),
+                            type_=request.json[
+                                'reana_specification']['workflow']['type'],
                             logs='')
         Session.add(workflow)
         Session.commit()

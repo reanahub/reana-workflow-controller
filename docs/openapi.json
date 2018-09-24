@@ -199,27 +199,23 @@
             "required": true,
             "schema": {
               "properties": {
-                "name": {
+                "operational_parameters": {
+                  "description": "Operational parameters.",
+                  "type": "object"
+                },
+                "reana_specification": {
+                  "description": "Workflow specification in JSON format.",
+                  "type": "object"
+                },
+                "workflow_name": {
                   "description": "Workflow name. If empty name will be generated.",
-                  "type": "string"
-                },
-                "parameters": {
-                  "description": "Workflow parameters.",
-                  "type": "object"
-                },
-                "specification": {
-                  "description": "Yadage specification in JSON format.",
-                  "type": "object"
-                },
-                "type": {
-                  "description": "Workflow type.",
                   "type": "string"
                 }
               },
               "required": [
-                "specification",
-                "type",
-                "name"
+                "reana_specification",
+                "workflow_name",
+                "operational_parameters"
               ],
               "type": "object"
             }

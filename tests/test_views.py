@@ -36,9 +36,13 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
             name=workflow_name,
             status=WorkflowStatus.finished,
             owner_id=default_user.id_,
-            specification=cwl_workflow_with_name['specification'],
-            parameters=cwl_workflow_with_name['parameters'],
-            type_=cwl_workflow_with_name['type'],
+            reana_yaml=cwl_workflow_with_name['reana_yaml'],
+            specification=cwl_workflow_with_name[
+                'reana_yaml']['specification'],
+            parameters=cwl_workflow_with_name[
+                'reana_yaml']['parameters'],
+            type_=cwl_workflow_with_name[
+                'reana_yaml']['type'],
             logs='')
         session.add(workflow)
         session.commit()
@@ -76,28 +80,6 @@ def test_get_workflows_missing_user(app):
         assert res.status_code == 400
 
 
-# def test_get_workflows_wrong_organization(app, default_user):
-#     """Test list of workflows for unknown organization."""
-#     with app.test_client() as client:
-#         res = client.get(url_for('api.get_workflows'),
-#                          query_string={"user": default_user.id_})
-#         assert res.status_code == 404
-
-#     with app.test_client() as client:
-#         res = client.get(url_for('api.get_workflows'),
-#                          query_string={
-#                              "user": default_user.id_})
-#         assert res.status_code == 404
-
-
-# def test_get_workflows_missing_organization(app, default_user):
-#     """Test listing all workflows with missing organization."""
-#     with app.test_client() as client:
-#         res = client.get(url_for('api.get_workflows'),
-#                          query_string={"user": default_user.id_})
-#         assert res.status_code == 400
-
-
 def test_create_workflow_with_name(app, session, default_user,
                                    tmp_shared_volume_path,
                                    cwl_workflow_with_name):
@@ -124,9 +106,12 @@ def test_create_workflow_with_name(app, session, default_user,
 
         workflow = workflow_by_id
 
-        workflow.specification == cwl_workflow_with_name['specification']
-        workflow.parameters == cwl_workflow_with_name['parameters']
-        workflow.type_ == cwl_workflow_with_name['type']
+        workflow.specification == cwl_workflow_with_name[
+            'reana_yaml']['workflow']['spec']
+        workflow.parameters == cwl_workflow_with_name[
+            'reana_yaml']['parameters']
+        workflow.type_ == cwl_workflow_with_name[
+            'reana_yaml']['workflow']['type']
 
         # Check that workflow workspace exist
         absolute_workflow_workspace = os.path.join(
@@ -139,7 +124,6 @@ def test_create_workflow_without_name(app, session, default_user,
                                       cwl_workflow_without_name):
     """Test create workflow and its workspace without specifying a name."""
     with app.test_client() as client:
-
         res = client.post(url_for('api.create_workflow'),
                           query_string={
                               "user": default_user.id_},
@@ -167,9 +151,12 @@ def test_create_workflow_without_name(app, session, default_user,
 
         workflow = workflow_by_id
 
-        workflow.specification == cwl_workflow_without_name['specification']
-        workflow.parameters == cwl_workflow_without_name['parameters']
-        workflow.type_ == cwl_workflow_without_name['type']
+        workflow.specification == cwl_workflow_without_name[
+            'reana_yaml']['specification']
+        workflow.parameters == cwl_workflow_without_name[
+            'reana_yaml']['parameters']
+        workflow.type_ == cwl_workflow_without_name[
+            'reana_yaml']['type']
 
         # Check that workflow workspace exist
         absolute_workflow_workspace = os.path.join(
@@ -410,9 +397,13 @@ def test_get_workflow_status_with_name(app, session, default_user,
             name=workflow_name,
             status=WorkflowStatus.finished,
             owner_id=default_user.id_,
-            specification=cwl_workflow_with_name['specification'],
-            parameters=cwl_workflow_with_name['parameters'],
-            type_=cwl_workflow_with_name['type'],
+            reana_yaml=cwl_workflow_with_name['reana_yaml'],
+            specification=cwl_workflow_with_name[
+                'reana_yaml']['specification'],
+            parameters=cwl_workflow_with_name[
+                'reana_yaml']['parameters'],
+            type_=cwl_workflow_with_name[
+                'reana_yaml']['type'],
             logs='')
         session.add(workflow)
         session.commit()
@@ -504,19 +495,20 @@ def test_set_workflow_status(app, session, default_user,
         assert json_response.get('status') == status_dict[payload].name
 
 
-def test_start_already_started_workflow(app, session, default_user):
+def test_start_already_started_workflow(app, session, default_user,
+                                        yadage_workflow_with_name):
     """Test start workflow twice."""
     with app.test_client() as client:
         os.environ["TESTS"] = "True"
         # create workflow
-        data = {'parameters': {'input': 'job.json'},
-                'specification': {'first': 'do this',
-                                  'second': 'do that'},
-                'type': 'yadage'}
+        # data = {'parameters': {'input': 'job.json'},
+        #         'specification': {'first': 'do this',
+        #                           'second': 'do that'},
+        #         'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
-                          data=json.dumps(data))
+                          data=json.dumps(yadage_workflow_with_name))
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get('workflow_id')
