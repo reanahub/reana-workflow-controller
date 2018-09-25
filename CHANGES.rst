@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.3.2 (2018-09-25)
+--------------------------
+
+- Modifies job input identification process for caching purposes, adding compatibility
+  with CephFS storage volumes.
+
 Version 0.3.1 (2018-09-07)
 --------------------------
 
