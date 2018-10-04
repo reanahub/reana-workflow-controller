@@ -11,7 +11,7 @@
 import json
 
 import pika
-from reana_commons.consumer import Consumer
+from reana_commons.consumer import BaseConsumer
 from reana_db.database import Session
 from reana_db.models import WorkflowStatus
 
@@ -20,16 +20,21 @@ from .tasks import (_update_job_cache, _update_job_progress,
                     _update_run_progress, _update_workflow_status)
 
 
-class JobStatusConsumer(Consumer):
+class JobStatusConsumer(BaseConsumer):
     """Consumer of jobs-status queue."""
 
     def __init__(self):
         """Constructor."""
-        super(JobStatusConsumer, self).__init__(STATUS_QUEUE)
+        super(JobStatusConsumer, self).__init__()
 
-    def on_message(self, channel, method_frame, header_frame, body):
+    def get_consumers(self, Consumer, channel):
+        """Implement providing kombu.Consumers with queues/callbacks."""
+        return [Consumer(queues=self.queues, callbacks=[self.on_message],
+                         accept=[self.message_default_format])]
+
+    def on_message(self, body, message):
         """On new message event handler."""
-        self._channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+        message.ack()
         body_dict = json.loads(body)
         workflow_uuid = body_dict.get('workflow_uuid')
         if workflow_uuid:
@@ -49,21 +54,3 @@ class JobStatusConsumer(Consumer):
                 if 'caching_info' in msg:
                     _update_job_cache(msg)
                 Session.commit()
-
-    def consume(self):
-        """Start consuming incoming messages."""
-        while True:
-            self.connect()
-            self._channel.basic_consume(self.on_message, STATUS_QUEUE)
-            try:
-                self._channel.start_consuming()
-            except KeyboardInterrupt:
-                self._channel.stop_consuming()
-                self._conn.close()
-            except pika.exceptions.ConnectionClosed:
-                # Uncomment this to make the example not attempt recovery
-                # from server-initiated connection closure, including
-                # when the node is stopped cleanly
-                # except pika.exceptions.ConnectionClosedByBroker:
-                #     pass
-                continue

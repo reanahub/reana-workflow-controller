@@ -21,7 +21,6 @@ COPY . /code
 
 # Debug off by default
 ARG DEBUG=false
-
 RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .; else pip install .; fi;
 
 EXPOSE 5000

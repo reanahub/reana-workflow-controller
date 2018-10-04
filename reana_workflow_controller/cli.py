@@ -23,4 +23,4 @@ def consume_job_queue():
         format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
     )
     consumer = JobStatusConsumer()
-    consumer.consume()
+    consumer.run()

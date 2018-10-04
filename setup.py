@@ -52,7 +52,7 @@ setup_requires = [
 ]
 
 install_requires = [
-    'celery==3.1.17',
+    'celery>=4.1.0,<4.3',
     'Flask-SQLAlchemy>=2.2',
     'Flask>=0.12',
     'fs>=2.0',
