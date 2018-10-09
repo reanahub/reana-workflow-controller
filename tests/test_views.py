@@ -13,6 +13,7 @@ import os
 import uuid
 
 import fs
+import mock
 import pytest
 from flask import url_for
 from pytest_reana.fixtures import (cwl_workflow_with_name,
@@ -469,12 +470,28 @@ def test_set_workflow_status(app, session, default_user,
             Workflow.id_ == workflow_created_uuid).first()
         assert workflow.status == WorkflowStatus.created
         payload = START
-        res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": default_user.id_,
-                                       "status": "start"})
-        json_response = json.loads(res.data.decode())
-        assert json_response.get('status') == status_dict[payload].name
+        # replace celery task with Mock()
+        with mock.patch('reana_workflow_controller.tasks.run_yadage_workflow'
+                        '.apply_async') as celery_mock:
+            # set workflow status to START
+            res = client.put(url_for('api.set_workflow_status',
+                             workflow_id_or_name=workflow_created_uuid),
+                             query_string={"user": default_user.id_,
+                                           "status": "start"})
+            json_response = json.loads(res.data.decode())
+            assert json_response.get('status') == status_dict[payload].name
+            # assert the celery task was called with the following arguments
+            celery_mock.assert_called_with(
+                kwargs={'workflow_uuid': workflow_created_uuid,
+                        'workflow_workspace':
+                        'users/{user_id}/workflows/{workflow_uuid}'.
+                        format(user_id=default_user.id_,
+                               workflow_uuid=workflow_created_uuid),
+                        'workflow_json': yadage_workflow_with_name[
+                            'reana_specification']['workflow'][
+                                'specification'],
+                        'parameters': {}},
+                queue='yadage-default-queue')
 
 
 def test_start_already_started_workflow(app, session, default_user,
@@ -494,21 +511,38 @@ def test_start_already_started_workflow(app, session, default_user,
             Workflow.id_ == workflow_created_uuid).first()
         assert workflow.status == WorkflowStatus.created
         payload = START
-        res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": default_user.id_,
-                                       "status": "start"})
-        json_response = json.loads(res.data.decode())
-        assert json_response.get('status') == status_dict[payload].name
-        res = client.put(url_for('api.set_workflow_status',
-                                 workflow_id_or_name=workflow_created_uuid),
-                         query_string={"user": default_user.id_,
-                                       "status": "start"})
-        json_response = json.loads(res.data.decode())
-        assert res.status_code == 409
-        expected_message = ("Workflow {0} could not be started because it is"
-                            " already running.").format(workflow_created_uuid)
-        assert json_response.get('message') == expected_message
+        # replace celery task with Mock()
+        with mock.patch('reana_workflow_controller.tasks.run_yadage_workflow'
+                        '.apply_async') as celery_mock:
+            # set workflow status to START
+            res = client.put(url_for('api.set_workflow_status',
+                             workflow_id_or_name=workflow_created_uuid),
+                             query_string={"user": default_user.id_,
+                                           "status": "start"})
+            json_response = json.loads(res.data.decode())
+            assert json_response.get('status') == status_dict[payload].name
+            # assert the celery task was called with the following arguments
+            celery_mock.assert_called_with(
+                kwargs={'workflow_uuid': workflow_created_uuid,
+                        'workflow_workspace':
+                        'users/{user_id}/workflows/{workflow_uuid}'.
+                        format(user_id=default_user.id_,
+                               workflow_uuid=workflow_created_uuid),
+                        'workflow_json': yadage_workflow_with_name[
+                            'reana_specification']['workflow'][
+                                'specification'],
+                        'parameters': {}},
+                queue='yadage-default-queue')
+            res = client.put(url_for('api.set_workflow_status',
+                             workflow_id_or_name=workflow_created_uuid),
+                             query_string={"user": default_user.id_,
+                                           "status": "start"})
+            json_response = json.loads(res.data.decode())
+            assert res.status_code == 409
+            expected_message = ("Workflow {0} could not be started because"
+                                " it is already running.").format(
+                                    workflow_created_uuid)
+            assert json_response.get('message') == expected_message
 
 
 def test_set_workflow_status_unauthorized(app, default_user,

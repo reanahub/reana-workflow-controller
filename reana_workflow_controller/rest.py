@@ -1286,11 +1286,10 @@ def run_yadage_workflow_from_spec(workflow):
             "workflow_json": workflow.get_specification(),
             "parameters": workflow.get_parameters()
         }
-        if not os.environ.get("TESTS"):
-            resultobject = run_yadage_workflow.apply_async(
-                kwargs=kwargs,
-                queue=WORKFLOW_QUEUES['yadage']
-            )
+        resultobject = run_yadage_workflow.apply_async(
+            kwargs=kwargs,
+            queue=WORKFLOW_QUEUES['yadage']
+        )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow),
@@ -1315,11 +1314,10 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
             "workflow_json": workflow.get_specification(),
             "parameters": parameters
         }
-        if not os.environ.get("TESTS"):
-            resultobject = run_cwl_workflow.apply_async(
-                kwargs=kwargs,
-                queue=WORKFLOW_QUEUES['cwl']
-            )
+        resultobject = run_cwl_workflow.apply_async(
+            kwargs=kwargs,
+            queue=WORKFLOW_QUEUES['cwl']
+        )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),
@@ -1342,10 +1340,9 @@ def run_serial_workflow_from_spec(workflow, operational_parameters):
             "workflow_parameters": workflow.get_parameters(),
             "operational_parameters": operational_parameters or {},
         }
-        if not os.environ.get("TESTS"):
-            resultobject = run_serial_workflow.apply_async(
-                kwargs=kwargs,
-                queue=WORKFLOW_QUEUES['serial'])
+        resultobject = run_serial_workflow.apply_async(
+            kwargs=kwargs,
+            queue=WORKFLOW_QUEUES['serial'])
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),
