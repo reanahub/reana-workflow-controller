@@ -23,17 +23,6 @@ from reana_workflow_controller.factory import create_app
 
 
 @pytest.fixture(scope='module')
-def tmp_shared_volume_path(tmpdir_factory):
-    """Fixture temporary file system database."""
-    temp_path = str(tmpdir_factory.mktemp('data').join('reana'))
-    shutil.copytree(os.path.join(os.path.dirname(__file__), "data"),
-                    temp_path)
-
-    yield temp_path
-    shutil.rmtree(temp_path)
-
-
-@pytest.fixture(scope='module')
 def base_app(tmp_shared_volume_path):
     """Flask application fixture."""
     config_mapping = {
