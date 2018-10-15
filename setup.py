@@ -27,7 +27,7 @@ tests_require = [
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
-    'pytest>=3.0.0',
+    'pytest>=3.8.0,<4.0.0',
     'swagger_spec_validator>=2.1.0',
 ]
 
@@ -62,6 +62,7 @@ install_requires = [
     'requests==2.11.1',
     'sqlalchemy-utils>=0.31.0',
     'reana-commons>=0.4.0.dev20181016,<0.5.0',
+    'pytest-reana>=0.4.0.dev20181016,<0.5.0',
     'reana-db>=0.3.0,<0.4',
     'uwsgi-tools>=1.1.1',
     'uWSGI>=2.0.17',
