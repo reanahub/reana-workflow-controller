@@ -10,8 +10,6 @@ RUN apt-get update && \
     apt-get install -y vim-tiny && \
     pip install --upgrade pip
 
-RUN pip install -e git://github.com/dinosk/reana-db.git@reana-yaml-in-models#egg=reana-db
-RUN pip install -e git://github.com/dinosk/reana-commons.git@reana-specification-in-models#egg=reana-commons
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_workflow_controller/version.py /code/reana_workflow_controller/
 WORKDIR /code

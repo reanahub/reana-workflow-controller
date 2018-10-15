@@ -1122,9 +1122,9 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           description: Required. New status.
           required: true
           type: string
-        - name: parameters
+        - name: operational_parameters
           in: body
-          description: Optional. Extra parameters for workflow status.
+          description: Optional. Operational parameters for workflow execution.
           required: false
           schema:
             type: object
@@ -1224,11 +1224,11 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
-        parameters = None
+        operational_parameters = {}
         if request.json:
-            parameters = request.json.get('parameters')
+            operational_parameters = request.json.get('operational_parameters')
         if status == START:
-            return start_workflow(workflow, parameters)
+            return start_workflow(workflow, operational_parameters)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1248,7 +1248,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def start_workflow(workflow, parameters):
+def start_workflow(workflow, operational_parameters):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         workflow.run_started_at = datetime.now()
@@ -1261,7 +1261,7 @@ def start_workflow(workflow, parameters):
         elif workflow.type_ == 'cwl':
             return run_cwl_workflow_from_spec_endpoint(workflow)
         elif workflow.type_ == 'serial':
-            return run_serial_workflow_from_spec(workflow, parameters)
+            return run_serial_workflow_from_spec(workflow, operational_parameters)
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))
@@ -1280,8 +1280,8 @@ def run_yadage_workflow_from_spec(workflow):
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
-            "workflow_json": workflow.specification,
-            "parameters": workflow.parameters
+            "workflow_json": workflow.get_specification(),
+            "parameters": workflow.get_parameters()
         }
         if not os.environ.get("TESTS"):
             resultobject = run_yadage_workflow.apply_async(
@@ -1303,13 +1303,13 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
     """Run a CWL workflow."""
     try:
         parameters = None
-        if workflow.parameters:
-            if 'input' in workflow.parameters:
-                parameters = workflow.parameters['input']
+        if workflow.get_parameters():
+            if 'input' in workflow.get_parameters():
+                parameters = workflow.get_parameters()['input']
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
-            "workflow_json": workflow.specification,
+            "workflow_json": workflow.get_specification(),
             "parameters": parameters
         }
         if not os.environ.get("TESTS"):
@@ -1329,15 +1329,15 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         abort(400)
 
 
-def run_serial_workflow_from_spec(workflow, engine_parameters):
+def run_serial_workflow_from_spec(workflow, operational_parameters):
     """Run a serial workflow."""
     try:
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
-            "workflow_json": workflow.specification,
-            "workflow_parameters": workflow.parameters,
-            "engine_parameters": engine_parameters,
+            "workflow_json": workflow.get_specification(),
+            "workflow_parameters": workflow.get_parameters(),
+            "operational_parameters": operational_parameters or {},
         }
         if not os.environ.get("TESTS"):
             resultobject = run_serial_workflow.apply_async(

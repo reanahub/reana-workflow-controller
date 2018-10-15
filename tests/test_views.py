@@ -36,13 +36,9 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
             name=workflow_name,
             status=WorkflowStatus.finished,
             owner_id=default_user.id_,
-            reana_yaml=cwl_workflow_with_name['reana_yaml'],
-            specification=cwl_workflow_with_name[
-                'reana_yaml']['specification'],
-            parameters=cwl_workflow_with_name[
-                'reana_yaml']['parameters'],
+            reana_specification=cwl_workflow_with_name['reana_specification'],
             type_=cwl_workflow_with_name[
-                'reana_yaml']['type'],
+                'reana_specification']['type'],
             logs='')
         session.add(workflow)
         session.commit()
@@ -106,13 +102,6 @@ def test_create_workflow_with_name(app, session, default_user,
 
         workflow = workflow_by_id
 
-        workflow.specification == cwl_workflow_with_name[
-            'reana_yaml']['workflow']['spec']
-        workflow.parameters == cwl_workflow_with_name[
-            'reana_yaml']['parameters']
-        workflow.type_ == cwl_workflow_with_name[
-            'reana_yaml']['workflow']['type']
-
         # Check that workflow workspace exist
         absolute_workflow_workspace = os.path.join(
             tmp_shared_volume_path, workflow.get_workspace())
@@ -150,13 +139,6 @@ def test_create_workflow_without_name(app, session, default_user,
         assert workflow_by_name
 
         workflow = workflow_by_id
-
-        workflow.specification == cwl_workflow_without_name[
-            'reana_yaml']['specification']
-        workflow.parameters == cwl_workflow_without_name[
-            'reana_yaml']['parameters']
-        workflow.type_ == cwl_workflow_without_name[
-            'reana_yaml']['type']
 
         # Check that workflow workspace exist
         absolute_workflow_workspace = os.path.join(
@@ -397,13 +379,9 @@ def test_get_workflow_status_with_name(app, session, default_user,
             name=workflow_name,
             status=WorkflowStatus.finished,
             owner_id=default_user.id_,
-            reana_yaml=cwl_workflow_with_name['reana_yaml'],
-            specification=cwl_workflow_with_name[
-                'reana_yaml']['specification'],
-            parameters=cwl_workflow_with_name[
-                'reana_yaml']['parameters'],
+            reana_specification=cwl_workflow_with_name['reana_specification'],
             type_=cwl_workflow_with_name[
-                'reana_yaml']['type'],
+                'reana_specification']['type'],
             logs='')
         session.add(workflow)
         session.commit()
@@ -501,10 +479,6 @@ def test_start_already_started_workflow(app, session, default_user,
     with app.test_client() as client:
         os.environ["TESTS"] = "True"
         # create workflow
-        # data = {'parameters': {'input': 'job.json'},
-        #         'specification': {'first': 'do this',
-        #                           'second': 'do that'},
-        #         'type': 'yadage'}
         res = client.post(url_for('api.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',

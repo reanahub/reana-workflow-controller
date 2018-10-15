@@ -100,7 +100,7 @@ def default_user(app, session):
 @pytest.fixture()
 def cwl_workflow_with_name():
     return {
-        "reana_yaml": {
+        "reana_specification": {
             "parameters": {"min_year": "1991", "max_year": "2001"},
             "workflow": {
                 "spec": {
@@ -119,7 +119,7 @@ def cwl_workflow_with_name():
 @pytest.fixture()
 def yadage_workflow_with_name():
     return {
-        "reana_yaml": {
+        "reana_specification": {
             "workflow": {
                 "spec": {
                     "first": "do this",
@@ -138,7 +138,7 @@ def yadage_workflow_with_name():
 @pytest.fixture()
 def cwl_workflow_without_name():
     return {
-        "reana_yaml": {
+        "reana_specification": {
             "parameters": {"min_year": "1991", "max_year": "2001"},
             "workflow": {
                 "spec": {
@@ -157,7 +157,7 @@ def cwl_workflow_without_name():
 @pytest.fixture()
 def yadage_workflow_without_name():
     return {
-        "reana_yaml": {
+        "reana_specification": {
             "workflow": {
                 "spec": {
                     "first": "do this",
