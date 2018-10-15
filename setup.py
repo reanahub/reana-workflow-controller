@@ -61,7 +61,7 @@ install_requires = [
     'pika>=0.11.2',
     'requests==2.11.1',
     'sqlalchemy-utils>=0.31.0',
-    'reana-commons>=0.3.1,<0.4',
+    'reana-commons>=0.4.0.dev20181016,<0.5.0',
     'reana-db>=0.3.0,<0.4',
     'uwsgi-tools>=1.1.1',
     'uWSGI>=2.0.17',
