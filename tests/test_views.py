@@ -15,6 +15,10 @@ import uuid
 import fs
 import pytest
 from flask import url_for
+from pytest_reana.fixtures import (cwl_workflow_with_name,
+                                   cwl_workflow_without_name, default_user,
+                                   session, tmp_shared_volume_path,
+                                   yadage_workflow_with_name)
 from reana_db.models import Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 

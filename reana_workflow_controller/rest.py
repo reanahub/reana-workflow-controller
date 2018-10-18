@@ -202,7 +202,9 @@ def create_workflow():  # noqa
               workflow_name:
                 type: string
                 description: Workflow name. If empty name will be generated.
-            required: [reana_specification, workflow_name, operational_parameters]
+            required: [reana_specification,
+                       workflow_name,
+                       operational_parameters]
       responses:
         201:
           description: >-
@@ -1261,7 +1263,8 @@ def start_workflow(workflow, operational_parameters):
         elif workflow.type_ == 'cwl':
             return run_cwl_workflow_from_spec_endpoint(workflow)
         elif workflow.type_ == 'serial':
-            return run_serial_workflow_from_spec(workflow, operational_parameters)
+            return run_serial_workflow_from_spec(workflow,
+                                                 operational_parameters)
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))

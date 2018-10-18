@@ -457,9 +457,9 @@
             "type": "string"
           },
           {
-            "description": "Optional. Extra parameters for workflow status.",
+            "description": "Optional. Operational parameters for workflow execution.",
             "in": "body",
-            "name": "parameters",
+            "name": "operational_parameters",
             "required": false,
             "schema": {
               "type": "object"
