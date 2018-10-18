@@ -4,6 +4,7 @@ REST API
 ========
 
 The REANA-Workflow-Controller component offers a REST API for managing
-workflows.
+workflows. Detailed REST API documentation can be found `here <_static/api.html>`_.
 
-.. openapi:: openapi.json
+.. automodule:: reana_workflow_controller.rest
+   :members:

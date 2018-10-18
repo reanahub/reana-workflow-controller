@@ -48,6 +48,18 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinxcontrib.httpdomain',
     'sphinxcontrib.openapi',
+    'sphinxcontrib.redoc',
+]
+
+redoc = [
+    {
+        'page': '_static/api',
+        'spec': 'openapi.json',
+        'embed': True,
+        'opts': {
+            'hide-loading': True,
+        }
+    }
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -204,3 +216,29 @@ texinfo_documents = [
      author, 'reana', 'One line description of project.',
      'Miscellaneous'),
 ]
+
+
+def get_class_name(full_module_name):
+    """
+    Pull out the class/function name from the full_module_name
+    """
+    #split the full_module_name by "."'s
+    return full_module_name.split('.')[-1]
+
+
+def process_docstring(app, what, name, obj, options, lines):
+    """
+    Deletes unnecessary docstring, saves summary and formats a hyperlink
+    to redocs.
+    """
+    description = lines[0]
+    name = get_class_name(name)
+    url = "`%s <_static/api.html#operation/%s>`_ "%(description,name)
+    #clearing the list of docstrings
+    del lines[:]
+    #adding back description
+    lines.append(url)
+
+
+def setup(app):
+    app.connect('autodoc-process-docstring', process_docstring)
