@@ -13,5 +13,4 @@ diff -q -w temp_openapi.json docs/openapi.json && \
 check-manifest --ignore ".travis-*" && \
 sphinx-build -qnN docs docs/_build/html && \
 python setup.py test && \
-sphinx-build -qnNW -b doctest docs docs/_build/doctest && \
 docker build -t reanahub/reana-workflow-controller .

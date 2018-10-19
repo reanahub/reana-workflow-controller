@@ -29,6 +29,7 @@ tests_require = [
     'pytest-pep8>=1.0.6',
     'pytest>=3.8.0,<4.0.0',
     'swagger_spec_validator>=2.1.0',
+    'pytest-reana>=0.4.0.dev201810181,<0.5.0',
 ]
 
 extras_require = {
@@ -37,6 +38,7 @@ extras_require = {
         'sphinx-rtd-theme>=0.1.9',
         'sphinxcontrib-httpdomain>=1.5.0',
         'sphinxcontrib-openapi>=0.3.0',
+        'sphinxcontrib-redoc>=1.5.1',
     ],
     'tests': tests_require,
 }
@@ -61,8 +63,7 @@ install_requires = [
     'pika>=0.11.2',
     'requests==2.11.1',
     'sqlalchemy-utils>=0.31.0',
-    'reana-commons>=0.4.0.dev20181016,<0.5.0',
-    'pytest-reana>=0.4.0.dev201810181,<0.5.0',
+    'reana-commons>=0.4.0.dev20181017,<0.5.0',
     'reana-db>=0.4.0.dev201810181,<0.5.0',
     'uwsgi-tools>=1.1.1',
     'uWSGI>=2.0.17',
