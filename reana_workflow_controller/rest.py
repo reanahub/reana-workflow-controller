@@ -1230,7 +1230,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         if request.json:
             operational_parameters = request.json.get('operational_parameters')
         if status == START:
-            return start_workflow(workflow, operational_parameters)
+            return _start_workflow(workflow, operational_parameters)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1250,7 +1250,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def start_workflow(workflow, operational_parameters):
+def _start_workflow(workflow, operational_parameters):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         workflow.run_started_at = datetime.now()
@@ -1259,12 +1259,12 @@ def start_workflow(workflow, operational_parameters):
         current_db_sessions.add(workflow)
         current_db_sessions.commit()
         if workflow.type_ == 'yadage':
-            return run_yadage_workflow_from_spec(workflow)
+            return _run_yadage_workflow_from_spec(workflow)
         elif workflow.type_ == 'cwl':
-            return run_cwl_workflow_from_spec_endpoint(workflow)
+            return _run_cwl_workflow_from_spec_endpoint(workflow)
         elif workflow.type_ == 'serial':
-            return run_serial_workflow_from_spec(workflow,
-                                                 operational_parameters)
+            return _run_serial_workflow_from_spec(workflow,
+                                                  operational_parameters)
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))
@@ -1277,7 +1277,7 @@ def start_workflow(workflow, operational_parameters):
         raise REANAWorkflowControllerError(message)
 
 
-def run_yadage_workflow_from_spec(workflow):
+def _run_yadage_workflow_from_spec(workflow):
     """Run a yadage workflow."""
     try:
         kwargs = {
@@ -1301,7 +1301,7 @@ def run_yadage_workflow_from_spec(workflow):
         abort(400)
 
 
-def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
+def _run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
     """Run a CWL workflow."""
     try:
         parameters = None
@@ -1330,7 +1330,7 @@ def run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         abort(400)
 
 
-def run_serial_workflow_from_spec(workflow, operational_parameters):
+def _run_serial_workflow_from_spec(workflow, operational_parameters):
     """Run a serial workflow."""
     try:
         kwargs = {

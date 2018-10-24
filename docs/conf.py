@@ -58,7 +58,8 @@ redoc = [
         'embed': True,
         'opts': {
             'hide-loading': True,
-         }
+            'hide-hostname': True,
+            }
     }
 ]
 
@@ -235,13 +236,20 @@ def process_docstring(app, what, name, obj, options, lines):
     Deletes unnecessary docstring, saves summary and formats a hyperlink
     to redocs.
     """
-    module_name,function_name = get_name(name)
+    module_name, function_name = get_name(name)
+    description = ''
+    operation_id = ''
     if what != "module" and module_name in rest_api_modules:
-        description = lines[0]
-        url = "`%s <_static/api.html#operation/%s>`_ "%(description,function_name)
-        #clearing the list of docstrings
+        for line in lines:
+            if "summary:" in line:
+                description = line.split("summary: ", 1)[1]
+            if "operationId:" in line:
+                operation_id = line.split('operationId: ', 1)[1]
+        url = "`%s <_static/api.html#operation/%s>`_" % (description,
+                                                         operation_id)
+        # clearing the list of docstrings
         del lines[:]
-        #adding back description
+        # adding back description
         lines.append(url)
 
 
