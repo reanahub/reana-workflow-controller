@@ -25,7 +25,8 @@ from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
                                               WorkflowInexistentError,
-                                              WorkflowNameError)
+                                              WorkflowNameError,
+                                              WorkflowDeletionError)
 from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
                                              run_yadage_workflow)
@@ -35,12 +36,8 @@ from reana_workflow_controller.utils import (create_workflow_workspace,
 START = 'start'
 STOP = 'stop'
 PAUSE = 'pause'
-STATUSES = {START, STOP, PAUSE}
-
-workflow_spec_to_task = {
-    "yadage": run_yadage_workflow,
-    "cwl": run_cwl_workflow
-}
+DELETED = 'deleted'
+STATUSES = {START, STOP, PAUSE, DELETED}
 
 restapi_blueprint = Blueprint('api', __name__)
 
@@ -1234,6 +1231,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         if status == START:
             return _start_workflow(workflow,
                                    parameters)
+        elif status == DELETED:
+            return _delete_workflow(workflow, request.json or {})
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1611,7 +1610,7 @@ def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
             Workflow.run_number == run_number,
             Workflow.owner_id == user_uuid).\
             one_or_none()
-        if not workflow:
+        if not workflow or workflow.status == WorkflowStatus.deleted:
             raise WorkflowInexistentError(
                 'REANA_WORKON is set to {0}, but '
                 'that workflow does not exist. '
@@ -1653,3 +1652,39 @@ def _get_workflow_input_parameters(workflow):
                     **workflow.input_parameters)
     else:
         return workflow.get_input_parameters()
+
+
+def _delete_workflow(workflow, parameters):
+    """Delete workflow."""
+    if workflow.status in [WorkflowStatus.created,
+                           WorkflowStatus.finished,
+                           # WorkflowStatus.stopped
+                           WorkflowStatus.failed]:
+        to_be_deleted = [workflow]
+        if parameters.get('all_runs') == 1:
+            to_be_deleted += Session.query(Workflow).\
+                filter_by(name=workflow.name).all()
+        for workflow in to_be_deleted:
+            if parameters.get('hard_delete') == 1:
+                # hard delete
+                Session.query(Workflow).filter_by(id_=workflow.id_).delete()
+                Session.commit()
+            else:
+                # soft delete
+                workflow.status = WorkflowStatus.deleted
+                current_db_sessions = Session.object_session(workflow)
+                current_db_sessions.add(workflow)
+                current_db_sessions.commit()
+
+        return jsonify({'message': 'Workflow successfully deleted',
+                        'workflow_id': workflow.id_,
+                        'workflow_name': _get_workflow_name(workflow),
+                        'status': workflow.status.name,
+                        'user': str(workflow.owner_id)}), 200
+    else:
+        raise WorkflowDeletionError('Workflow {0}.{1} cannot be deleted as it'
+                                    ' is currently running. If you are sure '
+                                    'you want to delete it provide the '
+                                    '--force flag.'.format(
+                                        workflow.name,
+                                        workflow.run_number))

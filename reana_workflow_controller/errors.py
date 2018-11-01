@@ -23,3 +23,7 @@ class REANAWorkflowControllerError(Exception):
 
 class UploadPathError(Exception):
     """Provided paths contain '../'."""
+
+
+class WorkflowDeletionError(Exception):
+    """Error when trying to delete a workflow."""
