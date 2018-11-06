@@ -29,7 +29,7 @@ tests_require = [
     'pytest-pep8>=1.0.6',
     'pytest>=3.8.0,<4.0.0',
     'swagger_spec_validator>=2.1.0',
-    'pytest-reana>=0.4.0.dev201810181,<0.5.0',
+    'pytest-reana>=0.4.0,<0.5.0',
 ]
 
 extras_require = {
@@ -60,11 +60,10 @@ install_requires = [
     'fs>=2.0',
     'jsonpickle>=0.9.6',
     'marshmallow>=2.13',
-    'pika>=0.11.2',
-    'requests==2.11.1',
+    'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',
-    'reana-commons>=0.4.0.dev20181017,<0.5.0',
-    'reana-db>=0.4.0.dev201810181,<0.5.0',
+    'reana-commons>=0.4.0,<0.5.0',
+    'reana-db>=0.4.0,<0.5.0',
     'uwsgi-tools>=1.1.1',
     'uWSGI>=2.0.17',
     'uwsgitop>=0.10',

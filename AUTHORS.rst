@@ -8,4 +8,6 @@ The list of contributors in alphabetical order:
 - `Dinos Kousidis <https://orcid.org/0000-0002-4914-4289>`_
 - `Harri Hirvonsalo <https://orcid.org/0000-0002-5503-510X>`_
 - `Lukas Heinrich <https://orcid.org/0000-0002-4048-7584>`_
+- `Rokas Maciulaitis <https://orcid.org/0000-0003-1064-6967>`_
+- `Sinclert Perez <https://www.linkedin.com/in/sinclert>`_
 - `Tibor Simko <https://orcid.org/0000-0001-7202-5803>`_

@@ -10,7 +10,6 @@
 
 import json
 
-import pika
 from reana_commons.consumer import BaseConsumer
 from reana_db.database import Session
 from reana_db.models import WorkflowStatus

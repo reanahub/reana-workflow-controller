@@ -1,6 +1,13 @@
 Changes
 =======
 
+Version 0.4.0 (2018-11-06)
+--------------------------
+
+- Improves AMQP re-connection handling. Switches from ``pika`` to ``kombu``.
+- Improves REST API documentation rendering.
+- Changes license to MIT.
+
 Version 0.3.2 (2018-09-25)
 --------------------------
 
