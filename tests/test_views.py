@@ -18,12 +18,15 @@ import pytest
 from flask import url_for
 from pytest_reana.fixtures import (cwl_workflow_with_name,
                                    cwl_workflow_without_name, default_user,
-                                   session, tmp_shared_volume_path,
+                                   sample_yadage_workflow_in_db, session,
+                                   tmp_shared_volume_path,
                                    yadage_workflow_with_name)
 from reana_db.models import Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
-from reana_workflow_controller.rest import START, STOP
+from reana_workflow_controller.errors import WorkflowDeletionError
+from reana_workflow_controller.rest import START, STOP, _delete_workflow
+from reana_workflow_controller.utils import create_workflow_workspace
 
 status_dict = {
     START: WorkflowStatus.running,
@@ -107,7 +110,7 @@ def test_create_workflow_with_name(app, session, default_user,
 
         workflow = workflow_by_id
 
-        # Check that workflow workspace exist
+        # Check that the workflow workspace exists
         absolute_workflow_workspace = os.path.join(
             tmp_shared_volume_path, workflow.get_workspace())
         assert os.path.exists(absolute_workflow_workspace)
@@ -145,7 +148,7 @@ def test_create_workflow_without_name(app, session, default_user,
 
         workflow = workflow_by_id
 
-        # Check that workflow workspace exist
+        # Check that the workflow workspace exists
         absolute_workflow_workspace = os.path.join(
             tmp_shared_volume_path, workflow.get_workspace())
         assert os.path.exists(absolute_workflow_workspace)
@@ -165,7 +168,7 @@ def test_create_workflow_wrong_user(app, session, tmp_shared_volume_path,
         response_data = json.loads(res.get_data(as_text=True))
         workflow = Workflow.query.filter(
             Workflow.id_ == response_data.get('workflow_id')).first()
-        # workflow exist in DB
+        # workflow exists in DB
         assert not workflow
 
 
@@ -740,3 +743,95 @@ def test_start_input_parameters(app, session, default_user,
             workflow = Workflow.query.filter(
                 Workflow.id_ == workflow_created_uuid).first()
             assert workflow.input_parameters == parameters['input_parameters']
+
+
+@pytest.mark.parametrize("state", [WorkflowStatus.created,
+                                   WorkflowStatus.failed,
+                                   WorkflowStatus.finished,
+                                   pytest.param(WorkflowStatus.deleted,
+                                                marks=pytest.mark.xfail),
+                                   pytest.param(WorkflowStatus.running,
+                                                marks=pytest.mark.xfail)])
+@pytest.mark.parametrize("hard_delete", [True, False])
+def test_delete_workflow(app,
+                         session,
+                         default_user,
+                         sample_yadage_workflow_in_db,
+                         state,
+                         hard_delete):
+    """Test deletion of a workflow in all possible states."""
+    sample_yadage_workflow_in_db.status = state
+    session.add(sample_yadage_workflow_in_db)
+    session.commit()
+
+    _delete_workflow(sample_yadage_workflow_in_db, hard_delete=hard_delete)
+    if not hard_delete:
+        assert sample_yadage_workflow_in_db.status == WorkflowStatus.deleted
+    else:
+        assert session.query(Workflow).filter_by(
+            id_=sample_yadage_workflow_in_db.id_).all() == []
+
+
+@pytest.mark.parametrize("hard_delete", [True, False])
+def test_delete_all_workflow_runs(app,
+                                  session,
+                                  default_user,
+                                  yadage_workflow_with_name,
+                                  hard_delete):
+    """Test deletion of all runs of a given workflow."""
+    # add 5 workflows in the database with the same name
+    for i in range(5):
+        workflow = Workflow(id_=uuid.uuid4(),
+                            name=yadage_workflow_with_name['name'],
+                            owner_id=default_user.id_,
+                            reana_specification=yadage_workflow_with_name[
+                                'reana_specification'],
+                            operational_parameters={},
+                            type_=yadage_workflow_with_name[
+                                'reana_specification']['workflow']['type'],
+                            logs='')
+        session.add(workflow)
+        session.commit()
+
+    first_workflow = session.query(Workflow).\
+        filter_by(name=yadage_workflow_with_name['name']).first()
+    _delete_workflow(first_workflow,
+                     all_runs=True,
+                     hard_delete=hard_delete)
+    if not hard_delete:
+        for workflow in session.query(Workflow).\
+                filter_by(name=first_workflow.name).all():
+            assert workflow.status == WorkflowStatus.deleted
+    else:
+        assert session.query(Workflow).\
+            filter_by(name=first_workflow.name).all() == []
+
+
+@pytest.mark.parametrize("hard_delete", [True, False])
+def test_workspace_deletion(app,
+                            session,
+                            default_user,
+                            yadage_workflow_with_name,
+                            tmp_shared_volume_path,
+                            hard_delete):
+    """Test workspace deletion."""
+    with app.test_client() as client:
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_},
+                          content_type='application/json',
+                          data=json.dumps(yadage_workflow_with_name))
+        assert res.status_code == 201
+        response_data = json.loads(res.get_data(as_text=True))
+
+        workflow = Workflow.query.filter(
+            Workflow.id_ == response_data.get('workflow_id')).first()
+        assert workflow
+
+        # Check that the workflow workspace exists
+        absolute_workflow_workspace = os.path.join(
+            tmp_shared_volume_path, workflow.get_workspace())
+        assert os.path.exists(absolute_workflow_workspace)
+
+        _delete_workflow(workflow, hard_delete=hard_delete)
+        assert not os.path.exists(absolute_workflow_workspace)
