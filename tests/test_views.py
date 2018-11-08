@@ -708,3 +708,35 @@ def test_get_workflow_logs_unauthorized(app, default_user,
                          query_string={"user": random_user_uuid},
                          content_type='application/json')
         assert res.status_code == 403
+
+
+def test_start_input_parameters(app, session, default_user,
+                                sample_yadage_workflow_in_db):
+    """Test start workflow with inupt parameters."""
+    with app.test_client() as client:
+        # create workflow
+        sample_yadage_workflow_in_db.status = WorkflowStatus.created
+        workflow_created_uuid = sample_yadage_workflow_in_db.id_
+        session.add(sample_yadage_workflow_in_db)
+        session.commit()
+        workflow = Workflow.query.filter(
+            Workflow.id_ == workflow_created_uuid).first()
+        assert workflow.status == WorkflowStatus.created
+        payload = START
+        parameters = {'input_parameters': {'first': 'test'},
+                      'operational_options': {}}
+        # replace celery task with Mock()
+        with mock.patch('reana_workflow_controller.tasks.run_yadage_workflow'
+                        '.apply_async'):
+            # set workflow status to START and pass parameters
+            res = client.put(url_for('api.set_workflow_status',
+                             workflow_id_or_name=workflow_created_uuid),
+                             query_string={"user": default_user.id_,
+                                           "status": "start"},
+                             content_type='application/json',
+                             data=json.dumps(parameters))
+            json_response = json.loads(res.data.decode())
+            assert json_response.get('status') == status_dict[payload].name
+            workflow = Workflow.query.filter(
+                Workflow.id_ == workflow_created_uuid).first()
+            assert workflow.input_parameters == parameters['input_parameters']

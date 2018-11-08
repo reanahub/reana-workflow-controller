@@ -192,9 +192,9 @@ def create_workflow():  # noqa
           schema:
             type: object
             properties:
-              operational_parameters:
+              operational_options:
                 type: object
-                description: Operational parameters.
+                description: Operational options.
               reana_specification:
                 type: object
                 description: >-
@@ -204,7 +204,7 @@ def create_workflow():  # noqa
                 description: Workflow name. If empty name will be generated.
             required: [reana_specification,
                        workflow_name,
-                       operational_parameters]
+                       operational_options]
       responses:
         201:
           description: >-
@@ -265,8 +265,8 @@ def create_workflow():  # noqa
                             owner_id=request.args['user'],
                             reana_specification=request.json[
                                 'reana_specification'],
-                            operational_parameters=request.json.get(
-                                'operational_parameters'),
+                            operational_options=request.json.get(
+                                'operational_options'),
                             type_=request.json[
                                 'reana_specification']['workflow']['type'],
                             logs='')
@@ -1124,9 +1124,11 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           description: Required. New status.
           required: true
           type: string
-        - name: operational_parameters
+        - name: parameters
           in: body
-          description: Optional. Operational parameters for workflow execution.
+          description: >-
+            Optional. Additional input parameters and operational options for
+            workflow execution.
           required: false
           schema:
             type: object
@@ -1226,11 +1228,12 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
-        operational_parameters = {}
+        parameters = {}
         if request.json:
-            operational_parameters = request.json.get('operational_parameters')
+            parameters = request.json
         if status == START:
-            return _start_workflow(workflow, operational_parameters)
+            return _start_workflow(workflow,
+                                   parameters)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1250,11 +1253,125 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-def _start_workflow(workflow, operational_parameters):
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/parameters',
+                         methods=['GET'])
+def get_workflow_parameters(workflow_id_or_name):  # noqa
+    r"""Get workflow input parameters.
+
+    ---
+    get:
+      summary: Get workflow parameters.
+      description: >-
+        This resource reports the input parameters of workflow.
+      operationId: get_workflow_parameters
+      produces:
+        - application/json
+      parameters:
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Workflow input parameters, including the status
+            are returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              parameters:
+                type: object
+          examples:
+            application/json:
+              {
+                'id': 'dd4e93cf-e6d0-4714-a601-301ed97eec60',
+                'name': 'workflow.24',
+                'parameters': {'helloworld': 'code/helloworld.py',
+                               'inputfile': 'data/names.txt',
+                               'outputfile': 'results/greetings.txt',
+                               'sleeptime': 2}
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
+                            exist"
+              }
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+
+    try:
+        user_uuid = request.args['user']
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
+        if not str(workflow.owner_id) == user_uuid:
+            return jsonify(
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id_or_name)}), 403
+
+        workflow_parameters = workflow.get_input_parameters()
+        return jsonify({'id': workflow.id_,
+                        'name': _get_workflow_name(workflow),
+                        'parameters': workflow_parameters}), 200
+    except WorkflowInexistentError:
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+def _start_workflow(workflow, parameters):
     """Start a workflow."""
     if workflow.status == WorkflowStatus.created:
         workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
+        if parameters:
+            workflow.input_parameters = parameters['input_parameters']
+            workflow.operational_options = \
+                parameters['operational_options']
         current_db_sessions = Session.object_session(workflow)
         current_db_sessions.add(workflow)
         current_db_sessions.commit()
@@ -1263,8 +1380,9 @@ def _start_workflow(workflow, operational_parameters):
         elif workflow.type_ == 'cwl':
             return _run_cwl_workflow_from_spec_endpoint(workflow)
         elif workflow.type_ == 'serial':
-            return _run_serial_workflow_from_spec(workflow,
-                                                  operational_parameters)
+            return _run_serial_workflow_from_spec(
+                workflow,
+                parameters['operational_options'])
         else:
             raise NotImplementedError(
                 'Workflow type {} is not supported.'.format(workflow.type_))
@@ -1284,7 +1402,7 @@ def _run_yadage_workflow_from_spec(workflow):
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.get_specification(),
-            "parameters": workflow.get_parameters()
+            "parameters": workflow.get_input_parameters()
         }
         resultobject = run_yadage_workflow.apply_async(
             kwargs=kwargs,
@@ -1305,9 +1423,9 @@ def _run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
     """Run a CWL workflow."""
     try:
         parameters = None
-        if workflow.get_parameters():
-            if 'input' in workflow.get_parameters():
-                parameters = workflow.get_parameters()['input']
+        if workflow.get_input_parameters():
+            if 'input' in workflow.get_input_parameters():
+                parameters = workflow.get_input_parameters()['input']
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
@@ -1330,15 +1448,15 @@ def _run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         abort(400)
 
 
-def _run_serial_workflow_from_spec(workflow, operational_parameters):
+def _run_serial_workflow_from_spec(workflow, operational_options):
     """Run a serial workflow."""
     try:
         kwargs = {
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.get_specification(),
-            "workflow_parameters": workflow.get_parameters(),
-            "operational_parameters": operational_parameters or {},
+            "workflow_parameters": _get_workflow_input_parameters(workflow),
+            "operational_options": operational_options or {},
         }
         resultobject = run_serial_workflow.apply_async(
             kwargs=kwargs,
@@ -1526,3 +1644,12 @@ def _get_current_job_progress(workflow_id):
                 'prettified_cmd': job.prettified_cmd,
                 'current_job_name': job.name}
     return current_job_commands
+
+
+def _get_workflow_input_parameters(workflow):
+    """Return workflow input parameters merged with live ones, if given."""
+    if workflow.input_parameters:
+        return dict(workflow.get_input_parameters(),
+                    **workflow.input_parameters)
+    else:
+        return workflow.get_input_parameters()

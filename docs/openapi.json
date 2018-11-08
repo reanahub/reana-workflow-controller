@@ -199,8 +199,8 @@
             "required": true,
             "schema": {
               "properties": {
-                "operational_parameters": {
-                  "description": "Operational parameters.",
+                "operational_options": {
+                  "description": "Operational options.",
                   "type": "object"
                 },
                 "reana_specification": {
@@ -215,7 +215,7 @@
               "required": [
                 "reana_specification",
                 "workflow_name",
-                "operational_parameters"
+                "operational_options"
               ],
               "type": "object"
             }
@@ -339,6 +339,90 @@
         "summary": "Returns logs of a specific workflow from a workflow engine."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/parameters": {
+      "get": {
+        "description": "This resource reports the input parameters of workflow.",
+        "operationId": "get_workflow_parameters",
+        "parameters": [
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Workflow input parameters, including the status are returned.",
+            "examples": {
+              "application/json": {
+                "id": "dd4e93cf-e6d0-4714-a601-301ed97eec60",
+                "name": "workflow.24",
+                "parameters": {
+                  "helloworld": "code/helloworld.py",
+                  "inputfile": "data/names.txt",
+                  "outputfile": "results/greetings.txt",
+                  "sleeptime": 2
+                }
+              }
+            },
+            "schema": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either User or Workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get workflow parameters."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/status": {
       "get": {
         "description": "This resource reports the status of workflow.",
@@ -457,9 +541,9 @@
             "type": "string"
           },
           {
-            "description": "Optional. Operational parameters for workflow execution.",
+            "description": "Optional. Additional input parameters and operational options for workflow execution.",
             "in": "body",
-            "name": "operational_parameters",
+            "name": "parameters",
             "required": false,
             "schema": {
               "type": "object"
