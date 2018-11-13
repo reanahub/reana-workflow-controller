@@ -32,8 +32,8 @@ from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_yadage_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
                                              list_directory_files,
-                                             remove_workflow_workspace,
-                                             remove_workflow_jobs_from_cache)
+                                             remove_workflow_jobs_from_cache,
+                                             remove_workflow_workspace)
 
 START = 'start'
 STOP = 'stop'
@@ -1236,7 +1236,9 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         elif status == DELETED:
             all_runs = True if request.json.get('all_runs') else False
             hard_delete = True if request.json.get('hard_delete') else False
-            return _delete_workflow(workflow, all_runs, hard_delete)
+            workspace = True if hard_delete or request.json.get('workspace') \
+                else False
+            return _delete_workflow(workflow, all_runs, hard_delete, workspace)
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1614,7 +1616,7 @@ def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
             Workflow.run_number == run_number,
             Workflow.owner_id == user_uuid).\
             one_or_none()
-        if not workflow or workflow.status == WorkflowStatus.deleted:
+        if not workflow:
             raise WorkflowInexistentError(
                 'REANA_WORKON is set to {0}, but '
                 'that workflow does not exist. '
@@ -1658,7 +1660,10 @@ def _get_workflow_input_parameters(workflow):
         return workflow.get_input_parameters()
 
 
-def _delete_workflow(workflow, all_runs=False, hard_delete=False):
+def _delete_workflow(workflow,
+                     all_runs=False,
+                     hard_delete=False,
+                     workspace=False):
     """Delete workflow."""
     if workflow.status in [WorkflowStatus.created,
                            WorkflowStatus.finished,
@@ -1673,6 +1678,8 @@ def _delete_workflow(workflow, all_runs=False, hard_delete=False):
                 remove_workflow_workspace(workflow.get_workspace())
                 _delete_workflow_row_from_db(workflow)
             else:
+                if workspace:
+                    remove_workflow_workspace(workflow.get_workspace())
                 _mark_workflow_as_deleted_in_db(workflow)
             remove_workflow_jobs_from_cache(workflow)
 

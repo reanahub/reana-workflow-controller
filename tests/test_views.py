@@ -21,7 +21,7 @@ from pytest_reana.fixtures import (cwl_workflow_with_name,
                                    sample_yadage_workflow_in_db, session,
                                    tmp_shared_volume_path,
                                    yadage_workflow_with_name)
-from reana_db.models import Workflow, WorkflowStatus
+from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.errors import WorkflowDeletionError
@@ -808,11 +808,13 @@ def test_delete_all_workflow_runs(app,
 
 
 @pytest.mark.parametrize("hard_delete", [True, False])
+@pytest.mark.parametrize("workspace", [True, False])
 def test_workspace_deletion(app,
                             session,
                             default_user,
                             yadage_workflow_with_name,
                             tmp_shared_volume_path,
+                            workspace,
                             hard_delete):
     """Test workspace deletion."""
     with app.test_client() as client:
@@ -828,10 +830,27 @@ def test_workspace_deletion(app,
             Workflow.id_ == response_data.get('workflow_id')).first()
         assert workflow
 
-        # Check that the workflow workspace exists
         absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.get_workspace())
-        assert os.path.exists(absolute_workflow_workspace)
+            tmp_shared_volume_path,
+            workflow.get_workspace())
 
-        _delete_workflow(workflow, hard_delete=hard_delete)
-        assert not os.path.exists(absolute_workflow_workspace)
+        # create a job for the workflow
+        workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
+        job_cache_entry = JobCache(job_id=workflow_job.id_)
+        session.add(workflow_job)
+        session.add(job_cache_entry)
+        session.commit()
+
+        # check that the workflow workspace exists
+        assert os.path.exists(absolute_workflow_workspace)
+        _delete_workflow(workflow,
+                         hard_delete=hard_delete,
+                         workspace=workspace)
+        if hard_delete or workspace:
+            assert not os.path.exists(absolute_workflow_workspace)
+
+        # check that all cache entries for jobs
+        # of the deleted workflow are removed
+        cache_entries_after_delete = JobCache.query.filter_by(
+            job_id=workflow_job.id_).all()
+        assert not cache_entries_after_delete

@@ -7,11 +7,10 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """Workflow persistence management."""
 
-import fs
 import os
-import fs.path as fs_path
-from flask import current_app as app
 
+import fs
+from flask import current_app as app
 from reana_db.database import Session
 from reana_db.models import Job, JobCache
 
