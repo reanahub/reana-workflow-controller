@@ -8,7 +8,12 @@
 
 """REANA Workflow Controller REST API."""
 
+import difflib
+import fs
+import json
 import os
+import pprint
+import subprocess
 import traceback
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -1218,6 +1223,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           enum:
             - start
             - stop
+            - deleted
         - name: parameters
           in: body
           description: >-
@@ -1480,6 +1486,141 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
                                    'variable appropriately.'.
                                    format(workflow_id_or_name)}), 404
     except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id_or_name_a>/diff/'
+                         '<workflow_id_or_name_b>', methods=['GET'])
+def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
+    r"""Get differences between two workflows.
+
+    ---
+    get:
+      summary: Get diff between two workflows.
+      description: >-
+        This resource shows the differences between
+        the assets of two workflows.
+        Resource is expecting two workflow UUIDs or names.
+      operationId: get_workflow_diff
+      produces:
+        - application/json
+      parameters:
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name_a
+          in: path
+          description: Required. Analysis UUID or name of the first workflow.
+          required: true
+          type: string
+        - name: workflow_id_or_name_b
+          in: path
+          description: Required. Analysis UUID or name of the second workflow.
+          required: true
+          type: string
+        - name: brief
+          in: query
+          description: Optional flag. If set, file contents are examined.
+          required: false
+          type: boolean
+          default: false
+        - name: context_lines
+          in: query
+          description: Optional parameter. Sets number of context lines
+                       for workspace diff output.
+          required: false
+          type: string
+          default: '5'
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about a workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              reana_specification:
+                type: string
+              workspace_listing:
+                type: string
+          examples:
+            application/json:
+              {
+                "reana_specification":
+                ["- nevents: 100000\n+ nevents: 200000"],
+                "workspace_listing": {"Only in workspace a: code"}
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either user or workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_uuid = request.args['user']
+        brief = request.args.get('brief', False)
+        brief = True if brief == 'true' else False
+        context_lines = request.args.get('context_lines', 5)
+
+        workflow_a_exists = False
+        workflow_a = _get_workflow_with_uuid_or_name(workflow_id_or_name_a,
+                                                     user_uuid)
+        workflow_a_exists = True
+        workflow_b = _get_workflow_with_uuid_or_name(workflow_id_or_name_b,
+                                                     user_uuid)
+        if not workflow_id_or_name_a or not workflow_id_or_name_b:
+            raise ValueError("Workflow id or name is not supplied")
+        specification_diff = get_specification_diff(
+            workflow_a, workflow_b)
+
+        try:
+            workspace_diff = get_workspace_diff(
+                workflow_a, workflow_b, brief, context_lines)
+        except ValueError as e:
+            workspace_diff = str(e)
+
+        response = {'reana_specification': json.dumps(specification_diff),
+                    'workspace_listing': json.dumps(workspace_diff)}
+        return jsonify(response)
+    except REANAWorkflowControllerError as e:
+        return jsonify({"message": str(e)}), 409
+    except WorkflowInexistentError as e:
+        wrong_workflow = workflow_id_or_name_b if workflow_a_exists \
+            else workflow_id_or_name_a
+        return jsonify({'message': 'Workflow {0} does not exist.'.
+                                   format(wrong_workflow)}), 404
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
@@ -1861,3 +2002,88 @@ def _mark_workflow_as_deleted_in_db(workflow):
     current_db_sessions = Session.object_session(workflow)
     current_db_sessions.add(workflow)
     current_db_sessions.commit()
+
+
+def get_specification_diff(workflow_a, workflow_b, output_format='unified'):
+    """Return differences between two workflow specifications.
+
+    :param workflow_a: The first workflow to be compared.
+    :type: reana_db.models.Workflow instance.
+    :param workflow_a: The first workflow to be compared.
+    :type: `~reana_db.models.Workflow` instance.
+    :param output_format: Sets output format. Optional.
+    :type: String. One of ['unified', 'context', 'html'].
+           Unified format returned if not set.
+
+    :rtype: List with lines of differences.
+    """
+    if output_format not in ['unified', 'context', 'html']:
+        raise ValueError('Unknown output format.'
+                         'Please select one of unified, context or html.')
+
+    if output_format == 'unified':
+        diff_method = getattr(difflib, 'unified_diff')
+    elif output_format == 'context':
+        diff_method = getattr(difflib, 'context_diff')
+    elif output_format == 'html':
+        diff_method = getattr(difflib, 'HtmlDiff')
+
+    specification_diff = dict.fromkeys(workflow_a.reana_specification.keys())
+    for section in specification_diff:
+        section_a = pprint.pformat(
+            workflow_a.reana_specification.get(section, '')).\
+            splitlines()
+        section_b = pprint.pformat(
+            workflow_b.reana_specification.get(section, '')).\
+            splitlines()
+        # skip first 2 lines of diff relevant if input comes from files
+        specification_diff[section] = list(diff_method(section_a,
+                                                       section_b))[2:]
+    return specification_diff
+
+
+def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
+    """Return differences between two workspaces.
+
+    :param workflow_a: The first workflow to be compared.
+    :type: reana_db.models.Workflow instance.
+    :param workflow_b: The second workflow to be compared.
+    :type: reana_db.models.Workflow instance.
+    :param brief: Optional flag to show brief workspace diff.
+    :type: Boolean.
+    :param context_lines: The number of context lines to show above and after
+                          the discovered differences.
+    :type: Integer or string.
+
+    :rtype: Dictionary with file paths and their sizes
+            unique to each workspace.
+    """
+    workspace_a = workflow_a.get_workspace()
+    workspace_b = workflow_b.get_workspace()
+    reana_fs = fs.open_fs(current_app.config['SHARED_VOLUME_PATH'])
+    if reana_fs.exists(workspace_a) and reana_fs.exists(workspace_b):
+        diff_command = ['diff',
+                        '--unified={}'.format(context_lines),
+                        '-r',
+                        reana_fs.getospath(workspace_a),
+                        reana_fs.getospath(workspace_b)]
+        if brief:
+            diff_command.append('-q')
+        diff_result = subprocess.run(diff_command,
+                                     stdout=subprocess.PIPE)
+        diff_result_string = diff_result.stdout.decode('utf-8')
+        diff_result_string = diff_result_string.replace(
+            reana_fs.getospath(workspace_a).decode('utf-8'),
+            _get_workflow_name(workflow_a))
+        diff_result_string = diff_result_string.replace(
+            reana_fs.getospath(workspace_b).decode('utf-8'),
+            _get_workflow_name(workflow_b))
+
+        return diff_result_string
+    else:
+        if not reana_fs.exists(workspace_a):
+            raise ValueError('Workspace of {} does not exist.'.format(
+                _get_workflow_name(workflow_a)))
+        if not reana_fs.exists(workspace_b):
+            raise ValueError('Workspace of {} does not exist.'.format(
+                _get_workflow_name(workflow_b)))

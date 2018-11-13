@@ -18,7 +18,9 @@ import pytest
 from flask import url_for
 from pytest_reana.fixtures import (cwl_workflow_with_name,
                                    cwl_workflow_without_name, default_user,
-                                   sample_yadage_workflow_in_db, session,
+                                   sample_yadage_workflow_in_db,
+                                   sample_workflow_workspace,
+                                   session,
                                    tmp_shared_volume_path,
                                    yadage_workflow_with_name)
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
@@ -980,3 +982,75 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
                          hard_delete=False,
                          workspace=True)
         assert not os.path.exists(absolute_workflow_workspace)
+
+
+def test_get_workflow_diff(app, default_user,
+                           sample_yadage_workflow_in_db,
+                           sample_serial_workflow_in_db,
+                           tmp_shared_volume_path,
+                           sample_workflow_workspace):
+    """Test set workflow status for unknown workflow."""
+    with app.test_client() as client:
+        res = client.get(url_for(
+            'api.get_workflow_diff',
+            workflow_id_or_name_a=sample_serial_workflow_in_db.id_,
+            workflow_id_or_name_b=sample_yadage_workflow_in_db.id_),
+            query_string={'user': default_user.id_},
+            content_type='application/json')
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))
+        assert 'reana_specification' in response_data
+        assert 'workspace_listing' in response_data
+        workflow_diff = json.loads(response_data['reana_specification'])[
+            'workflow']
+        entire_diff_as_string = ''.join(str(e) for e in workflow_diff)
+        # the following should be present in the diff
+        assert 'serial' in ''.join(str(e) for e in json.loads(
+            response_data['reana_specification'])['workflow'])
+        assert 'yadage' in ''.join(str(e) for e in json.loads(
+            response_data['reana_specification'])['workflow'])
+        assert json.dumps(sample_serial_workflow_in_db.reana_specification[
+            'workflow']['specification']['steps'][0]['commands']) in \
+            entire_diff_as_string
+        # single line of the entire specification is tested
+        # get_workflow_diff() returns extra characters between lines
+        assert sample_yadage_workflow_in_db.reana_specification[
+            'workflow']['specification']['first'] in \
+            entire_diff_as_string
+        print('done')
+
+
+def test_get_workspace_diff(app, default_user,
+                            sample_yadage_workflow_in_db,
+                            sample_serial_workflow_in_db,
+                            tmp_shared_volume_path,
+                            sample_workflow_workspace):
+    """Test get workspace differences."""
+    # create the workspaces for the two workflows
+    workspace_path_a = next(sample_workflow_workspace(
+        str(sample_serial_workflow_in_db.id_)))
+    workspace_path_b = next(sample_workflow_workspace(
+        str(sample_yadage_workflow_in_db.id_)))
+
+    sample_serial_workflow_in_db.get_workspace = lambda: str(
+        sample_serial_workflow_in_db.id_)
+    sample_yadage_workflow_in_db.get_workspace = lambda: str(
+        sample_yadage_workflow_in_db.id_)
+    # modify the contents in one file
+    with open(
+            os.path.join(
+                workspace_path_a, 'data',
+                'World_historical_and_predicted_populations_in_percentage.csv'
+            ), 'a') as f:
+        f.write('An extra line')
+        f.flush()
+    with app.test_client() as client:
+        res = client.get(url_for(
+            'api.get_workflow_diff',
+            workflow_id_or_name_a=sample_serial_workflow_in_db.id_,
+            workflow_id_or_name_b=sample_yadage_workflow_in_db.id_),
+            query_string={'user': default_user.id_},
+            content_type='application/json')
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))
+        assert 'An extra line' in response_data['workspace_listing']
