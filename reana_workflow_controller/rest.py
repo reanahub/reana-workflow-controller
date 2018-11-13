@@ -30,14 +30,15 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               WorkflowNameError)
 from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
-                                             run_yadage_workflow)
+                                             run_yadage_workflow,
+                                             stop_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
                                              list_directory_files,
                                              remove_workflow_jobs_from_cache,
                                              remove_workflow_workspace)
 
 START = 'start'
-STOP = 'stop'
+STOP = 'stopped'
 PAUSE = 'pause'
 DELETED = 'deleted'
 STATUSES = {START, STOP, PAUSE, DELETED}
@@ -1125,6 +1126,9 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           description: Required. New status.
           required: true
           type: string
+          enum:
+            - start
+            - stop
         - name: parameters
           in: body
           description: >-
@@ -1256,6 +1260,13 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             workspace = True if hard_delete or request.json.get('workspace') \
                 else False
             return _delete_workflow(workflow, all_runs, hard_delete, workspace)
+        if status == STOP:
+            _stop_workflow(workflow)
+            return jsonify({'message': 'Workflow successfully stopped',
+                            'workflow_id': workflow.id_,
+                            'workflow_name': _get_workflow_name(workflow),
+                            'status': workflow.status.name,
+                            'user': str(workflow.owner_id)}), 200
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
@@ -1417,6 +1428,35 @@ def _start_workflow(workflow, parameters):
         raise REANAWorkflowControllerError(message)
 
 
+def _stop_workflow(workflow):
+    """Stop a given workflow."""
+    if workflow.status == WorkflowStatus.running:
+        workflow.run_stopped_at = datetime.now()
+        workflow.status = WorkflowStatus.stopped
+        current_db_sessions = Session.object_session(workflow)
+        current_db_sessions.add(workflow)
+        current_db_sessions.commit()
+        kwargs = {
+            'workflow_uuid': str(workflow.id_),
+            'job_list':
+            workflow.job_progress.get('running', {}).get('job_ids', []),
+        }
+        if workflow.type_ in ['serial', 'yadage', 'cwl']:
+            stop_workflow.apply_async(
+                kwargs=kwargs,
+                queue=WORKFLOW_QUEUES[workflow.type_],
+                task_id='delete-{}'.format(str(workflow.id_))
+            )
+        else:
+            raise NotImplementedError(
+                'Workflow type {} does not support '
+                'stop yet.'.format(workflow.type_))
+    else:
+        message = \
+            ("Workflow {id_} is not running.").format(id_=workflow.id_)
+        raise REANAWorkflowControllerError(message)
+
+
 def _run_yadage_workflow_from_spec(workflow):
     """Run a yadage workflow."""
     try:
@@ -1428,7 +1468,8 @@ def _run_yadage_workflow_from_spec(workflow):
         }
         resultobject = run_yadage_workflow.apply_async(
             kwargs=kwargs,
-            queue=WORKFLOW_QUEUES['yadage']
+            queue=WORKFLOW_QUEUES['yadage'],
+            task_id=str(workflow.id_),
         )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': workflow.id_,
@@ -1456,7 +1497,8 @@ def _run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
         }
         resultobject = run_cwl_workflow.apply_async(
             kwargs=kwargs,
-            queue=WORKFLOW_QUEUES['cwl']
+            queue=WORKFLOW_QUEUES['cwl'],
+            task_id=str(workflow.id_),
         )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
@@ -1482,7 +1524,9 @@ def _run_serial_workflow_from_spec(workflow, operational_options):
         }
         resultobject = run_serial_workflow.apply_async(
             kwargs=kwargs,
-            queue=WORKFLOW_QUEUES['serial'])
+            queue=WORKFLOW_QUEUES['serial'],
+            task_id=str(workflow.id_),
+        )
         return jsonify({'message': 'Workflow successfully launched',
                         'workflow_id': str(workflow.id_),
                         'workflow_name': _get_workflow_name(workflow),

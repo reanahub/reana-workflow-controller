@@ -12,6 +12,7 @@ RUN apt-get update && \
 
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_workflow_controller/version.py /code/reana_workflow_controller/
+
 WORKDIR /code
 RUN pip install --no-cache-dir requirements-builder && \
     requirements-builder -e all -l pypi setup.py | pip install --no-cache-dir -r /dev/stdin && \

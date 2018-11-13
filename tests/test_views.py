@@ -30,7 +30,7 @@ from reana_workflow_controller.utils import create_workflow_workspace
 
 status_dict = {
     START: WorkflowStatus.running,
-    STOP: WorkflowStatus.finished
+    STOP: WorkflowStatus.finished,
 }
 
 
@@ -493,7 +493,8 @@ def test_set_workflow_status(app, session, default_user,
                             'reana_specification']['workflow'][
                                 'specification'],
                         'parameters': {}},
-                queue='yadage-default-queue')
+                queue='yadage-default-queue',
+                task_id=workflow_created_uuid)
 
 
 def test_start_already_started_workflow(app, session, default_user,
@@ -534,7 +535,8 @@ def test_start_already_started_workflow(app, session, default_user,
                             'reana_specification']['workflow'][
                                 'specification'],
                         'parameters': {}},
-                queue='yadage-default-queue')
+                queue='yadage-default-queue',
+                task_id=workflow_created_uuid)
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
                              query_string={"user": default_user.id_,
@@ -545,6 +547,37 @@ def test_start_already_started_workflow(app, session, default_user,
                                 " it is already running.").format(
                                     workflow_created_uuid)
             assert json_response.get('message') == expected_message
+
+
+@pytest.mark.parametrize(
+    "current_status, expected_status, expected_http_status_code, "
+    "celery_task_call_count",
+    [(WorkflowStatus.created, WorkflowStatus.created, 409, 0),
+     (WorkflowStatus.running, WorkflowStatus.stopped, 200, 1),
+     (WorkflowStatus.failed, WorkflowStatus.failed, 409, 0),
+     (WorkflowStatus.finished, WorkflowStatus.finished, 409, 0)]
+)
+def test_stop_workflow(current_status, expected_status,
+                       expected_http_status_code,
+                       celery_task_call_count,
+                       app, default_user,
+                       yadage_workflow_with_name,
+                       sample_serial_workflow_in_db, session):
+    """Test stop workflow."""
+    with app.test_client() as client:
+        sample_serial_workflow_in_db.status = current_status
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+        with mock.patch('reana_workflow_controller.tasks.stop_workflow.'
+                        'apply_async') as stop_workflow_mock:
+            res = client.put(
+                url_for('api.set_workflow_status',
+                        workflow_id_or_name=sample_serial_workflow_in_db.name),
+                query_string={"user": default_user.id_,
+                              "status": "stopped"})
+            assert sample_serial_workflow_in_db.status == expected_status
+            assert res.status_code == expected_http_status_code
+            assert stop_workflow_mock.call_count == celery_task_call_count
 
 
 def test_set_workflow_status_unauthorized(app, default_user,
