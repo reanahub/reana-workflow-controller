@@ -15,8 +15,6 @@ import shutil
 
 import pytest
 from reana_db.models import Base, User
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy_utils import create_database, database_exists, drop_database
 
 from reana_workflow_controller.factory import create_app
@@ -30,21 +28,9 @@ def base_app(tmp_shared_volume_path):
         "SECRET_KEY": "SECRET_KEY",
         "TESTING": True,
         "SHARED_VOLUME_PATH": tmp_shared_volume_path,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///",
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///testdb.db",
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "ORGANIZATIONS": ["default"],
     }
     app_ = create_app(config_mapping)
     return app_
-
-
-@pytest.fixture()
-def app(base_app, db_engine, session):
-    """Flask application fixture."""
-    with base_app.app_context():
-        import reana_db.models
-
-        Base.metadata.create_all(bind=db_engine)
-        yield base_app
-        for table in reversed(Base.metadata.sorted_tables):
-            db_engine.execute(table.delete())

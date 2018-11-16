@@ -1127,7 +1127,13 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           in: body
           description: >-
             Optional. Additional input parameters and operational options for
-            workflow execution.
+            workflow execution. Possible parameters are `CACHE=on/off`, passed
+            to disable caching of results in serial workflows,
+            `all_runs=True/False` deletes all runs of a given workflow
+            if status is set to deleted, `workspace=True/False` which deletes
+            the workspace of a workflow and finally `hard_delete=True` which
+            removes completely the workflow data from the database and the
+            workspace from the shared filesystem.
           required: false
           schema:
             type: object
@@ -1667,7 +1673,8 @@ def _delete_workflow(workflow,
     """Delete workflow."""
     if workflow.status in [WorkflowStatus.created,
                            WorkflowStatus.finished,
-                           # WorkflowStatus.stopped
+                           # WorkflowStatus.stopped,
+                           WorkflowStatus.deleted,
                            WorkflowStatus.failed]:
         to_be_deleted = [workflow]
         if all_runs:
@@ -1688,12 +1695,6 @@ def _delete_workflow(workflow,
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'user': str(workflow.owner_id)}), 200
-    elif workflow.status == WorkflowStatus.deleted:
-        raise WorkflowDeletionError(
-            'Workflow {0}.{1} has already been deleted.'.
-            format(
-                workflow.name,
-                workflow.run_number))
     else:
         raise WorkflowDeletionError(
             'Workflow {0}.{1} cannot be deleted as it'

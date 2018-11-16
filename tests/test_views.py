@@ -96,7 +96,6 @@ def test_create_workflow_with_name(app, session, default_user,
                           data=json.dumps(cwl_workflow_with_name))
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
-
         # Check workflow fetch by id
         workflow_by_id = Workflow.query.filter(
             Workflow.id_ == response_data.get('workflow_id')).first()
@@ -745,31 +744,40 @@ def test_start_input_parameters(app, session, default_user,
             assert workflow.input_parameters == parameters['input_parameters']
 
 
-@pytest.mark.parametrize("state", [WorkflowStatus.created,
-                                   WorkflowStatus.failed,
-                                   WorkflowStatus.finished,
-                                   pytest.param(WorkflowStatus.deleted,
-                                                marks=pytest.mark.xfail),
-                                   pytest.param(WorkflowStatus.running,
-                                                marks=pytest.mark.xfail)])
+@pytest.mark.parametrize("status", [WorkflowStatus.created,
+                                    WorkflowStatus.failed,
+                                    WorkflowStatus.finished,
+                                    pytest.param(WorkflowStatus.deleted,
+                                                 marks=pytest.mark.xfail),
+                                    pytest.param(WorkflowStatus.running,
+                                                 marks=pytest.mark.xfail)])
 @pytest.mark.parametrize("hard_delete", [True, False])
 def test_delete_workflow(app,
                          session,
                          default_user,
                          sample_yadage_workflow_in_db,
-                         state,
+                         status,
                          hard_delete):
-    """Test deletion of a workflow in all possible states."""
-    sample_yadage_workflow_in_db.status = state
+    """Test deletion of a workflow in all possible statuses."""
+    sample_yadage_workflow_in_db.status = status
     session.add(sample_yadage_workflow_in_db)
     session.commit()
-
-    _delete_workflow(sample_yadage_workflow_in_db, hard_delete=hard_delete)
-    if not hard_delete:
-        assert sample_yadage_workflow_in_db.status == WorkflowStatus.deleted
-    else:
-        assert session.query(Workflow).filter_by(
-            id_=sample_yadage_workflow_in_db.id_).all() == []
+    with app.test_client() as client:
+        res = client.put(
+            url_for('api.set_workflow_status',
+                    workflow_id_or_name=sample_yadage_workflow_in_db.id_),
+            query_string={
+                'user': default_user.id_,
+                'status': 'deleted'
+            },
+            content_type='application/json',
+            data=json.dumps({'hard_delete': hard_delete}))
+        if not hard_delete:
+            assert sample_yadage_workflow_in_db.status == \
+                WorkflowStatus.deleted
+        else:
+            assert session.query(Workflow).filter_by(
+                id_=sample_yadage_workflow_in_db.id_).all() == []
 
 
 @pytest.mark.parametrize("hard_delete", [True, False])
@@ -786,7 +794,7 @@ def test_delete_all_workflow_runs(app,
                             owner_id=default_user.id_,
                             reana_specification=yadage_workflow_with_name[
                                 'reana_specification'],
-                            operational_parameters={},
+                            operational_options={},
                             type_=yadage_workflow_with_name[
                                 'reana_specification']['workflow']['type'],
                             logs='')
@@ -795,9 +803,17 @@ def test_delete_all_workflow_runs(app,
 
     first_workflow = session.query(Workflow).\
         filter_by(name=yadage_workflow_with_name['name']).first()
-    _delete_workflow(first_workflow,
-                     all_runs=True,
-                     hard_delete=hard_delete)
+    with app.test_client() as client:
+        res = client.put(
+            url_for('api.set_workflow_status',
+                    workflow_id_or_name=first_workflow.id_),
+            query_string={
+                'user': default_user.id_,
+                'status': 'deleted'
+            },
+            content_type='application/json',
+            data=json.dumps({'hard_delete': hard_delete,
+                             'all_runs': True}))
     if not hard_delete:
         for workflow in session.query(Workflow).\
                 filter_by(name=first_workflow.name).all():
@@ -843,9 +859,17 @@ def test_workspace_deletion(app,
 
         # check that the workflow workspace exists
         assert os.path.exists(absolute_workflow_workspace)
-        _delete_workflow(workflow,
-                         hard_delete=hard_delete,
-                         workspace=workspace)
+        with app.test_client() as client:
+            res = client.put(
+                url_for('api.set_workflow_status',
+                        workflow_id_or_name=workflow.id_),
+                query_string={
+                    'user': default_user.id_,
+                    'status': 'deleted'
+                },
+                content_type='application/json',
+                data=json.dumps({'hard_delete': hard_delete,
+                                 'workspace': workspace}))
         if hard_delete or workspace:
             assert not os.path.exists(absolute_workflow_workspace)
 
@@ -854,3 +878,48 @@ def test_workspace_deletion(app,
         cache_entries_after_delete = JobCache.query.filter_by(
             job_id=workflow_job.id_).all()
         assert not cache_entries_after_delete
+
+
+def test_deletion_of_workspace_of_an_already_deleted_workflow(
+        app,
+        session,
+        default_user,
+        yadage_workflow_with_name,
+        tmp_shared_volume_path):
+    """Test workspace deletion of an already deleted workflow."""
+    with app.test_client() as client:
+        res = client.post(url_for('api.create_workflow'),
+                          query_string={
+                              "user": default_user.id_},
+                          content_type='application/json',
+                          data=json.dumps(yadage_workflow_with_name))
+        assert res.status_code == 201
+        response_data = json.loads(res.get_data(as_text=True))
+
+        workflow = Workflow.query.filter(
+            Workflow.id_ == response_data.get('workflow_id')).first()
+        assert workflow
+
+        absolute_workflow_workspace = os.path.join(
+            tmp_shared_volume_path,
+            workflow.get_workspace())
+
+        # check that the workflow workspace exists
+        assert os.path.exists(absolute_workflow_workspace)
+        with app.test_client() as client:
+            res = client.put(
+                url_for('api.set_workflow_status',
+                        workflow_id_or_name=workflow.id_),
+                query_string={
+                    'user': default_user.id_,
+                    'status': 'deleted'
+                },
+                content_type='application/json',
+                data=json.dumps({'hard_delete': False,
+                                 'workspace': False}))
+        assert os.path.exists(absolute_workflow_workspace)
+
+        _delete_workflow(workflow,
+                         hard_delete=False,
+                         workspace=True)
+        assert not os.path.exists(absolute_workflow_workspace)
