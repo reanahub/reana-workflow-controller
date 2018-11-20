@@ -29,7 +29,7 @@ tests_require = [
     'pytest-pep8>=1.0.6',
     'pytest>=3.8.0,<4.0.0',
     'swagger_spec_validator>=2.1.0',
-    'pytest-reana>=v0.5.0.dev201811191',
+    'pytest-reana>=0.5.0.dev201811191',
 ]
 
 extras_require = {
