@@ -546,6 +546,20 @@
             "name": "parameters",
             "required": false,
             "schema": {
+              "properties": {
+                "CACHE": {
+                  "type": "string"
+                },
+                "all_runs": {
+                  "type": "boolean"
+                },
+                "hard_delete": {
+                  "type": "boolean"
+                },
+                "workspace": {
+                  "type": "boolean"
+                }
+              },
               "type": "object"
             }
           }

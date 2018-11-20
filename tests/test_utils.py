@@ -29,22 +29,22 @@ from reana_workflow_controller.rest import START, STOP, _delete_workflow
 from reana_workflow_controller.utils import create_workflow_workspace
 
 
-@pytest.mark.parametrize("state", [WorkflowStatus.created,
-                                   WorkflowStatus.failed,
-                                   WorkflowStatus.finished,
-                                   pytest.param(WorkflowStatus.deleted,
-                                                marks=pytest.mark.xfail),
-                                   pytest.param(WorkflowStatus.running,
-                                                marks=pytest.mark.xfail)])
+@pytest.mark.parametrize("status", [WorkflowStatus.created,
+                                    WorkflowStatus.failed,
+                                    WorkflowStatus.finished,
+                                    pytest.param(WorkflowStatus.deleted,
+                                                 marks=pytest.mark.xfail),
+                                    pytest.param(WorkflowStatus.running,
+                                                 marks=pytest.mark.xfail)])
 @pytest.mark.parametrize("hard_delete", [True, False])
 def test_delete_workflow(app,
                          session,
                          default_user,
                          sample_yadage_workflow_in_db,
-                         state,
+                         status,
                          hard_delete):
-    """Test deletion of a workflow in all possible states."""
-    sample_yadage_workflow_in_db.status = state
+    """Test deletion of a workflow in all possible statuses."""
+    sample_yadage_workflow_in_db.status = status
     session.add(sample_yadage_workflow_in_db)
     session.commit()
 
@@ -75,6 +75,9 @@ def test_delete_all_workflow_runs(app,
                                 'reana_specification']['workflow']['type'],
                             logs='')
         session.add(workflow)
+        if i == 4:
+            workflow.status = WorkflowStatus.running
+            not_deleted_one = workflow.id_
         session.commit()
 
     first_workflow = session.query(Workflow).\
@@ -85,10 +88,14 @@ def test_delete_all_workflow_runs(app,
     if not hard_delete:
         for workflow in session.query(Workflow).\
                 filter_by(name=first_workflow.name).all():
-            assert workflow.status == WorkflowStatus.deleted
+            if not_deleted_one == workflow.id_:
+                assert workflow.status == WorkflowStatus.running
+            else:
+                assert workflow.status == WorkflowStatus.deleted
     else:
-        assert session.query(Workflow).\
-            filter_by(name=first_workflow.name).all() == []
+        # the one running should not be deleted
+        assert len(session.query(Workflow).
+                   filter_by(name=first_workflow.name).all()) == 1
 
 
 @pytest.mark.parametrize("hard_delete", [True, False])

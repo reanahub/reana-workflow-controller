@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
+from fs.errors import CreateFailed
 from reana_db.database import Session
 from reana_db.models import Job, User, Workflow, WorkflowStatus
 from werkzeug.exceptions import NotFound
@@ -562,7 +563,6 @@ def get_files(workflow_id_or_name):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
-
         file_list = list_directory_files(os.path.join(
           current_app.config['SHARED_VOLUME_PATH'],
           workflow.get_workspace()))
@@ -576,6 +576,8 @@ def get_files(workflow_id_or_name):  # noqa
                                    format(workflow_id_or_name)}), 404
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except CreateFailed:
+        return jsonify({"message": "Workspace does not exist."}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
@@ -1137,6 +1139,15 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           required: false
           schema:
             type: object
+            properties:
+              CACHE:
+                type: string
+              all_runs:
+                type: boolean
+              workspace:
+                type: boolean
+              hard_delete:
+                type: boolean
       responses:
         200:
           description: >-
@@ -1679,7 +1690,8 @@ def _delete_workflow(workflow,
         to_be_deleted = [workflow]
         if all_runs:
             to_be_deleted += Session.query(Workflow).\
-                filter_by(name=workflow.name).all()
+                filter(Workflow.name == workflow.name,
+                       Workflow.status != WorkflowStatus.running).all()
         for workflow in to_be_deleted:
             if hard_delete:
                 remove_workflow_workspace(workflow.get_workspace())
