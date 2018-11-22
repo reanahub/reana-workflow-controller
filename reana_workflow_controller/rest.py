@@ -490,6 +490,95 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@restapi_blueprint.route(
+    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
+    methods=['DELETE'])
+def delete_file(workflow_id_or_name, file_name):  # noqa
+    r"""Delete a file from the workspace.
+
+    ---
+    delete:
+      summary: Delete the specified file.
+      description: >-
+        This resource is expecting a workflow UUID and a filename existing
+        inside the workspace to be deleted.
+      operationId: delete_file
+      produces:
+        - application/json
+      parameters:
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name
+          required: true
+          type: string
+        - name: file_name
+          in: path
+          description: Required. Name (or path) of the file to be deleted.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The file has been downloaded.
+          schema:
+            type: file
+        404:
+          description: >-
+            Request failed. `file_name` does not exist.
+          examples:
+            application/json:
+              {
+                "message": "input.csv does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Internal workflow controller error."
+              }
+    """
+    try:
+        user_uuid = request.args['user']
+        user = User.query.filter(User.id_ == user_uuid).first()
+        if not user:
+            return jsonify(
+                {'message': 'User {} does not exist'.format(user)}), 404
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
+
+        absolute_path_to_file = os.path.join(
+          current_app.config['SHARED_VOLUME_PATH'],
+          workflow.get_workspace(), file_name)
+        os.remove(absolute_path_to_file)
+        return jsonify(
+            {'message': 'File {} successfully deleted'.format(file_name)}), 200
+
+    except WorkflowInexistentError:
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
+    except KeyError:
+        return jsonify({"message": "Malformed request."}), 400
+    except NotFound as e:
+        return jsonify(
+            {"message": "{0} does not exist.".format(file_name)}), 404
+    except OSError as e:
+        return jsonify(
+            {"message": "Error while deleting {}.".format(file_name)}), 500
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
 @restapi_blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                          methods=['GET'])
 def get_files(workflow_id_or_name):  # noqa

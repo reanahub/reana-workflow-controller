@@ -682,6 +682,30 @@ def test_upload_file_unknown_workflow(app, default_user):
         assert res.status_code == 404
 
 
+def test_delete_file(app, default_user, sample_serial_workflow_in_db):
+    """Test delete file."""
+    # Move to fixture
+    from flask import current_app
+    create_workflow_workspace(sample_serial_workflow_in_db.get_workspace())
+    abs_path_workspace = os.path.join(
+          current_app.config['SHARED_VOLUME_PATH'],
+          sample_serial_workflow_in_db.get_workspace())
+    file_name = 'dataset.csv'
+    file_binary_content = b'1,2,3,4\n5,6,7,8'
+    abs_path_to_file = os.path.join(abs_path_workspace, file_name)
+    with open(abs_path_to_file, 'wb+') as f:
+        f.write(file_binary_content)
+    assert os.path.exists(abs_path_to_file)
+    with app.test_client() as client:
+        res = client.delete(
+            url_for('api.delete_file',
+                    workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                    file_name=file_name),
+                    query_string={"user": default_user.id_})
+        assert res.status_code == 200
+        assert not os.path.exists(abs_path_to_file)
+
+
 def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
     """Test get workflow logs."""
     with app.test_client() as client:
