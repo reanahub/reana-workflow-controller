@@ -11,6 +11,7 @@ import io
 import json
 import os
 import uuid
+from pathlib import Path
 
 import fs
 import mock
@@ -26,7 +27,8 @@ from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.errors import WorkflowDeletionError
 from reana_workflow_controller.rest import START, STOP, _delete_workflow
-from reana_workflow_controller.utils import create_workflow_workspace
+from reana_workflow_controller.utils import (create_workflow_workspace,
+                                             remove_files_recursive_wildcard)
 
 
 @pytest.mark.parametrize("status", [WorkflowStatus.created,
@@ -164,3 +166,28 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
     _delete_workflow(sample_yadage_workflow_in_db,
                      hard_delete=True,
                      workspace=True)
+
+
+def test_delete_recursive_wildcard(tmp_shared_volume_path):
+    """Test recursive wildcard deletion of files."""
+    file_binary_content = b'1,2,3,4\n5,6,7,8'
+    size = 0
+    directory_path = Path(tmp_shared_volume_path, 'rm_files_test')
+    files_to_remove = ['file1.csv', 'subdir/file2.csv']
+    posix_path_to_deleted_files = []
+    for file_name in files_to_remove:
+        posix_file_path = Path(directory_path, file_name)
+        posix_file_path.parent.mkdir(parents=True)
+        posix_file_path.touch()
+        size = posix_file_path.write_bytes(file_binary_content)
+        assert posix_file_path.exists()
+        posix_path_to_deleted_files.append(posix_file_path)
+
+    deleted_files = remove_files_recursive_wildcard(directory_path, '**/*.csv')
+    for posix_file_path in posix_path_to_deleted_files:
+        assert not posix_file_path.exists()
+
+    for key in deleted_files['deleted']:
+        assert key in files_to_remove
+        assert deleted_files['deleted'][key]['size'] == size
+    assert not len(deleted_files['failed'])

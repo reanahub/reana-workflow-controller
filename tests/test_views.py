@@ -701,7 +701,7 @@ def test_delete_file(app, default_user, sample_serial_workflow_in_db):
             url_for('api.delete_file',
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                     file_name=file_name),
-                    query_string={"user": default_user.id_})
+            query_string={"user": default_user.id_})
         assert res.status_code == 200
         assert not os.path.exists(abs_path_to_file)
 

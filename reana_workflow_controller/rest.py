@@ -34,6 +34,7 @@ from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              stop_workflow)
 from reana_workflow_controller.utils import (create_workflow_workspace,
                                              list_directory_files,
+                                             remove_files_recursive_wildcard,
                                              remove_workflow_jobs_from_cache,
                                              remove_workflow_workspace)
 
@@ -553,13 +554,12 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
+        abs_path_to_workspace = os.path.join(
+            current_app.config['SHARED_VOLUME_PATH'], workflow.get_workspace())
+        deleted = remove_files_recursive_wildcard(
+          abs_path_to_workspace, file_name)
 
-        absolute_path_to_file = os.path.join(
-          current_app.config['SHARED_VOLUME_PATH'],
-          workflow.get_workspace(), file_name)
-        os.remove(absolute_path_to_file)
-        return jsonify(
-            {'message': 'File {} successfully deleted'.format(file_name)}), 200
+        return jsonify(deleted), 200
 
     except WorkflowInexistentError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '

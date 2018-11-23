@@ -8,6 +8,7 @@
 """Workflow persistence management."""
 
 import os
+from pathlib import Path
 
 import fs
 from flask import current_app as app
@@ -66,3 +67,41 @@ def remove_workflow_jobs_from_cache(workflow):
         Session.query(JobCache).filter_by(job_id=job.id_).delete()
         remove_workflow_workspace(job_path)
     Session.commit()
+
+
+def remove_files_recursive_wildcard(directory_path, path):
+    """Remove file(s) from workflow workspace.
+
+    :param directory_path: FIXME.
+    :param path: FIXME.
+    :return: FIXME.
+    """
+    deleted = {"deleted": {}, "failed": {}}
+    secure_path = remove_upper_level_references(path)
+    posix_dir_prefix = Path(directory_path)
+    for posix_path in posix_dir_prefix.glob(secure_path):
+        try:
+            file_name = str(posix_path.relative_to(posix_dir_prefix))
+            object_size = posix_path.stat().st_size
+            os.unlink(posix_path) if posix_path.is_file() \
+                else os.rmdir(posix_path)
+
+            deleted['deleted'][file_name] = \
+                {"size": object_size}
+        except Exception as e:
+            deleted['failed'][file_name] = \
+                {"error": str(e)}
+
+    return deleted
+
+
+def remove_upper_level_references(path):
+    """Remove upper than `./` references.
+
+    Collapse separators/up-level references avoiding references to paths
+    outside working directory.
+
+    :param path: User provided path to a file or directory.
+    :return: Returns the corresponding sanitized path.
+    """
+    return os.path.normpath("/" + path).lstrip("/")
