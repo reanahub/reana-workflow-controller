@@ -1684,7 +1684,7 @@ def _delete_workflow(workflow,
     """Delete workflow."""
     if workflow.status in [WorkflowStatus.created,
                            WorkflowStatus.finished,
-                           # WorkflowStatus.stopped,
+                           WorkflowStatus.stopped,
                            WorkflowStatus.deleted,
                            WorkflowStatus.failed]:
         to_be_deleted = [workflow]
@@ -1707,7 +1707,7 @@ def _delete_workflow(workflow,
                         'workflow_name': _get_workflow_name(workflow),
                         'status': workflow.status.name,
                         'user': str(workflow.owner_id)}), 200
-    else:
+    elif workflow.status == WorkflowStatus.running:
         raise WorkflowDeletionError(
             'Workflow {0}.{1} cannot be deleted as it'
             ' is currently running.'.

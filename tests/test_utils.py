@@ -32,6 +32,7 @@ from reana_workflow_controller.utils import create_workflow_workspace
 @pytest.mark.parametrize("status", [WorkflowStatus.created,
                                     WorkflowStatus.failed,
                                     WorkflowStatus.finished,
+                                    WorkflowStatus.stopped,
                                     pytest.param(WorkflowStatus.deleted,
                                                  marks=pytest.mark.xfail),
                                     pytest.param(WorkflowStatus.running,
