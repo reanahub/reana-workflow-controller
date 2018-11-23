@@ -1416,6 +1416,8 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
                 type: string
               name:
                 type: string
+              type:
+                type: string
               parameters:
                 type: object
           examples:
@@ -1423,6 +1425,7 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
               {
                 'id': 'dd4e93cf-e6d0-4714-a601-301ed97eec60',
                 'name': 'workflow.24',
+                'type': 'serial',
                 'parameters': {'helloworld': 'code/helloworld.py',
                                'inputfile': 'data/names.txt',
                                'outputfile': 'results/greetings.txt',
@@ -1475,9 +1478,11 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
                  .format(user_uuid, workflow_id_or_name)}), 403
 
         workflow_parameters = workflow.get_input_parameters()
-        return jsonify({'id': workflow.id_,
-                        'name': _get_workflow_name(workflow),
-                        'parameters': workflow_parameters}), 200
+        return jsonify({
+            'id': workflow.id_,
+            'name': _get_workflow_name(workflow),
+            'type': workflow.reana_specification['workflow']['type'],
+            'parameters': workflow_parameters}), 200
     except WorkflowInexistentError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
@@ -1640,7 +1645,9 @@ def _start_workflow(workflow, parameters):
         if workflow.type_ == 'yadage':
             return _run_yadage_workflow_from_spec(workflow)
         elif workflow.type_ == 'cwl':
-            return _run_cwl_workflow_from_spec_endpoint(workflow)
+            return _run_cwl_workflow_from_spec_endpoint(
+                workflow,
+                parameters['operational_options'])
         elif workflow.type_ == 'serial':
             return _run_serial_workflow_from_spec(
                 workflow,
@@ -1711,7 +1718,7 @@ def _run_yadage_workflow_from_spec(workflow):
         abort(400)
 
 
-def _run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
+def _run_cwl_workflow_from_spec_endpoint(workflow, operational_options):  # noqa
     """Run a CWL workflow."""
     try:
         parameters = None
@@ -1722,7 +1729,8 @@ def _run_cwl_workflow_from_spec_endpoint(workflow):  # noqa
             "workflow_uuid": str(workflow.id_),
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.get_specification(),
-            "parameters": parameters
+            "parameters": parameters,
+            "operational_options": operational_options or {},
         }
         resultobject = run_cwl_workflow.apply_async(
             kwargs=kwargs,
