@@ -183,11 +183,11 @@ def test_delete_recursive_wildcard(tmp_shared_volume_path):
         assert posix_file_path.exists()
         posix_path_to_deleted_files.append(posix_file_path)
 
-    deleted_files = remove_files_recursive_wildcard(directory_path, '**/*.csv')
+    deleted_files = remove_files_recursive_wildcard(directory_path, '**/*')
     for posix_file_path in posix_path_to_deleted_files:
         assert not posix_file_path.exists()
 
-    for key in deleted_files['deleted']:
-        assert key in files_to_remove
+    for key in files_to_remove:
+        assert key in deleted_files['deleted']
         assert deleted_files['deleted'][key]['size'] == size
     assert not len(deleted_files['failed'])

@@ -79,7 +79,9 @@ def remove_files_recursive_wildcard(directory_path, path):
     deleted = {"deleted": {}, "failed": {}}
     secure_path = remove_upper_level_references(path)
     posix_dir_prefix = Path(directory_path)
-    for posix_path in posix_dir_prefix.glob(secure_path):
+    paths = list(posix_dir_prefix.glob(secure_path))
+    paths.sort(key=lambda path: len(str(path)), reverse=True)
+    for posix_path in paths:
         try:
             file_name = str(posix_path.relative_to(posix_dir_prefix))
             object_size = posix_path.stat().st_size
