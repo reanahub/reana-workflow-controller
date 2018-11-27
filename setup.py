@@ -62,7 +62,7 @@ install_requires = [
     'marshmallow>=2.13',
     'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',
-    'reana-commons>=0.5.0.dev20181116,<0.6.0',
+    'reana-commons>=0.5.0.dev20181128,<0.6.0',
     'reana-db>=0.5.0.dev20181116,<0.6.0',
     'uwsgi-tools>=1.1.1',
     'uWSGI>=2.0.17',

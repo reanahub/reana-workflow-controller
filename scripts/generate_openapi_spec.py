@@ -16,6 +16,7 @@ import click
 from apispec import APISpec
 from flask import current_app
 from flask.cli import with_appcontext
+from reana_commons.utils import copy_openapi_specs
 from swagger_spec_validator.validator20 import validate_json
 
 from reana_workflow_controller.version import __version__
@@ -34,8 +35,15 @@ __output_path__ = "temp_openapi.json"
 
 
 @click.command()
+@click.option(
+    '-p', '--publish',
+    help='Optional parameters if set, will pass generated and '
+         'validated openapi specifications to reana-commons module. '
+         'E.g. --publish.',
+    count=True
+)
 @with_appcontext
-def build_openapi_spec():
+def build_openapi_spec(publish):
     """Creates an OpenAPI definition of Flask application,
     check conformity of generated definition against OpenAPI 2.0 specification
     and writes it into a file."""
@@ -88,6 +96,8 @@ def build_openapi_spec():
         click.echo(
             click.style('OpenAPI specification validated successfully',
                         fg='green'))
+        if publish:
+            copy_openapi_specs(__output_path__, 'reana-workflow-controller')
 
     return spec.to_dict()
 
