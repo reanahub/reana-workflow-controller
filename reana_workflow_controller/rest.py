@@ -1730,7 +1730,7 @@ def _run_cwl_workflow_from_spec_endpoint(workflow, operational_options):  # noqa
             "workflow_workspace": workflow.get_workspace(),
             "workflow_json": workflow.get_specification(),
             "parameters": parameters,
-            "operational_options": operational_options or {},
+            "operational_options": operational_options or [],
         }
         resultobject = run_cwl_workflow.apply_async(
             kwargs=kwargs,
