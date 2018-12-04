@@ -576,7 +576,7 @@ def test_stop_workflow(current_status, expected_status,
                 url_for('api.set_workflow_status',
                         workflow_id_or_name=sample_serial_workflow_in_db.name),
                 query_string={"user": default_user.id_,
-                              "status": "stopped"})
+                              "status": "stop"})
             assert sample_serial_workflow_in_db.status == expected_status
             assert res.status_code == expected_http_status_code
             assert stop_workflow_mock.call_count == celery_task_call_count

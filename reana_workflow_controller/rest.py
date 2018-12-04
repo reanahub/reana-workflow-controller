@@ -44,10 +44,9 @@ from reana_workflow_controller.utils import (create_workflow_workspace,
                                              remove_workflow_workspace)
 
 START = 'start'
-STOP = 'stopped'
-PAUSE = 'pause'
+STOP = 'stop'
 DELETED = 'deleted'
-STATUSES = {START, STOP, PAUSE, DELETED}
+STATUSES = {START, STOP, DELETED}
 
 restapi_blueprint = Blueprint('api', __name__)
 
