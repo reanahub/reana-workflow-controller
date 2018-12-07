@@ -10,6 +10,9 @@
 
 import os
 
+from packaging.version import parse
+from reana_workflow_controller.version import __version__
+
 BROKER_URL = os.getenv('RABBIT_MQ_URL',
                        'message-broker.default.svc.cluster.local')
 
@@ -50,3 +53,23 @@ PROGRESS_STATUSES = ['running', 'finished', 'failed', 'total']
 WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
                    'yadage': 'yadage-default-queue',
                    'serial': 'serial-default-queue'}
+
+REANA_STORAGE_BACKEND = os.getenv('REANA_STORAGE_BACKEND', 'local')
+"""Type of storage attached to the engines, one of ['local', 'ceph']."""
+
+MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
+"""If CEPH storage backend is used, this represents the name of the
+Kubernetes persistent volume claim."""
+
+SHARED_FS_MAPPING = {
+    'MOUNT_SOURCE_PATH': os.getenv("SHARED_VOLUME_PATH_ROOT", '/reana'),
+    # Root path in the underlying shared file system to be mounted inside
+    # workflow engines.
+    'MOUNT_DEST_PATH': os.getenv("SHARED_VOLUME_PATH", '/reana'),
+    # Mount path for the shared file system volume inside workflow engines.
+}
+"""Mapping from the shared file system backend to the job file system."""
+
+WORKFLOW_ENGINE_VERSION = parse(__version__).base_version if \
+   os.getenv("REANA_DEPLOYMENT_TYPE", 'local') != 'local' else 'latest'
+"""CWL workflow engine version."""

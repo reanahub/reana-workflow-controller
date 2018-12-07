@@ -252,6 +252,9 @@ def process_docstring(app, what, name, obj, options, lines):
         # adding back description
         lines.append(url)
 
+intersphinx_mapping = {
+    'reana_db': ('https://reana-db.readthedocs.io/en/latest/', None),
+}
 
 def setup(app):
     app.connect('autodoc-process-docstring', process_docstring)

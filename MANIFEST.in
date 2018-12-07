@@ -18,6 +18,7 @@ recursive-include docs *.png
 recursive-include docs *.rst
 recursive-include docs *.txt
 recursive-include reana_workflow_controller *.html
+recursive-include reana_workflow_controller *.py
 recursive-include scripts *.py
 recursive-include tests *.py
 recursive-include tests *.finished

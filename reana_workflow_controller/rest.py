@@ -9,7 +9,6 @@
 """REANA Workflow Controller REST API."""
 
 import difflib
-import fs
 import json
 import os
 import pprint
@@ -18,13 +17,14 @@ import traceback
 from datetime import datetime
 from uuid import UUID, uuid4
 
+import fs
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from fs.errors import CreateFailed
-from reana_db.database import Session
-from reana_db.models import Job, User, Workflow, WorkflowStatus
 from werkzeug.exceptions import NotFound
 
+from reana_db.database import Session
+from reana_db.models import Job, User, Workflow, WorkflowStatus
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
                                               WORKFLOW_QUEUES,
                                               WORKFLOW_TIME_FORMAT)
@@ -42,6 +42,8 @@ from reana_workflow_controller.utils import (create_workflow_workspace,
                                              remove_files_recursive_wildcard,
                                              remove_workflow_jobs_from_cache,
                                              remove_workflow_workspace)
+from reana_workflow_controller.workflow_run_managers.kubernetes import \
+    KubernetesWorkflowRunManager
 
 START = 'start'
 STOP = 'stop'
@@ -1346,8 +1348,12 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         if request.json:
             parameters = request.json
         if status == START:
-            return _start_workflow(workflow,
-                                   parameters)
+            _start_workflow(workflow, parameters)
+            return jsonify({'message': 'Workflow successfully launched',
+                            'workflow_id': str(workflow.id_),
+                            'workflow_name': _get_workflow_name(workflow),
+                            'status': workflow.status.name,
+                            'user': str(workflow.owner_id)}), 200
         elif status == DELETED:
             all_runs = True if request.json.get('all_runs') else False
             hard_delete = True if request.json.get('hard_delete') else False
@@ -1636,25 +1642,14 @@ def _start_workflow(workflow, parameters):
         workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
         if parameters:
-            workflow.input_parameters = parameters['input_parameters']
+            workflow.input_parameters = parameters.get('input_parameters')
             workflow.operational_options = \
-                parameters['operational_options']
+                parameters.get('operational_options')
         current_db_sessions = Session.object_session(workflow)
         current_db_sessions.add(workflow)
         current_db_sessions.commit()
-        if workflow.type_ == 'yadage':
-            return _run_yadage_workflow_from_spec(workflow)
-        elif workflow.type_ == 'cwl':
-            return _run_cwl_workflow_from_spec_endpoint(
-                workflow,
-                parameters['operational_options'])
-        elif workflow.type_ == 'serial':
-            return _run_serial_workflow_from_spec(
-                workflow,
-                parameters['operational_options'])
-        else:
-            raise NotImplementedError(
-                'Workflow type {} is not supported.'.format(workflow.type_))
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        kwrm.start_batch_workflow_run()
     else:
         verb = "is" if workflow.status == WorkflowStatus.running else "has"
         message = \
@@ -1691,88 +1686,6 @@ def _stop_workflow(workflow):
         message = \
             ("Workflow {id_} is not running.").format(id_=workflow.id_)
         raise REANAWorkflowControllerError(message)
-
-
-def _run_yadage_workflow_from_spec(workflow):
-    """Run a yadage workflow."""
-    try:
-        kwargs = {
-            "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.get_workspace(),
-            "workflow_json": workflow.get_specification(),
-            "parameters": workflow.get_input_parameters()
-        }
-        resultobject = run_yadage_workflow.apply_async(
-            kwargs=kwargs,
-            queue=WORKFLOW_QUEUES['yadage'],
-            task_id=str(workflow.id_),
-        )
-        return jsonify({'message': 'Workflow successfully launched',
-                        'workflow_id': workflow.id_,
-                        'workflow_name': _get_workflow_name(workflow),
-                        'status': workflow.status.name,
-                        'user': str(workflow.owner_id)}), 200
-
-    except(KeyError, ValueError):
-        traceback.print_exc()
-        abort(400)
-
-
-def _run_cwl_workflow_from_spec_endpoint(workflow, operational_options):  # noqa
-    """Run a CWL workflow."""
-    try:
-        parameters = None
-        if workflow.get_input_parameters():
-            if 'input' in workflow.get_input_parameters():
-                parameters = workflow.get_input_parameters()['input']
-        kwargs = {
-            "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.get_workspace(),
-            "workflow_json": workflow.get_specification(),
-            "parameters": parameters,
-            "operational_options": operational_options or [],
-        }
-        resultobject = run_cwl_workflow.apply_async(
-            kwargs=kwargs,
-            queue=WORKFLOW_QUEUES['cwl'],
-            task_id=str(workflow.id_),
-        )
-        return jsonify({'message': 'Workflow successfully launched',
-                        'workflow_id': str(workflow.id_),
-                        'workflow_name': _get_workflow_name(workflow),
-                        'status': workflow.status.name,
-                        'user': str(workflow.owner_id)}), 200
-
-    except (KeyError, ValueError) as e:
-        print(e)
-        # traceback.print_exc()
-        abort(400)
-
-
-def _run_serial_workflow_from_spec(workflow, operational_options):
-    """Run a serial workflow."""
-    try:
-        kwargs = {
-            "workflow_uuid": str(workflow.id_),
-            "workflow_workspace": workflow.get_workspace(),
-            "workflow_json": workflow.get_specification(),
-            "workflow_parameters": _get_workflow_input_parameters(workflow),
-            "operational_options": operational_options or {},
-        }
-        resultobject = run_serial_workflow.apply_async(
-            kwargs=kwargs,
-            queue=WORKFLOW_QUEUES['serial'],
-            task_id=str(workflow.id_),
-        )
-        return jsonify({'message': 'Workflow successfully launched',
-                        'workflow_id': str(workflow.id_),
-                        'workflow_name': _get_workflow_name(workflow),
-                        'status': workflow.status.name,
-                        'user': str(workflow.owner_id)}), 200
-
-    except(KeyError, ValueError):
-        traceback.print_exc()
-        abort(400)
 
 
 def _get_workflow_name(workflow):

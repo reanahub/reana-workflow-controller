@@ -461,7 +461,6 @@ def test_set_workflow_status(app, session, default_user,
                              yadage_workflow_with_name):
     """Test set workflow status "Start"."""
     with app.test_client() as client:
-        os.environ["TESTS"] = "True"
         # create workflow
         res = client.post(url_for('api.create_workflow'),
                           query_string={"user": default_user.id_},
@@ -475,8 +474,9 @@ def test_set_workflow_status(app, session, default_user,
         assert workflow.status == WorkflowStatus.created
         payload = START
         # replace celery task with Mock()
-        with mock.patch('reana_workflow_controller.tasks.run_yadage_workflow'
-                        '.apply_async') as celery_mock:
+        with mock.patch(
+             'reana_workflow_controller.workflow_run_managers.kubernetes'
+             '.current_k8s_batchv1_api_client') as k8s_api_client:
             # set workflow status to START
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
@@ -485,18 +485,7 @@ def test_set_workflow_status(app, session, default_user,
             json_response = json.loads(res.data.decode())
             assert json_response.get('status') == status_dict[payload].name
             # assert the celery task was called with the following arguments
-            celery_mock.assert_called_with(
-                kwargs={'workflow_uuid': workflow_created_uuid,
-                        'workflow_workspace':
-                        'users/{user_id}/workflows/{workflow_uuid}'.
-                        format(user_id=default_user.id_,
-                               workflow_uuid=workflow_created_uuid),
-                        'workflow_json': yadage_workflow_with_name[
-                            'reana_specification']['workflow'][
-                                'specification'],
-                        'parameters': {}},
-                queue='yadage-default-queue',
-                task_id=workflow_created_uuid)
+            k8s_api_client.create_namespaced_job.assert_called_once()
 
 
 def test_start_already_started_workflow(app, session, default_user,
@@ -517,8 +506,9 @@ def test_start_already_started_workflow(app, session, default_user,
         assert workflow.status == WorkflowStatus.created
         payload = START
         # replace celery task with Mock()
-        with mock.patch('reana_workflow_controller.tasks.run_yadage_workflow'
-                        '.apply_async') as celery_mock:
+        with mock.patch('reana_workflow_controller.workflow_run_managers'
+                        '.kubernetes'
+                        '.current_k8s_batchv1_api_client'):
             # set workflow status to START
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
@@ -526,19 +516,6 @@ def test_start_already_started_workflow(app, session, default_user,
                                            "status": "start"})
             json_response = json.loads(res.data.decode())
             assert json_response.get('status') == status_dict[payload].name
-            # assert the celery task was called with the following arguments
-            celery_mock.assert_called_with(
-                kwargs={'workflow_uuid': workflow_created_uuid,
-                        'workflow_workspace':
-                        'users/{user_id}/workflows/{workflow_uuid}'.
-                        format(user_id=default_user.id_,
-                               workflow_uuid=workflow_created_uuid),
-                        'workflow_json': yadage_workflow_with_name[
-                            'reana_specification']['workflow'][
-                                'specification'],
-                        'parameters': {}},
-                queue='yadage-default-queue',
-                task_id=workflow_created_uuid)
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
                              query_string={"user": default_user.id_,
@@ -787,8 +764,8 @@ def test_start_input_parameters(app, session, default_user,
         parameters = {'input_parameters': {'first': 'test'},
                       'operational_options': {}}
         # replace celery task with Mock()
-        with mock.patch('reana_workflow_controller.tasks.run_yadage_workflow'
-                        '.apply_async'):
+        with mock.patch('reana_workflow_controller.workflow_run_managers'
+                        '.kubernetes.current_k8s_batchv1_api_client'):
             # set workflow status to START and pass parameters
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
