@@ -61,7 +61,7 @@ install_requires = [
     'jsonpickle>=0.9.6',
     'kubernetes>=6.0.0',
     'marshmallow>=2.13',
-    'reana-commons>=0.5.0.dev20181204,<0.6.0',
+    'reana-commons>=0.5.0.dev20181213,<0.6.0[kubernetes]',
     'reana-db>=0.5.0.dev20181126,<0.6.0',
     'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',
