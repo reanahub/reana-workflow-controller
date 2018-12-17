@@ -14,7 +14,6 @@ from reana_commons.consumer import BaseConsumer
 from reana_db.database import Session
 from reana_db.models import WorkflowStatus
 
-from .config import STATUS_QUEUE
 from .tasks import (_update_job_cache, _update_job_progress,
                     _update_run_progress, _update_workflow_status)
 
@@ -24,11 +23,11 @@ class JobStatusConsumer(BaseConsumer):
 
     def __init__(self):
         """Constructor."""
-        super(JobStatusConsumer, self).__init__()
+        super(JobStatusConsumer, self).__init__(queue='jobs-status')
 
     def get_consumers(self, Consumer, channel):
         """Implement providing kombu.Consumers with queues/callbacks."""
-        return [Consumer(queues=self.queues, callbacks=[self.on_message],
+        return [Consumer(queues=self.queue, callbacks=[self.on_message],
                          accept=[self.message_default_format])]
 
     def on_message(self, body, message):

@@ -40,14 +40,6 @@ DEFAULT_NAME_FOR_WORKFLOWS = 'workflow'
 WORKFLOW_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 """Time format for workflow starting time, created time etc."""
 
-EXCHANGE = ''
-
-EXCHANGE_TYPE = ''
-
-STATUS_QUEUE = 'jobs-status'
-
-ROUTING_KEY = 'jobs-status'
-
 PROGRESS_STATUSES = ['running', 'finished', 'failed', 'total']
 
 WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',

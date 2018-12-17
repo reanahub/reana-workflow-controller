@@ -25,13 +25,13 @@ from werkzeug.exceptions import NotFound
 
 from reana_db.database import Session
 from reana_db.models import Job, User, Workflow, WorkflowStatus
+from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
                                               WORKFLOW_QUEUES,
                                               WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               UploadPathError,
                                               WorkflowDeletionError,
-                                              WorkflowInexistentError,
                                               WorkflowNameError)
 from reana_workflow_controller.tasks import (run_cwl_workflow,
                                              run_serial_workflow,
@@ -395,7 +395,7 @@ def upload_file(workflow_id_or_name):
           {'message': '{} has been successfully uploaded.'.format(
             full_file_name)}), 200
 
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment'
@@ -482,7 +482,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
                                    mimetype='multipart/form-data',
                                    as_attachment=True), 200
 
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -567,7 +567,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
 
         return jsonify(deleted), 200
 
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -664,7 +664,7 @@ def get_files(workflow_id_or_name):  # noqa
           workflow.get_workspace()))
         return jsonify(file_list), 200
 
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -764,7 +764,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
                         'logs': workflow.logs or "",
                         'user': user_uuid}), 200
 
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -1180,7 +1180,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         'progress': progress,
                         'user': user_uuid,
                         'logs': workflow_logs}), 200
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -1370,7 +1370,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         else:
             raise NotImplemented("Status {} is not supported yet"
                                  .format(status))
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -1489,7 +1489,7 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
             'name': _get_workflow_name(workflow),
             'type': workflow.reana_specification['workflow']['type'],
             'parameters': workflow_parameters}), 200
-    except WorkflowInexistentError:
+    except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
                                    'Please set your REANA_WORKON environment '
@@ -1623,7 +1623,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify(response)
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
-    except WorkflowInexistentError as e:
+    except ValueError as e:
         wrong_workflow = workflow_id_or_name_b if workflow_a_exists \
             else workflow_id_or_name_a
         return jsonify({'message': 'Workflow {0} does not exist.'.
@@ -1638,7 +1638,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
 
 def _start_workflow(workflow, parameters):
     """Start a workflow."""
-    if workflow.status == WorkflowStatus.created:
+    if workflow.status in [WorkflowStatus.created, WorkflowStatus.queued]:
         workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
         if parameters:
@@ -1695,147 +1695,6 @@ def _get_workflow_name(workflow):
     :type workflow: reana-commons.models.Workflow
     """
     return workflow.name + '.' + str(workflow.run_number)
-
-
-def _get_workflow_by_name(workflow_name, user_uuid):
-    """From Workflows named as `workflow_name` the latest run_number.
-
-    Only use when you are sure that workflow_name is not UUIDv4.
-
-    :rtype: reana-commons.models.Workflow
-    """
-    workflow = Workflow.query.filter(
-        Workflow.name == workflow_name,
-        Workflow.owner_id == user_uuid). \
-        order_by(Workflow.run_number.desc()).first()
-    if not workflow:
-        raise WorkflowInexistentError(
-            'REANA_WORKON is set to {0}, but '
-            'that workflow does not exist. '
-            'Please set your REANA_WORKON environment '
-            'variable appropriately.'.
-            format(workflow_name))
-    return workflow
-
-
-def _get_workflow_by_uuid(workflow_uuid):
-    """Get Workflow with UUIDv4.
-
-    :param workflow_uuid: UUIDv4 of a Workflow.
-    :type workflow_uuid: String representing a valid UUIDv4.
-
-    :rtype: reana-commons.models.Workflow
-    """
-    workflow = Workflow.query.filter(Workflow.id_ ==
-                                     workflow_uuid).first()
-    if not workflow:
-        raise WorkflowInexistentError(
-            'REANA_WORKON is set to {0}, but '
-            'that workflow does not exist. '
-            'Please set your REANA_WORKON environment '
-            'variable appropriately.'.
-            format(workflow_uuid))
-    return workflow
-
-
-def _get_workflow_with_uuid_or_name(uuid_or_name, user_uuid):
-    """Get Workflow from database with uuid or name.
-
-    :param uuid_or_name: String representing a valid UUIDv4 or valid
-        Workflow name. Valid name contains only ASCII alphanumerics.
-
-        Name might be in format 'reana.workflow.123' with arbitrary
-        number of dot-delimited substrings, where last substring specifies
-        the run number of the workflow this workflow name refers to.
-
-        If name does not contain a valid run number, but it is a valid name,
-        workflow with latest run number of all the workflows with this name
-        is returned.
-    :type uuid_or_name: String
-
-    :rtype: reana-commons.models.Workflow
-    """
-    # Check existence
-    if not uuid_or_name:
-        raise WorkflowNameError('No Workflow was specified.')
-
-    # Check validity
-    try:
-        uuid_or_name.encode('ascii')
-    except UnicodeEncodeError:
-        # `workflow_name` contains something else than just ASCII.
-        raise WorkflowNameError('Workflow name {} is not valid.'.
-                                format(uuid_or_name))
-
-    # Check if UUIDv4
-    try:
-        # is_uuid = UUID(uuid_or_name, version=4)
-        is_uuid = UUID('{' + uuid_or_name + '}', version=4)
-    except (TypeError, ValueError):
-        is_uuid = None
-
-    if is_uuid:
-        # `uuid_or_name` is an UUIDv4.
-        # Search with it since it is expected to be unique.
-        return _get_workflow_by_uuid(uuid_or_name)
-
-    else:
-        # `uuid_or_name` is not and UUIDv4. Expect it is a name.
-
-        # Expect name might be in format 'reana.workflow.123' with arbitrary
-        # number of dot-delimited substring, where last substring specifies
-        # the run_number of the workflow this workflow name refers to.
-
-        # Possible candidates for names are e.g. :
-        # 'workflow_name' -> ValueError
-        # 'workflow.name' -> True, True
-        # 'workflow.name.123' -> True, True
-        # '123.' -> True, False
-        # '' -> ValueError
-        # '.123' -> False, True
-        # '..' -> False, False
-        # '123.12' -> True, True
-        # '123.12.' -> True, False
-
-        # Try to split the dot-separated string.
-        try:
-            workflow_name, run_number = uuid_or_name.rsplit('.', maxsplit=1)
-        except ValueError:
-            # Couldn't split. Probably not a dot-separated string.
-            #  -> Search with `uuid_or_name`
-            return _get_workflow_by_name(uuid_or_name, user_uuid)
-
-        # Check if `run_number` was specified
-        if not run_number:
-            # No `run_number` specified.
-            # -> Search by `workflow_name`
-            return _get_workflow_by_name(workflow_name, user_uuid)
-
-        # `run_number` was specified.
-        # Check `run_number` is valid.
-        if not run_number.isdigit():
-            # `uuid_or_name` was split, so it is a dot-separated string
-            # but it didn't contain a valid `run_number`.
-            # Assume that this dot-separated string is the name of
-            # the workflow and search with it.
-            return _get_workflow_by_name(uuid_or_name, user_uuid)
-
-        # `run_number` is valid.
-        # Search by `run_number` since it is a primary key.
-        workflow = Workflow.query.filter(
-            Workflow.name == workflow_name,
-            Workflow.run_number == run_number,
-            Workflow.owner_id == user_uuid).\
-            one_or_none()
-        if not workflow:
-            raise WorkflowInexistentError(
-                'REANA_WORKON is set to {0}, but '
-                'that workflow does not exist. '
-                'Please set your REANA_WORKON environment '
-                'variable appropriately.'.
-                format(workflow_name, run_number))
-
-        return workflow
 
 
 def _get_workflow_logs(workflow):

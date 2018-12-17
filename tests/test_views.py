@@ -325,7 +325,6 @@ def test_get_files_unknown_workflow(app, default_user):
     with app.test_client() as client:
         # create workflow
         random_workflow_uuid = str(uuid.uuid4())
-
         res = client.get(
             url_for('api.get_files',
                     workflow_id_or_name=random_workflow_uuid),
