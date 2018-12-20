@@ -70,8 +70,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec = client.V1JobSpec(
             template=client.V1PodTemplateSpec())
         spec.template.metadata = workflow_metadata
-        container = client.V1Container(name=name, image=image, env=[],
-                                       volume_mounts=[], command=command)
+        container = client.V1Container(name=name, image=image,
+                                       image_pull_policy='IfNotPresent',
+                                       env=[], volume_mounts=[],
+                                       command=['/bin/bash', '-c'],
+                                       args=command)
         container.env.extend(env_vars)
         container.volume_mounts = [
             {

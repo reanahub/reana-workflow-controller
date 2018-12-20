@@ -5,6 +5,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Workflow run manager interface."""
+import json
 
 from reana_workflow_controller.config import WORKFLOW_ENGINE_VERSION
 
@@ -27,15 +28,20 @@ class WorkflowRunManager():
     engine_mapping = {
         'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.format(
             WORKFLOW_ENGINE_VERSION),
-                'command': ['sleep', '1000'],
+                'command': "sleep 1000",
                 'environment_variables': common_env_variables},
         'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.format(
             WORKFLOW_ENGINE_VERSION),
-                   'command': ['sleep', '1000'],
-                   'environment_variables': common_env_variables},
+                'command': "sleep 1000",
+                'environment_variables': common_env_variables},
         'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.format(
             WORKFLOW_ENGINE_VERSION),
-                   'command': ['sleep', '1000'],
+                   'command': ("run-serial-workflow "
+                               "--workflow-uuid {id} "
+                               "--workflow-workspace {workspace} "
+                               "--workflow-json '{json}' "
+                               "--workflow-parameters '{parameters}' "
+                               "--operational-options '{options}' "),
                    'environment_variables': common_env_variables},
     }
     """Mapping between engines and their basis configuration."""
@@ -70,6 +76,14 @@ class WorkflowRunManager():
             workflow_type=self.workflow.type_,
         )
 
+    def _get_merged_workflow_parameters(self):
+        """Return workflow input parameters merged with live ones, if given."""
+        if self.workflow.input_parameters:
+            return dict(self.workflow.get_input_parameters(),
+                        **self.workflow.input_parameters)
+        else:
+            return self.workflow.get_input_parameters()
+
     def start_batch_workflow_run(self):
         """Start a batch workflow run."""
         raise NotImplementedError('')
@@ -81,7 +95,13 @@ class WorkflowRunManager():
     def _workflow_engine_command(self):
         """Return the command to be run for a given workflow engine."""
         return (WorkflowRunManager.engine_mapping[self.workflow.type_]
-                ['command'])
+                ['command'].format(
+             id=self.workflow.id_,
+             workspace=self.workflow.get_workspace(),
+             json=json.dumps(self.workflow.get_specification()),
+             parameters=json.dumps(self._get_merged_workflow_parameters()),
+             options=json.dumps(self.workflow.operational_options),
+        ))
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
