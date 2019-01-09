@@ -34,7 +34,12 @@ class WorkflowRunManager():
     engine_mapping = {
         'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.format(
             WORKFLOW_ENGINE_VERSION),
-                'command': "sleep 1000",
+                'command': ("run-cwl-workflow "
+                            "--workflow-uuid {id} "
+                            "--workflow-workspace {workspace} "
+                            "--workflow-json '{json}' "
+                            "--workflow-parameters '{parameters}' "
+                            "--operational-options '{options}' "),
                 'environment_variables': common_env_variables},
         'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.format(
             WORKFLOW_ENGINE_VERSION),
