@@ -6,6 +6,7 @@
 
 """Workflow run manager interface."""
 import json
+import os
 
 from reana_workflow_controller.config import WORKFLOW_ENGINE_VERSION
 
@@ -21,10 +22,15 @@ class WorkflowRunManager():
         {
             'name': 'SHARED_VOLUME_PATH',
             'value': '/reana'
-        }
+        },
     ]
     """Common to all workflow engines environment variables."""
 
+    if os.getenv('FLASK_ENV') == 'development':
+        common_env_variables.extend(({'name': 'WDB_SOCKET_SERVER',
+                                     'value': 'wdb'},
+                                    {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
+                                     'value': 'True'}))
     engine_mapping = {
         'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.format(
             WORKFLOW_ENGINE_VERSION),
