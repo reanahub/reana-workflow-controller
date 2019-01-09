@@ -32,8 +32,12 @@ class WorkflowRunManager():
                 'environment_variables': common_env_variables},
         'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.format(
             WORKFLOW_ENGINE_VERSION),
-                'command': "sleep 1000",
-                'environment_variables': common_env_variables},
+                   'command': ("run-yadage-workflow "
+                               "--workflow-uuid {id} "
+                               "--workflow-workspace {workspace} "
+                               "--workflow-json '{json}' "
+                               "--workflow-parameters '{parameters}' "),
+                   'environment_variables': common_env_variables},
         'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.format(
             WORKFLOW_ENGINE_VERSION),
                    'command': ("run-serial-workflow "
