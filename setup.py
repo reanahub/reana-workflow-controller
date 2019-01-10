@@ -90,6 +90,7 @@ setup(
     author_email='info@reana.io',
     url='https://github.com/reanahub/reana-workflow-controller',
     packages=['reana_workflow_controller', ],
+    include_package_data=True,
     zip_safe=False,
     entry_points={
         'flask.commands': [
