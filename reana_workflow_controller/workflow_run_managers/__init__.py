@@ -5,6 +5,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Workflow run manager interface."""
+import base64
 import json
 import os
 
@@ -37,7 +38,7 @@ class WorkflowRunManager():
                 'command': ("run-cwl-workflow "
                             "--workflow-uuid {id} "
                             "--workflow-workspace {workspace} "
-                            "--workflow-json '{json}' "
+                            "--workflow-json '{workflow_json}' "
                             "--workflow-parameters '{parameters}' "
                             "--operational-options '{options}' "),
                 'environment_variables': common_env_variables},
@@ -46,7 +47,7 @@ class WorkflowRunManager():
                    'command': ("run-yadage-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
-                               "--workflow-json '{json}' "
+                               "--workflow-json '{workflow_json}' "
                                "--workflow-parameters '{parameters}' "),
                    'environment_variables': common_env_variables},
         'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.format(
@@ -54,7 +55,7 @@ class WorkflowRunManager():
                    'command': ("run-serial-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
-                               "--workflow-json '{json}' "
+                               "--workflow-json '{workflow_json}' "
                                "--workflow-parameters '{parameters}' "
                                "--operational-options '{options}' "),
                    'environment_variables': common_env_variables},
@@ -111,12 +112,14 @@ class WorkflowRunManager():
         """Return the command to be run for a given workflow engine."""
         return (WorkflowRunManager.engine_mapping[self.workflow.type_]
                 ['command'].format(
-             id=self.workflow.id_,
-             workspace=self.workflow.get_workspace(),
-             json=json.dumps(self.workflow.get_specification()),
-             parameters=json.dumps(self._get_merged_workflow_parameters()),
-             options=json.dumps(self.workflow.operational_options),
-        ))
+                    id=self.workflow.id_,
+                    workspace=self.workflow.get_workspace(),
+                    workflow_json=base64.standard_b64encode(json.dumps(
+                        self.workflow.get_specification()).encode()),
+                    parameters=base64.standard_b64encode(json.dumps(
+                        self._get_merged_workflow_parameters()).encode()),
+                    options=base64.standard_b64encode(json.dumps(
+                        self.workflow.operational_options).encode())))
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
