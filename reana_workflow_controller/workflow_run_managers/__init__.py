@@ -104,6 +104,10 @@ class WorkflowRunManager():
         """Start a batch workflow run."""
         raise NotImplementedError('')
 
+    def stop_batch_workflow_run(self):
+        """Stop a batch workflow run."""
+        raise NotImplementedError('')
+
     def _workflow_engine_image(self):
         """Return the correct image for the current workflow type."""
         return WorkflowRunManager.engine_mapping[self.workflow.type_]['image']

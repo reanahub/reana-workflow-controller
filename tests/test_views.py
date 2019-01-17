@@ -529,7 +529,7 @@ def test_start_already_started_workflow(app, session, default_user,
 
 @pytest.mark.parametrize(
     "current_status, expected_status, expected_http_status_code, "
-    "celery_task_call_count",
+    "k8s_stop_call_count",
     [(WorkflowStatus.created, WorkflowStatus.created, 409, 0),
      (WorkflowStatus.running, WorkflowStatus.stopped, 200, 1),
      (WorkflowStatus.failed, WorkflowStatus.failed, 409, 0),
@@ -537,7 +537,7 @@ def test_start_already_started_workflow(app, session, default_user,
 )
 def test_stop_workflow(current_status, expected_status,
                        expected_http_status_code,
-                       celery_task_call_count,
+                       k8s_stop_call_count,
                        app, default_user,
                        yadage_workflow_with_name,
                        sample_serial_workflow_in_db, session):
@@ -546,8 +546,9 @@ def test_stop_workflow(current_status, expected_status,
         sample_serial_workflow_in_db.status = current_status
         session.add(sample_serial_workflow_in_db)
         session.commit()
-        with mock.patch('reana_workflow_controller.tasks.stop_workflow.'
-                        'apply_async') as stop_workflow_mock:
+        with mock.patch('reana_workflow_controller.workflow_run_managers.'
+                        'kubernetes.current_k8s_batchv1_api_client') \
+                as stop_workflow_mock:
             res = client.put(
                 url_for('api.set_workflow_status',
                         workflow_id_or_name=sample_serial_workflow_in_db.name),
@@ -555,7 +556,8 @@ def test_stop_workflow(current_status, expected_status,
                               "status": "stop"})
             assert sample_serial_workflow_in_db.status == expected_status
             assert res.status_code == expected_http_status_code
-            assert stop_workflow_mock.call_count == celery_task_call_count
+            assert stop_workflow_mock.delete_namespaced_job.call_count \
+                == k8s_stop_call_count
 
 
 def test_set_workflow_status_unauthorized(app, default_user,

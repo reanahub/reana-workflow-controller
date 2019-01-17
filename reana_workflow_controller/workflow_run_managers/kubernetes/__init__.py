@@ -14,6 +14,7 @@ from reana_workflow_controller.config import (MANILA_CEPHFS_PVC,
                                               REANA_STORAGE_BACKEND,
                                               TTL_SECONDS_AFTER_FINISHED)
 from reana_workflow_controller.workflow_run_managers import WorkflowRunManager
+from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 
 
 class KubernetesWorkflowRunManager(WorkflowRunManager):
@@ -36,13 +37,31 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
     }
     """Configuration to connect to the different storage backends."""
 
+    default_namespace = 'default'
+    """Default Kubernetes namespace."""
+
     def start_batch_workflow_run(self):
         """Start a batch workflow run."""
-        namespace = 'default'
-        workflow_name = self._workflow_run_name_generator('batch')
-        job = self._create_job_spec(workflow_name)
+        workflow_run_name = self._workflow_run_name_generator('batch')
+        job = self._create_job_spec(workflow_run_name)
         current_k8s_batchv1_api_client.create_namespaced_job(
-            namespace=namespace, body=job)
+            namespace=KubernetesWorkflowRunManager.default_namespace,
+            body=job)
+
+    def stop_batch_workflow_run(self, workflow_run_jobs=None):
+        """Stop a batch workflow run along with all its dependent jobs.
+
+        :param workflow_run_jobs: List of active job id's spawned by the
+            workflow run.
+        """
+        workflow_run_name = self._workflow_run_name_generator('batch')
+        workflow_run_jobs = workflow_run_jobs or []
+        to_delete = workflow_run_jobs + [workflow_run_name]
+        for job in to_delete:
+            current_k8s_batchv1_api_client.delete_namespaced_job(
+                job,
+                KubernetesWorkflowRunManager.default_namespace,
+                V1DeleteOptions(propagation_policy='Background'))
 
     def _create_job_spec(self, name, command=None, image=None,
                          env_vars=None):
