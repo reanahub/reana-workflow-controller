@@ -26,7 +26,7 @@ BROKER = os.getenv('RABBIT_MQ', 'amqp://{0}:{1}@{2}//'.format(BROKER_USER,
 
 BROKER_PORT = os.getenv('RABBIT_MQ_PORT', 5672)
 
-SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')
+SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/var/reana')
 
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -47,25 +47,87 @@ WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
                    'serial': 'serial-default-queue'}
 
 REANA_STORAGE_BACKEND = os.getenv('REANA_STORAGE_BACKEND', 'local')
-"""Type of storage attached to the engines, one of ['local', 'ceph']."""
+"""Type of storage attached to the engines, one of ['local', 'cephfs']."""
 
 MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
 """If CEPH storage backend is used, this represents the name of the
 Kubernetes persistent volume claim."""
 
+MOUNT_CVMFS = os.getenv('REANA_MOUNT_CVMFS', False)
+"""Option to mount CVMFS volumes in workflow engines and jobs."""
+
 SHARED_FS_MAPPING = {
-    'MOUNT_SOURCE_PATH': os.getenv("SHARED_VOLUME_PATH_ROOT", '/reana'),
+    'MOUNT_SOURCE_PATH': os.getenv("SHARED_VOLUME_PATH_ROOT",
+                                   SHARED_VOLUME_PATH),
     # Root path in the underlying shared file system to be mounted inside
     # workflow engines.
-    'MOUNT_DEST_PATH': os.getenv("SHARED_VOLUME_PATH", '/reana'),
+    'MOUNT_DEST_PATH': os.getenv("SHARED_VOLUME_PATH",
+                                 SHARED_VOLUME_PATH),
     # Mount path for the shared file system volume inside workflow engines.
 }
 """Mapping from the shared file system backend to the job file system."""
 
-WORKFLOW_ENGINE_VERSION = parse(__version__).base_version if \
-   os.getenv("REANA_DEPLOYMENT_TYPE", 'local') != 'local' else 'latest'
+WORKFLOW_ENGINE_VERSION = 'cvmfs-16'
 """CWL workflow engine version."""
+
+WORKFLOW_ENGINE_COMMON_ENV_VARS = [
+   {
+      'name': 'ZMQ_PROXY_CONNECT',
+      'value': 'tcp://zeromq-msg-proxy.default.svc.cluster.local:8666'
+   },
+   {
+      'name': 'SHARED_VOLUME_PATH',
+      'value': SHARED_VOLUME_PATH
+   },
+   {
+        'name': 'REANA_MOUNT_CVMFS',
+        'value': MOUNT_CVMFS
+   }
+]
+"""Common to all workflow engines environment variables."""
+
+WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG = ({'name': 'WDB_SOCKET_SERVER',
+                                          'value': 'wdb'},
+                                         {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
+                                          'value': 'True'})
+"""Common to all workflow engines environment variables for debug mode."""
 
 TTL_SECONDS_AFTER_FINISHED = 60
 """Threshold in seconds to clean up terminated (either Complete or Failed)
 jobs."""
+
+
+CVMFS_VOLUME_CONFIGURATION = {
+   'alice': {
+       'name': 'alice-cvmfs-volume',
+       'persistentVolumeClaim': {
+            'claimName': 'csi-cvmfs-alice-pvc',
+            'readOnly': True
+       },
+       'mountPath': '/cvmfs/alice.cern.ch'
+   },
+   'cms': {
+       'name': 'cms-cvmfs-volume',
+       'persistentVolumeClaim': {
+            'claimName': 'csi-cvmfs-cms-pvc',
+            'readOnly': True
+       },
+       'mountPath': '/cvmfs/cms.cern.ch'
+   },
+   'lhcb': {
+       'name': 'lhcb-cvmfs-volume',
+       'persistentVolumeClaim': {
+            'claimName': 'csi-cvmfs-lhcb-pvc',
+            'readOnly': True
+       },
+       'mountPath': '/cvmfs/lhcb.cern.ch'
+   },
+   'atlas': {
+       'name': 'atlas-cvmfs-volume',
+       'persistentVolumeClaim': {
+            'claimName': 'csi-cvmfs-atlas-pvc',
+            'readOnly': True
+       },
+       'mountPath': '/cvmfs/atlas.cern.ch'
+   }
+}

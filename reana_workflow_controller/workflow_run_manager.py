@@ -13,60 +13,52 @@ from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 
-from reana_workflow_controller.config import (MANILA_CEPHFS_PVC,
-                                              REANA_STORAGE_BACKEND,
-                                              SHARED_FS_MAPPING,
-                                              TTL_SECONDS_AFTER_FINISHED,
-                                              WORKFLOW_ENGINE_VERSION)
+from reana_workflow_controller.config import (
+    CVMFS_VOLUME_CONFIGURATION,
+    MANILA_CEPHFS_PVC,
+    MOUNT_CVMFS,
+    REANA_STORAGE_BACKEND,
+    SHARED_FS_MAPPING,
+    TTL_SECONDS_AFTER_FINISHED,
+    WORKFLOW_ENGINE_COMMON_ENV_VARS,
+    WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG,
+    WORKFLOW_ENGINE_VERSION)
 
 
 class WorkflowRunManager():
     """Interface which specifies how to manage workflow runs."""
 
-    common_env_variables = [
-        {
-            'name': 'ZMQ_PROXY_CONNECT',
-            'value': 'tcp://zeromq-msg-proxy.default.svc.cluster.local:8666'
-        },
-        {
-            'name': 'SHARED_VOLUME_PATH',
-            'value': '/reana'
-        },
-    ]
-    """Common to all workflow engines environment variables."""
-
     if os.getenv('FLASK_ENV') == 'development':
-        common_env_variables.extend(({'name': 'WDB_SOCKET_SERVER',
-                                     'value': 'wdb'},
-                                    {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
-                                     'value': 'True'}))
+        WORKFLOW_ENGINE_COMMON_ENV_VARS.extend(
+            WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
+
     engine_mapping = {
-        'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.format(
-            WORKFLOW_ENGINE_VERSION),
+        'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.
+                         format(WORKFLOW_ENGINE_VERSION),
                 'command': ("run-cwl-workflow "
                             "--workflow-uuid {id} "
                             "--workflow-workspace {workspace} "
                             "--workflow-json '{workflow_json}' "
                             "--workflow-parameters '{parameters}' "
                             "--operational-options '{options}' "),
-                'environment_variables': common_env_variables},
-        'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.format(
-            WORKFLOW_ENGINE_VERSION),
+                'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
+        'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.
+                            format(WORKFLOW_ENGINE_VERSION),
                    'command': ("run-yadage-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
                                "--workflow-json '{workflow_json}' "
                                "--workflow-parameters '{parameters}' "),
-                   'environment_variables': common_env_variables},
-        'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.format(
-            WORKFLOW_ENGINE_VERSION),
+                   'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
+        'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.
+                            format(WORKFLOW_ENGINE_VERSION),
                    'command': ("run-serial-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
                                "--workflow-json '{workflow_json}' "
                                "--workflow-parameters '{parameters}' "
                                "--operational-options '{options}' "),
-                   'environment_variables': common_env_variables},
+                   'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
     }
     """Mapping between engines and their basis configuration."""
 
@@ -157,6 +149,15 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             }
         }
     }
+
+    cvmfs_volumes = []
+    cvmfs_volume_mounts = []
+    for cvmfs_mount in CVMFS_VOLUME_CONFIGURATION.values():
+        cvmfs_volumes.append({'name': cvmfs_mount['name'],
+                              'persistentVolumeClaim':
+                              cvmfs_mount['persistentVolumeClaim']})
+        cvmfs_volume_mounts.append({'name': cvmfs_mount['name'],
+                                    'mountPath': cvmfs_mount['mountPath']})
     """Configuration to connect to the different storage backends."""
 
     default_namespace = 'default'
@@ -229,6 +230,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             KubernetesWorkflowRunManager.k8s_shared_volume
             [REANA_STORAGE_BACKEND]
         ]
+        if MOUNT_CVMFS:
+            container.volume_mounts.extend(KubernetesWorkflowRunManager.
+                                           cvmfs_volume_mounts)
+            spec.template.spec.volumes.extend(KubernetesWorkflowRunManager.
+                                              cvmfs_volumes)
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
         job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
