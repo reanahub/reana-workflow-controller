@@ -11,7 +11,8 @@ from kubernetes import client
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_workflow_controller.config import (MANILA_CEPHFS_PVC,
                                               SHARED_FS_MAPPING,
-                                              REANA_STORAGE_BACKEND)
+                                              REANA_STORAGE_BACKEND,
+                                              TTL_SECONDS_AFTER_FINISHED)
 from reana_workflow_controller.workflow_run_managers import WorkflowRunManager
 
 
@@ -89,5 +90,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         ]
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
+        job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
         job.spec.backoff_limit = 0
         return job

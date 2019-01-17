@@ -73,3 +73,7 @@ SHARED_FS_MAPPING = {
 WORKFLOW_ENGINE_VERSION = parse(__version__).base_version if \
    os.getenv("REANA_DEPLOYMENT_TYPE", 'local') != 'local' else 'latest'
 """CWL workflow engine version."""
+
+TTL_SECONDS_AFTER_FINISHED = 60
+"""Threshold in seconds to clean up terminated (either Complete or Failed)
+jobs."""
