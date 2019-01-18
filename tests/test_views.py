@@ -474,8 +474,8 @@ def test_set_workflow_status(app, session, default_user,
         payload = START
         # replace celery task with Mock()
         with mock.patch(
-             'reana_workflow_controller.workflow_run_managers.kubernetes'
-             '.current_k8s_batchv1_api_client') as k8s_api_client:
+             'reana_workflow_controller.workflow_run_manager.'
+             'current_k8s_batchv1_api_client') as k8s_api_client:
             # set workflow status to START
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
@@ -505,9 +505,8 @@ def test_start_already_started_workflow(app, session, default_user,
         assert workflow.status == WorkflowStatus.created
         payload = START
         # replace celery task with Mock()
-        with mock.patch('reana_workflow_controller.workflow_run_managers'
-                        '.kubernetes'
-                        '.current_k8s_batchv1_api_client'):
+        with mock.patch('reana_workflow_controller.workflow_run_manager.'
+                        'current_k8s_batchv1_api_client'):
             # set workflow status to START
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),
@@ -546,8 +545,8 @@ def test_stop_workflow(current_status, expected_status,
         sample_serial_workflow_in_db.status = current_status
         session.add(sample_serial_workflow_in_db)
         session.commit()
-        with mock.patch('reana_workflow_controller.workflow_run_managers.'
-                        'kubernetes.current_k8s_batchv1_api_client') \
+        with mock.patch('reana_workflow_controller.workflow_run_manager.'
+                        'current_k8s_batchv1_api_client') \
                 as stop_workflow_mock:
             res = client.put(
                 url_for('api.set_workflow_status',
@@ -765,8 +764,8 @@ def test_start_input_parameters(app, session, default_user,
         parameters = {'input_parameters': {'first': 'test'},
                       'operational_options': {}}
         # replace celery task with Mock()
-        with mock.patch('reana_workflow_controller.workflow_run_managers'
-                        '.kubernetes.current_k8s_batchv1_api_client'):
+        with mock.patch('reana_workflow_controller.workflow_run_manager.'
+                        'current_k8s_batchv1_api_client'):
             # set workflow status to START and pass parameters
             res = client.put(url_for('api.set_workflow_status',
                              workflow_id_or_name=workflow_created_uuid),

@@ -38,7 +38,7 @@ from reana_workflow_controller.utils import (create_workflow_workspace,
                                              remove_files_recursive_wildcard,
                                              remove_workflow_jobs_from_cache,
                                              remove_workflow_workspace)
-from reana_workflow_controller.workflow_run_managers.kubernetes import \
+from reana_workflow_controller.workflow_run_manager import \
     KubernetesWorkflowRunManager
 
 START = 'start'
