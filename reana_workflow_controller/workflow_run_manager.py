@@ -22,7 +22,9 @@ from reana_workflow_controller.config import (
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG,
-    WORKFLOW_ENGINE_VERSION)
+    CWL_WORKFLOW_ENGINE_VERSION,
+    YADAGE_WORKFLOW_ENGINE_VERSION,
+    SERIAL_WORKFLOW_ENGINE_VERSION)
 
 
 class WorkflowRunManager():
@@ -34,7 +36,7 @@ class WorkflowRunManager():
 
     engine_mapping = {
         'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.
-                         format(WORKFLOW_ENGINE_VERSION),
+                         format(CWL_WORKFLOW_ENGINE_VERSION),
                 'command': ("run-cwl-workflow "
                             "--workflow-uuid {id} "
                             "--workflow-workspace {workspace} "
@@ -43,7 +45,7 @@ class WorkflowRunManager():
                             "--operational-options '{options}' "),
                 'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
         'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.
-                            format(WORKFLOW_ENGINE_VERSION),
+                            format(YADAGE_WORKFLOW_ENGINE_VERSION),
                    'command': ("run-yadage-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
@@ -51,7 +53,7 @@ class WorkflowRunManager():
                                "--workflow-parameters '{parameters}' "),
                    'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
         'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.
-                            format(WORKFLOW_ENGINE_VERSION),
+                            format(SERIAL_WORKFLOW_ENGINE_VERSION),
                    'command': ("run-serial-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "

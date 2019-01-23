@@ -67,8 +67,17 @@ SHARED_FS_MAPPING = {
 }
 """Mapping from the shared file system backend to the job file system."""
 
-WORKFLOW_ENGINE_VERSION = 'cvmfs-16'
+CWL_WORKFLOW_ENGINE_VERSION = os.getenv('CWL_WORKFLOW_ENGINE_VERSION',
+                                        'latest')
 """CWL workflow engine version."""
+
+YADAGE_WORKFLOW_ENGINE_VERSION = os.getenv('YADAGE_WORKFLOW_ENGINE_VERSION',
+                                           'latest')
+"""Yadage workflow engine version."""
+
+SERIAL_WORKFLOW_ENGINE_VERSION = os.getenv('SERIAL_WORKFLOW_ENGINE_VERSION',
+                                           'latest')
+"""Serial workflow engine version."""
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
    {
