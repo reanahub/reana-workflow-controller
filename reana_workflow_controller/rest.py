@@ -720,7 +720,13 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "workflow_name": "mytest-1",
-                "logs": "<Workflow engine log output>",
+                "logs": "{'workflow_logs': string,
+                          'job_logs': {
+                             '256b25f4-4cfb-4684-b7a8-73872ef455a2': string,
+                             '256b25f4-4cfb-4684-b7a8-73872ef455a3': string,
+                           },
+                          'engine_specific': object,
+                         }",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
         400:
@@ -754,10 +760,12 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
-
+        workflow_logs = {'workflow_logs': workflow.logs,
+                         'job_logs': _get_workflow_logs(workflow),
+                         'engine_specific': workflow.engine_specific}
         return jsonify({'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow),
-                        'logs': workflow.logs or "",
+                        'logs': json.dumps(workflow_logs),
                         'user': user_uuid}), 200
 
     except ValueError:
@@ -913,7 +921,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                         'status': workflow.status.name,
                         'progress': progress,
                         'user': user_uuid,
-                        'logs': workflow_logs}), 200
+                        'logs': json.dumps(workflow_logs)}), 200
     except ValueError:
         return jsonify({'message': 'REANA_WORKON is set to {0}, but '
                                    'that workflow does not exist. '
@@ -1421,10 +1429,11 @@ def _get_workflow_name(workflow):
 
 def _get_workflow_logs(workflow):
     """Return the logs for all jobs of a workflow."""
-    jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
-    all_logs = ''
+    jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).order_by(
+        Job.created).all()
+    all_logs = {}
     for job in jobs:
-        all_logs += job.logs or ''
+        all_logs[str(job.id_)] = job.logs or ''
     return all_logs
 
 

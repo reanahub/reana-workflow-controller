@@ -707,7 +707,8 @@ def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
             'workflow_id': workflow_uuid,
             'workflow_name': workflow_name,
             'user': str(default_user.id_),
-            'logs': create_workflow_logs
+            'logs': '{"workflow_logs": "", "job_logs": {},'
+                    ' "engine_specific": null}'
         }
         assert response_data == expected_data
 
