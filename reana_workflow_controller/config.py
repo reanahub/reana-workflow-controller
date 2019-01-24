@@ -53,7 +53,8 @@ MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
 """If CEPH storage backend is used, this represents the name of the
 Kubernetes persistent volume claim."""
 
-MOUNT_CVMFS = os.getenv('REANA_MOUNT_CVMFS', False)
+MOUNT_CVMFS = True if os.getenv('REANA_MOUNT_CVMFS', '').lower() == \
+     'true' else False
 """Option to mount CVMFS volumes in workflow engines and jobs."""
 
 SHARED_FS_MAPPING = {
@@ -90,7 +91,7 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
    },
    {
         'name': 'REANA_MOUNT_CVMFS',
-        'value': MOUNT_CVMFS
+        'value': '{}'.format(MOUNT_CVMFS)
    }
 ]
 """Common to all workflow engines environment variables."""
