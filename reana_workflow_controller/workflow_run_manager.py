@@ -137,7 +137,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
 
     k8s_shared_volume = {
-        'ceph': {
+        'cephfs': {
             'name': 'default-shared-volume',
             'persistentVolumeClaim': {
                 'claimName': MANILA_CEPHFS_PVC,
