@@ -21,11 +21,12 @@ import fs
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from fs.errors import CreateFailed
-from werkzeug.exceptions import NotFound
-
+from reana_commons.utils import get_workflow_status_change_verb
 from reana_db.database import Session
 from reana_db.models import Job, User, Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
+from werkzeug.exceptions import NotFound
+
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
                                               WORKFLOW_QUEUES,
                                               WORKFLOW_TIME_FORMAT)
@@ -1393,11 +1394,12 @@ def _start_workflow(workflow, parameters):
         kwrm = KubernetesWorkflowRunManager(workflow)
         kwrm.start_batch_workflow_run()
     else:
-        verb = "is" if workflow.status == WorkflowStatus.running else "has"
         message = \
             ("Workflow {id_} could not be started because it {verb}"
-             " already {status}.").format(id_=workflow.id_, verb=verb,
-                                          status=str(workflow.status.name))
+             " already {status}.").format(
+               id_=workflow.id_,
+               verb=get_workflow_status_change_verb(workflow.status.name),
+               status=str(workflow.status.name))
         raise REANAWorkflowControllerError(message)
 
 
