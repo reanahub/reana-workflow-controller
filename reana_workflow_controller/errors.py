@@ -9,7 +9,7 @@
 """REANA Workflow Controller errors."""
 
 
-class WorkflowNameError(Exception):
+class REANAWorkflowNameError(Exception):
     """."""
 
 
@@ -17,9 +17,9 @@ class REANAWorkflowControllerError(Exception):
     """Error when trying to manage workflows."""
 
 
-class UploadPathError(Exception):
+class REANAUploadPathError(Exception):
     """Provided paths contain '../'."""
 
 
-class WorkflowDeletionError(Exception):
+class REANAWorkflowDeletionError(Exception):
     """Error when trying to delete a workflow."""

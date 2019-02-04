@@ -26,7 +26,7 @@ from pytest_reana.fixtures import (cwl_workflow_with_name,
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
-from reana_workflow_controller.errors import WorkflowDeletionError
+from reana_workflow_controller.errors import REANAWorkflowDeletionError
 from reana_workflow_controller.rest import START, STOP, _delete_workflow
 from reana_workflow_controller.utils import create_workflow_workspace
 

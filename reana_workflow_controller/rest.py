@@ -31,9 +31,9 @@ from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
                                               WORKFLOW_QUEUES,
                                               WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
-                                              UploadPathError,
-                                              WorkflowDeletionError,
-                                              WorkflowNameError)
+                                              REANAUploadPathError,
+                                              REANAWorkflowDeletionError,
+                                              REANAWorkflowNameError)
 from reana_workflow_controller.utils import (create_workflow_workspace,
                                              list_directory_files,
                                              remove_files_recursive_wildcard,
@@ -262,8 +262,8 @@ def create_workflow():  # noqa
                 workflow_name.encode('ascii')
             except UnicodeEncodeError:
                 # `workflow_name` contains something else than just ASCII.
-                raise WorkflowNameError('Workflow name {} is not valid.'.
-                                        format(workflow_name))
+                raise REANAWorkflowNameError('Workflow name {} is not valid.'.
+                                             format(workflow_name))
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,
                             name=workflow_name,
@@ -282,7 +282,7 @@ def create_workflow():  # noqa
                         'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow)}), 201
 
-    except (WorkflowNameError, KeyError) as e:
+    except (REANAWorkflowNameError, KeyError) as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
@@ -376,7 +376,7 @@ def upload_file(workflow_id_or_name):
         if full_file_name[0] == '/':
             full_file_name = full_file_name[1:]
         elif '..' in full_file_name.split("/"):
-            raise UploadPathError('Path cannot contain "..".')
+            raise REANAUploadPathError('Path cannot contain "..".')
         absolute_workspace_path = os.path.join(
           current_app.config['SHARED_VOLUME_PATH'],
           workflow.get_workspace())
@@ -1494,7 +1494,7 @@ def _delete_workflow(workflow,
                         'status': workflow.status.name,
                         'user': str(workflow.owner_id)}), 200
     elif workflow.status == WorkflowStatus.running:
-        raise WorkflowDeletionError(
+        raise REANAWorkflowDeletionError(
             'Workflow {0}.{1} cannot be deleted as it'
             ' is currently running.'.
             format(
