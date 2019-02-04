@@ -32,6 +32,7 @@ from reana_workflow_controller.config import (
     DEFAULT_INTERACTIVE_SESSION_IMAGE,
     DEFAULT_INTERACTIVE_SESSION_PORT,
     DEFAULT_NAME_FOR_WORKFLOWS,
+    SHARED_VOLUME_PATH,
     WORKFLOW_QUEUES,
     WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAUploadPathError,
@@ -174,11 +175,16 @@ def get_workflows():  # noqa
                                  'created': workflow.created.
                                  strftime(WORKFLOW_TIME_FORMAT)}
             if verbose:
-                disk_usage_info = get_workspace_disk_usage(
-                    workflow.get_workspace(),
-                    summarize=True)
-                # TODO: format disk_usage_info
-                workflow_response['size'] = disk_usage_info
+                reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
+                if reana_fs.exists(workflow.get_workspace()):
+                    absolute_workspace_path = reana_fs.getospath(
+                        workflow.get_workspace())
+                    disk_usage_info = get_workspace_disk_usage(
+                        absolute_workspace_path)
+                    if disk_usage_info:
+                        workflow_response['size'] = disk_usage_info[-1]['size']
+                    else:
+                        workflow_response['size'] = '0K'
             workflows.append(workflow_response)
 
         return jsonify(workflows), 200
