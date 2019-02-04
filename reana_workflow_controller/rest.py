@@ -21,7 +21,8 @@ import fs
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from fs.errors import CreateFailed
-from reana_commons.utils import get_workflow_status_change_verb
+from reana_commons.utils import (get_workflow_status_change_verb,
+                                 get_workspace_disk_usage)
 from reana_db.database import Session
 from reana_db.models import Job, User, Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
@@ -73,6 +74,11 @@ def get_workflows():  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
+        - name: verbose
+          in: query
+          description: Optional flag to show more information.
+          required: false
+          type: boolean
       responses:
         200:
           description: >-
@@ -89,6 +95,8 @@ def get_workflows():  # noqa
                   type: string
                 status:
                   type: string
+                size:
+                  type: string
                 user:
                   type: string
                 created:
@@ -98,29 +106,33 @@ def get_workflows():  # noqa
               [
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
-                  "name": "mytest-1",
+                  "name": "mytest.1",
                   "status": "running",
+                  "size": "10M",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
-                  "name": "mytest-2",
+                  "name": "mytest.2",
                   "status": "finished",
+                  "size": "12M",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
-                  "name": "mytest-3",
-                  "status": "waiting",
+                  "name": "mytest.3",
+                  "status": "created",
+                  "size": "180K",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
-                  "name": "mytest-4",
-                  "status": "waiting",
+                  "name": "mytest.4",
+                  "status": "created",
+                  "size": "1G",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 }
@@ -149,6 +161,7 @@ def get_workflows():  # noqa
     try:
         user_uuid = request.args['user']
         user = User.query.filter(User.id_ == user_uuid).first()
+        verbose = request.args.get('verbose', False)
         if not user:
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
@@ -160,6 +173,12 @@ def get_workflows():  # noqa
                                  'user': user_uuid,
                                  'created': workflow.created.
                                  strftime(WORKFLOW_TIME_FORMAT)}
+            if verbose:
+                disk_usage_info = get_workspace_disk_usage(
+                    workflow.get_workspace(),
+                    summarize=True)
+                # TODO: format disk_usage_info
+                workflow_response['size'] = disk_usage_info
             workflows.append(workflow_response)
 
         return jsonify(workflows), 200
