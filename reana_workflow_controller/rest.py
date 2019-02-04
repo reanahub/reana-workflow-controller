@@ -27,11 +27,14 @@ from reana_db.models import Job, User, Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from werkzeug.exceptions import NotFound
 
-from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
-                                              WORKFLOW_QUEUES,
-                                              WORKFLOW_TIME_FORMAT)
-from reana_workflow_controller.errors import (REANAWorkflowControllerError,
-                                              REANAUploadPathError,
+from reana_workflow_controller.config import (
+    DEFAULT_INTERACTIVE_SESSION_IMAGE,
+    DEFAULT_INTERACTIVE_SESSION_PORT,
+    DEFAULT_NAME_FOR_WORKFLOWS,
+    WORKFLOW_QUEUES,
+    WORKFLOW_TIME_FORMAT)
+from reana_workflow_controller.errors import (REANAUploadPathError,
+                                              REANAWorkflowControllerError,
                                               REANAWorkflowDeletionError,
                                               REANAWorkflowNameError)
 from reana_workflow_controller.utils import (create_workflow_workspace,
@@ -1125,6 +1128,108 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 400
     except NotImplementedError as e:
         return jsonify({"message": str(e)}), 501
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/open',
+                         methods=['POST'])
+def open_interactive_session(workflow_id_or_name):  # noqa
+    r"""Start an interactive session inside the workflow workspace.
+
+    ---
+    post:
+      summary: Start an interactive session inside the workflow workspace.
+      description: >-
+        This resource is expecting a workflow to start an interactive session
+        within its workspace.
+      operationId: open_interactive_session
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+        - name: interactive_environment
+          in: body
+          description: >-
+            Optional. Image to use when spawning the interactive session along
+            with the needed port.
+          required: false
+          schema:
+            type: object
+            properties:
+              image:
+                type: string
+              port:
+                type: integer
+      responses:
+        200:
+          description: >-
+            Request succeeded. The interactive session has been opened.
+          schema:
+            type: object
+            properties:
+              path:
+                type: string
+          examples:
+            application/json:
+              {
+                "path": "/dd4e93cf-e6d0-4714-a601-301ed97eec60",
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
+                            exist"
+              }
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        if request.json and not request.json.get("image"):
+            raise ValueError("If interactive_environment payload is sent, it˛"
+                             "should contain the image property.")
+
+        user_uuid = request.args["user"]
+        image = request.json.get("image", DEFAULT_INTERACTIVE_SESSION_IMAGE)
+        port = request.json.get("port", DEFAULT_INTERACTIVE_SESSION_PORT)
+        workflow = None
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        access_path = kwrm.start_interactive_session(image, port)
+        return jsonify({"path": "{}".format(access_path)}), 200
+
+    except (KeyError, ValueError) as e:
+        status_code = 400 if workflow else 404
+        return jsonify({"message": str(e)}), status_code
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 

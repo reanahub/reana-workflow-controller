@@ -8,23 +8,31 @@
 import base64
 import json
 import os
+from string import Template
 
+import pkg_resources
+import yaml
 from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
-from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
-
+from kubernetes.client.rest import ApiException
+from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
+                                          current_k8s_corev1_api_client,
+                                          current_k8s_extensions_v1beta1)
+from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.config import (
     CVMFS_VOLUME_CONFIGURATION,
-    MANILA_CEPHFS_PVC,
-    MOUNT_CVMFS,
+    CWL_WORKFLOW_ENGINE_VERSION,
+    K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH,
+    MANILA_CEPHFS_PVC, MOUNT_CVMFS,
     REANA_STORAGE_BACKEND,
+    SERIAL_WORKFLOW_ENGINE_VERSION,
     SHARED_FS_MAPPING,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG,
-    CWL_WORKFLOW_ENGINE_VERSION,
     YADAGE_WORKFLOW_ENGINE_VERSION,
-    SERIAL_WORKFLOW_ENGINE_VERSION)
+    DEFAULT_INTERACTIVE_SESSION_IMAGE,
+    DEFAULT_INTERACTIVE_SESSION_PORT)
 
 
 class WorkflowRunManager():
@@ -71,7 +79,7 @@ class WorkflowRunManager():
         """
         self.workflow = workflow
 
-    def _workflow_run_name_generator(self, mode):
+    def _workflow_run_name_generator(self, mode, type=None):
         """Generate the name to be given to a workflow run.
 
         In the case of Kubernetes, this should allow administrators to be able
@@ -88,10 +96,11 @@ class WorkflowRunManager():
         :param mode: Mode in which the workflow runs, like ``batch`` or
             ``interactive``.
         """
+        type_ = type or self.workflow.type_
         return '{mode}-{workflow_type}-{workflow_id}'.format(
             mode=mode,
             workflow_id=self.workflow.id_,
-            workflow_type=self.workflow.type_,
+            workflow_type=type_,
         )
 
     def _get_merged_workflow_parameters(self):
@@ -104,6 +113,10 @@ class WorkflowRunManager():
 
     def start_batch_workflow_run(self):
         """Start a batch workflow run."""
+        raise NotImplementedError('')
+
+    def start_interactive_session(self):
+        """Start an interactive workflow run."""
         raise NotImplementedError('')
 
     def stop_batch_workflow_run(self):
@@ -172,6 +185,56 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         current_k8s_batchv1_api_client.create_namespaced_job(
             namespace=KubernetesWorkflowRunManager.default_namespace,
             body=job)
+
+    def start_interactive_session(
+            self, image=None, port=None):
+        """Start an interactive workflow run."""
+        try:
+            image = image or DEFAULT_INTERACTIVE_SESSION_IMAGE
+            port = port or DEFAULT_INTERACTIVE_SESSION_PORT
+            workflow_run_name = \
+                self._workflow_run_name_generator('interactive',
+                                                  type='session')
+            access_path = self.generate_interactive_workflow_path()
+            interactive_deployment_file = pkg_resources.resource_string(
+                "reana_workflow_controller",
+                K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH).decode("UTF-8")
+            interactive_deployment_replaced = \
+                Template(interactive_deployment_file).substitute(
+                    image=image,
+                    deployment_name=workflow_run_name,
+                    ingress_path=access_path,
+                    service_port=port,
+                )
+            ingress, service, deployment = yaml.load_all(
+                interactive_deployment_replaced)
+            current_k8s_extensions_v1beta1.create_namespaced_deployment(
+                'default', deployment)
+            current_k8s_corev1_api_client.create_namespaced_service(
+                'default', service)
+            current_k8s_extensions_v1beta1.create_namespaced_ingress(
+                'default', ingress)
+
+            return access_path
+        except ApiException as api_exception:
+            raise REANAInteractiveSessionError(
+                "Connection to Kubernetes has failed:\n{}".format(
+                    api_exception)
+            )
+        except ValueError as value_error:
+            raise REANAInteractiveSessionError(
+                "Error while filling the interactive workflow "
+                "run template:\n{}".format(value_error)
+            )
+        except Exception as e:
+            raise REANAInteractiveSessionError(
+                "Unkown error while starting interactive workflow run:\n{}"
+                .format(e)
+            )
+
+    def generate_interactive_workflow_path(self):
+        """Generate the path to access the interactive workflow."""
+        return "/{}".format(self.workflow.id_)
 
     def stop_batch_workflow_run(self, workflow_run_jobs=None):
         """Stop a batch workflow run along with all its dependent jobs.

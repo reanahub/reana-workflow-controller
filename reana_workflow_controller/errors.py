@@ -23,3 +23,7 @@ class REANAUploadPathError(Exception):
 
 class REANAWorkflowDeletionError(Exception):
     """Error when trying to delete a workflow."""
+
+
+class REANAInteractiveSessionError(Exception):
+    """Error when trying to create an interactive session."""

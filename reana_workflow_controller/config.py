@@ -141,3 +141,13 @@ CVMFS_VOLUME_CONFIGURATION = {
        'mountPath': '/cvmfs/atlas.cern.ch'
    }
 }
+
+K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH = \
+     "templates/k8s/interactive-deployment.template"
+"""Path to the k8s interactive deployment template, relative to the package."""
+
+DEFAULT_INTERACTIVE_SESSION_IMAGE = "jupyter/scipy-notebook"
+"""Docker image to use by default when opening interactive sessions."""
+
+DEFAULT_INTERACTIVE_SESSION_PORT = 8888
+"""Default port used by the default interactive session image."""
