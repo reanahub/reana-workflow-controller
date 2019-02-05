@@ -61,9 +61,10 @@ def remove_workflow_jobs_from_cache(workflow):
     """
     jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
     for job in jobs:
-        job_path = os.path.join(workflow.get_workspace(),
-                                '..', 'archive',
-                                str(job.id_))
+        job_path = remove_upper_level_references(
+            os.path.join(workflow.get_workspace(),
+                         '..', 'archive',
+                         str(job.id_)))
         Session.query(JobCache).filter_by(job_id=job.id_).delete()
         remove_workflow_workspace(job_path)
     Session.commit()

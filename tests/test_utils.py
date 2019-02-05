@@ -11,6 +11,7 @@ import io
 import json
 import os
 import uuid
+from distutils.dir_util import copy_tree
 from pathlib import Path
 
 import fs
@@ -124,8 +125,15 @@ def test_workspace_deletion(app,
     session.add(job_cache_entry)
     session.commit()
 
+    # create cached workspace
+    cache_dir_path = os.path.abspath(os.path.join(
+        absolute_workflow_workspace, os.pardir,
+        'archive', str(workflow_job.id_)))
+    os.makedirs(cache_dir_path)
+
     # check that the workflow workspace exists
     assert os.path.exists(absolute_workflow_workspace)
+    assert os.path.exists(cache_dir_path)
     _delete_workflow(workflow,
                      hard_delete=hard_delete,
                      workspace=workspace)
@@ -137,6 +145,7 @@ def test_workspace_deletion(app,
     cache_entries_after_delete = JobCache.query.filter_by(
         job_id=workflow_job.id_).all()
     assert not cache_entries_after_delete
+    assert not os.path.exists(cache_dir_path)
 
 
 def test_deletion_of_workspace_of_an_already_deleted_workflow(
