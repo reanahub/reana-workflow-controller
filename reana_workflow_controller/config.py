@@ -53,10 +53,6 @@ MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
 """If CEPH storage backend is used, this represents the name of the
 Kubernetes persistent volume claim."""
 
-MOUNT_CVMFS = True if os.getenv('REANA_MOUNT_CVMFS', '').lower() == \
-     'true' else False
-"""Option to mount CVMFS volumes in workflow engines and jobs."""
-
 SHARED_FS_MAPPING = {
     'MOUNT_SOURCE_PATH': os.getenv("SHARED_VOLUME_PATH_ROOT",
                                    SHARED_VOLUME_PATH),
@@ -88,10 +84,6 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
    {
       'name': 'SHARED_VOLUME_PATH',
       'value': SHARED_VOLUME_PATH
-   },
-   {
-        'name': 'REANA_MOUNT_CVMFS',
-        'value': '{}'.format(MOUNT_CVMFS)
    }
 ]
 """Common to all workflow engines environment variables."""
@@ -105,42 +97,6 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG = ({'name': 'WDB_SOCKET_SERVER',
 TTL_SECONDS_AFTER_FINISHED = 60
 """Threshold in seconds to clean up terminated (either Complete or Failed)
 jobs."""
-
-
-CVMFS_VOLUME_CONFIGURATION = {
-   'alice': {
-       'name': 'alice-cvmfs-volume',
-       'persistentVolumeClaim': {
-            'claimName': 'csi-cvmfs-alice-pvc',
-            'readOnly': True
-       },
-       'mountPath': '/cvmfs/alice.cern.ch'
-   },
-   'cms': {
-       'name': 'cms-cvmfs-volume',
-       'persistentVolumeClaim': {
-            'claimName': 'csi-cvmfs-cms-pvc',
-            'readOnly': True
-       },
-       'mountPath': '/cvmfs/cms.cern.ch'
-   },
-   'lhcb': {
-       'name': 'lhcb-cvmfs-volume',
-       'persistentVolumeClaim': {
-            'claimName': 'csi-cvmfs-lhcb-pvc',
-            'readOnly': True
-       },
-       'mountPath': '/cvmfs/lhcb.cern.ch'
-   },
-   'atlas': {
-       'name': 'atlas-cvmfs-volume',
-       'persistentVolumeClaim': {
-            'claimName': 'csi-cvmfs-atlas-pvc',
-            'readOnly': True
-       },
-       'mountPath': '/cvmfs/atlas.cern.ch'
-   }
-}
 
 K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH = \
      "templates/k8s/interactive-deployment.template"

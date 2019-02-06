@@ -20,10 +20,9 @@ from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
                                           current_k8s_extensions_v1beta1)
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.config import (
-    CVMFS_VOLUME_CONFIGURATION,
     CWL_WORKFLOW_ENGINE_VERSION,
     K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH,
-    MANILA_CEPHFS_PVC, MOUNT_CVMFS,
+    MANILA_CEPHFS_PVC,
     REANA_STORAGE_BACKEND,
     SERIAL_WORKFLOW_ENGINE_VERSION,
     SHARED_FS_MAPPING,
@@ -43,7 +42,7 @@ class WorkflowRunManager():
             WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
 
     engine_mapping = {
-        'cwl': {'image': 'reanahub/reana-workflow-engine-cwl:{}'.
+        'cwl': {'image': 'dinossimpson/reana-workflow-engine-cwl:{}'.
                          format(CWL_WORKFLOW_ENGINE_VERSION),
                 'command': ("run-cwl-workflow "
                             "--workflow-uuid {id} "
@@ -52,7 +51,7 @@ class WorkflowRunManager():
                             "--workflow-parameters '{parameters}' "
                             "--operational-options '{options}' "),
                 'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
-        'yadage': {'image': 'reanahub/reana-workflow-engine-yadage:{}'.
+        'yadage': {'image': 'dinossimpson/reana-workflow-engine-yadage:{}'.
                             format(YADAGE_WORKFLOW_ENGINE_VERSION),
                    'command': ("run-yadage-workflow "
                                "--workflow-uuid {id} "
@@ -60,7 +59,7 @@ class WorkflowRunManager():
                                "--workflow-json '{workflow_json}' "
                                "--workflow-parameters '{parameters}' "),
                    'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
-        'serial': {'image': 'reanahub/reana-workflow-engine-serial:{}'.
+        'serial': {'image': 'dinossimpson/reana-workflow-engine-serial:{}'.
                             format(SERIAL_WORKFLOW_ENGINE_VERSION),
                    'command': ("run-serial-workflow "
                                "--workflow-uuid {id} "
@@ -142,8 +141,19 @@ class WorkflowRunManager():
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
-        return (WorkflowRunManager.engine_mapping[self.workflow.type_]
-                ['environment_variables'])
+        env_vars = list(WorkflowRunManager.engine_mapping[
+            self.workflow.type_]['environment_variables'])
+        cvmfs_volumes = 'false'
+        for resource in self.workflow.reana_specification['workflow'].\
+                get('resources', {}):
+            if 'cvmfs' in resource:
+                cvmfs_volumes = resource['cvmfs']
+                break
+        if type(cvmfs_volumes) == list:
+            cvmfs_env_var = {'name': 'REANA_MOUNT_CVMFS',
+                             'value': str(cvmfs_volumes)}
+            env_vars.append(cvmfs_env_var)
+        return (env_vars)
 
 
 class KubernetesWorkflowRunManager(WorkflowRunManager):
@@ -164,16 +174,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             }
         }
     }
-
-    cvmfs_volumes = []
-    cvmfs_volume_mounts = []
-    for cvmfs_mount in CVMFS_VOLUME_CONFIGURATION.values():
-        cvmfs_volumes.append({'name': cvmfs_mount['name'],
-                              'persistentVolumeClaim':
-                              cvmfs_mount['persistentVolumeClaim']})
-        cvmfs_volume_mounts.append({'name': cvmfs_mount['name'],
-                                    'mountPath': cvmfs_mount['mountPath']})
-    """Configuration to connect to the different storage backends."""
 
     default_namespace = 'default'
     """Default Kubernetes namespace."""
@@ -295,11 +295,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             KubernetesWorkflowRunManager.k8s_shared_volume
             [REANA_STORAGE_BACKEND]
         ]
-        if MOUNT_CVMFS:
-            container.volume_mounts.extend(KubernetesWorkflowRunManager.
-                                           cvmfs_volume_mounts)
-            spec.template.spec.volumes.extend(KubernetesWorkflowRunManager.
-                                              cvmfs_volumes)
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
         job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
