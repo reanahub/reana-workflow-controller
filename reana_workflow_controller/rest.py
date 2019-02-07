@@ -1484,6 +1484,173 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@restapi_blueprint.route('/workflows/move_files/<workflow_id_or_name>',
+                         methods=['PUT'])
+def move_files(workflow_id_or_name):  # noqa
+    r"""Move files within workspace.
+    ---
+    put:
+      summary: Move files within workspace.
+      description: >-
+        This resource moves files within the workspace. Resource is expecting
+        a workflow UUID.
+      operationId: move_files
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: source
+          in: query
+          description: Required. Source file(s).
+          required: true
+          type: string
+        - name: target
+          in: query
+          description: Required. Target file(s).
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner..
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Message about successfully moved files is
+            returned.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Files were successfully moved",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_uuid = request.args['user']
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
+        source = request.args['source']
+        target = request.args['target']
+        if workflow.status == 'running':
+            return jsonify({'message': 'Workflow is running, files can not be '
+                            'moved'}), 400
+
+        if not str(workflow.owner_id) == user_uuid:
+            return jsonify(
+                {'message': 'User {} is not allowed to access workflow {}'
+                 .format(user_uuid, workflow_id_or_name)}), 403
+
+        _mv_files(source, target, workflow)
+        message = 'File(s) {} were successfully moved'.format(source)
+
+        return jsonify({
+            'message': message,
+            'workflow_id': workflow.id_,
+            'workflow_name': _get_workflow_name(workflow)}), 200
+
+    except ValueError:
+        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
+                                   'that workflow does not exist. '
+                                   'Please set your REANA_WORKON environment '
+                                   'variable appropriately.'.
+                                   format(workflow_id_or_name)}), 404
+    except REANAWorkflowControllerError as e:
+        return jsonify({"message": str(e)}), 409
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except NotImplementedError as e:
+        return jsonify({"message": str(e)}), 501
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+def _mv_files(source, target, workflow):
+    """Move files within workspace."""
+    absolute_workspace_path = os.path.join(
+        current_app.config['SHARED_VOLUME_PATH'],
+        workflow.get_workspace())
+    absolute_source_path = os.path.join(
+        current_app.config['SHARED_VOLUME_PATH'],
+        absolute_workspace_path,
+        source
+    )
+    absolute_target_path = os.path.join(
+        current_app.config['SHARED_VOLUME_PATH'],
+        absolute_workspace_path,
+        target
+    )
+
+    if not os.path.exists(absolute_source_path):
+        message = 'Path {} does not exist'.format(source)
+        raise REANAWorkflowControllerError(message)
+    if not absolute_source_path.startswith(absolute_workspace_path):
+        message = 'Source path is outside user workspace'
+        raise REANAWorkflowControllerError(message)
+    if not absolute_source_path.startswith(absolute_workspace_path):
+        message = 'Target path is outside workspace'
+        raise REANAWorkflowControllerError(message)
+    try:
+        reana_fs = fs.open_fs(absolute_workspace_path)
+        if os.path.isdir(target):
+            reana_fs.movedir(src_path=sources,
+                             dst_path=target)
+        else:
+            reana_fs.move(src_path=source,
+                          dst_path=target)
+        reana_fs.close()
+    except Exception as e:
+        reana_fs.close()
+        message = 'Something went wrong:\n {}'.format(e)
+        raise REANAWorkflowControllerError(message)
+
+
 def _start_workflow(workflow, parameters):
     """Start a workflow."""
     if workflow.status in [WorkflowStatus.created, WorkflowStatus.queued]:
