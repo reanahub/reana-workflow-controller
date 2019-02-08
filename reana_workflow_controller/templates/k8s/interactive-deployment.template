@@ -40,8 +40,8 @@ spec:
     spec:
       containers:
       - name: $deployment_name
-        command: ["jupyter"]
-        args: ["notebook", "--NotebookApp.token='$user_access_token'"]
+        command: ["start-notebook.sh"]
+        args: ["--NotebookApp.token='$user_access_token'", "--NotebookApp.base_url='$ingress_path'"]
         image: $image
         ports:
         - containerPort: $service_port
