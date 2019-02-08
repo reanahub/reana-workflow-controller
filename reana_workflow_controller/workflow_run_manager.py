@@ -213,6 +213,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     deployment_name=workflow_run_name,
                     ingress_path=access_path,
                     service_port=port,
+                    user_access_token=self.workflow.get_owner_access_token(),
                 )
             ingress, service, deployment = yaml.load_all(
                 interactive_deployment_replaced)
