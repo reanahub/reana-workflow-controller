@@ -64,16 +64,19 @@ SHARED_FS_MAPPING = {
 }
 """Mapping from the shared file system backend to the job file system."""
 
-CWL_WORKFLOW_ENGINE_VERSION = os.getenv('CWL_WORKFLOW_ENGINE_VERSION',
-                                        'latest')
+REANA_WORKFLOW_ENGINE_IMAGE_CWL = os.getenv(
+     'REANA_WORKFLOW_ENGINE_IMAGE_CWL',
+     'reanahub/reana-workflow-engine-cwl:latest')
 """CWL workflow engine version."""
 
-YADAGE_WORKFLOW_ENGINE_VERSION = os.getenv('YADAGE_WORKFLOW_ENGINE_VERSION',
-                                           'latest')
+REANA_WORKFLOW_ENGINE_IMAGE_YADAGE = os.getenv(
+     'REANA_WORKFLOW_ENGINE_IMAGE_YADAGE',
+     'reanahub/reana-workflow-engine-yadage:latest')
 """Yadage workflow engine version."""
 
-SERIAL_WORKFLOW_ENGINE_VERSION = os.getenv('SERIAL_WORKFLOW_ENGINE_VERSION',
-                                           'latest')
+REANA_WORKFLOW_ENGINE_IMAGE_SERIAL = os.getenv(
+     'REANA_WORKFLOW_ENGINE_IMAGE_SERIAL',
+     'reanahub/reana-workflow-engine-serial:latest')
 """Serial workflow engine version."""
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [

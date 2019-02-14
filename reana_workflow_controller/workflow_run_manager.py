@@ -20,16 +20,16 @@ from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
                                           current_k8s_extensions_v1beta1)
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.config import (
-    CWL_WORKFLOW_ENGINE_VERSION,
     K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH,
     MANILA_CEPHFS_PVC,
     REANA_STORAGE_BACKEND,
-    SERIAL_WORKFLOW_ENGINE_VERSION,
+    REANA_WORKFLOW_ENGINE_IMAGE_CWL,
+    REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
+    REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG,
-    YADAGE_WORKFLOW_ENGINE_VERSION,
     DEFAULT_INTERACTIVE_SESSION_IMAGE,
     DEFAULT_INTERACTIVE_SESSION_PORT)
 
@@ -42,8 +42,8 @@ class WorkflowRunManager():
             WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
 
     engine_mapping = {
-        'cwl': {'image': 'dinossimpson/reana-workflow-engine-cwl:{}'.
-                         format(CWL_WORKFLOW_ENGINE_VERSION),
+        'cwl': {'image': '{}'.
+                         format(REANA_WORKFLOW_ENGINE_IMAGE_CWL),
                 'command': ("run-cwl-workflow "
                             "--workflow-uuid {id} "
                             "--workflow-workspace {workspace} "
@@ -51,16 +51,16 @@ class WorkflowRunManager():
                             "--workflow-parameters '{parameters}' "
                             "--operational-options '{options}' "),
                 'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
-        'yadage': {'image': 'dinossimpson/reana-workflow-engine-yadage:{}'.
-                            format(YADAGE_WORKFLOW_ENGINE_VERSION),
+        'yadage': {'image': '{}'.
+                            format(REANA_WORKFLOW_ENGINE_IMAGE_YADAGE),
                    'command': ("run-yadage-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
                                "--workflow-json '{workflow_json}' "
                                "--workflow-parameters '{parameters}' "),
                    'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
-        'serial': {'image': 'dinossimpson/reana-workflow-engine-serial:{}'.
-                            format(SERIAL_WORKFLOW_ENGINE_VERSION),
+        'serial': {'image': '{}'.
+                            format(REANA_WORKFLOW_ENGINE_IMAGE_SERIAL),
                    'command': ("run-serial-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
