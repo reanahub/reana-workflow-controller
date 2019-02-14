@@ -1638,9 +1638,11 @@ def _mv_files(source, target, workflow):
         raise REANAWorkflowControllerError(message)
     try:
         reana_fs = fs.open_fs(absolute_workspace_path)
-        if os.path.isdir(target):
-            reana_fs.movedir(src_path=sources,
-                             dst_path=target)
+        source_info = reana_fs.getinfo(source)
+        if source_info.is_dir:
+            reana_fs.movedir(src_path=source,
+                             dst_path=target,
+                             create=True)
         else:
             reana_fs.move(src_path=source,
                           dst_path=target)
