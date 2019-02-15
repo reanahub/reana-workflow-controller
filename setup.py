@@ -62,7 +62,7 @@ install_requires = [
     'kubernetes>=6.0.0',
     'marshmallow>=2.13',
     'packaging>=18.0',
-    'reana-commons>=0.5.0.dev20190215,<0.6.0[kubernetes]',
+    'reana-commons>=0.5.0.dev20190218,<0.6.0[kubernetes]',
     'reana-db>=0.5.0.dev20190213,<0.6.0',
     'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',

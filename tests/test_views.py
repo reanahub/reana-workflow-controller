@@ -62,7 +62,8 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
                 "name": workflow.name + '.1',  # Add run_number
                 "status": workflow.status.name,
                 "user": str(workflow.owner_id),
-                "created": response_data[0]["created"]
+                "created": response_data[0]["created"],
+                "size": "-"
             }
         ]
 

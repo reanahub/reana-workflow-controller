@@ -173,7 +173,8 @@ def get_workflows():  # noqa
                                  'status': workflow.status.name,
                                  'user': user_uuid,
                                  'created': workflow.created.
-                                 strftime(WORKFLOW_TIME_FORMAT)}
+                                 strftime(WORKFLOW_TIME_FORMAT),
+                                 'size': '-'}
             if verbose:
                 reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
                 if reana_fs.exists(workflow.get_workspace()):

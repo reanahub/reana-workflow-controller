@@ -18,6 +18,8 @@ from kubernetes.client.rest import ApiException
 from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
                                           current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
+from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
+                                 create_cvmfs_storage_class)
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.config import (
     K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH,
@@ -153,6 +155,9 @@ class WorkflowRunManager():
             cvmfs_env_var = {'name': 'REANA_MOUNT_CVMFS',
                              'value': str(cvmfs_volumes)}
             env_vars.append(cvmfs_env_var)
+            for cvmfs_volume in cvmfs_volumes:
+                create_cvmfs_storage_class(cvmfs_volume)
+                create_cvmfs_persistent_volume_claim(cvmfs_volume)
         return (env_vars)
 
 
