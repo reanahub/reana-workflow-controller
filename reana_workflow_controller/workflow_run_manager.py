@@ -15,6 +15,7 @@ import yaml
 from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
+from reana_commons.config import CVMFS_REPOSITORIES
 from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
                                           current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
@@ -156,8 +157,10 @@ class WorkflowRunManager():
                              'value': str(cvmfs_volumes)}
             env_vars.append(cvmfs_env_var)
             for cvmfs_volume in cvmfs_volumes:
-                create_cvmfs_storage_class(cvmfs_volume)
-                create_cvmfs_persistent_volume_claim(cvmfs_volume)
+                if cvmfs_volume in CVMFS_REPOSITORIES:
+                    create_cvmfs_storage_class(cvmfs_volume)
+                    create_cvmfs_persistent_volume_claim(cvmfs_volume)
+
         return (env_vars)
 
 
