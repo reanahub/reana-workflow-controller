@@ -101,12 +101,8 @@ TTL_SECONDS_AFTER_FINISHED = 60
 """Threshold in seconds to clean up terminated (either Complete or Failed)
 jobs."""
 
-K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH = \
-     "templates/k8s/interactive-deployment.template"
-"""Path to the k8s interactive deployment template, relative to the package."""
+JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook"
+"""Default image for Jupyter based interactive session deployments."""
 
-DEFAULT_INTERACTIVE_SESSION_IMAGE = "jupyter/scipy-notebook"
-"""Docker image to use by default when opening interactive sessions."""
-
-DEFAULT_INTERACTIVE_SESSION_PORT = 8888
-"""Default port used by the default interactive session image."""
+JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT = 8888
+"""Default port for Jupyter based interactive session deployments."""
