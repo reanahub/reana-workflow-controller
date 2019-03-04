@@ -147,10 +147,10 @@ class WorkflowRunManager():
         env_vars = list(WorkflowRunManager.engine_mapping[
             self.workflow.type_]['environment_variables'])
         cvmfs_volumes = 'false'
-        for resource in self.workflow.reana_specification['workflow'].\
-                get('resources', {}):
+        for resource, value in self.workflow.reana_specification['workflow'].\
+                get('resources', {}).items():
             if 'cvmfs' in resource:
-                cvmfs_volumes = resource['cvmfs']
+                cvmfs_volumes = value
                 break
         if type(cvmfs_volumes) == list:
             cvmfs_env_var = {'name': 'REANA_MOUNT_CVMFS',
