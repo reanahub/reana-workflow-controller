@@ -7,6 +7,8 @@
 """REANA Workflow Controller Kubernetes utils."""
 
 from kubernetes import client
+from kubernetes.client.rest import ApiException
+
 from reana_commons.k8s.api_client import (current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
 from reana_workflow_controller.config import (
@@ -181,5 +183,37 @@ def instantiate_k8s_objects(kubernetes_objects, namespace):
             kind = obj[0]
             k8s_object = obj[1]
             instantiate_k8s_object[kind](namespace, k8s_object)
+    except KeyError:
+        raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
+
+
+def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
+    """Delete Kubernetes objects if they exist.
+
+    :param kubernetes_objects: Dictionary composed by the object kind as
+        key and the object itself as value.
+    :param namespace: Kubernetes namespace where the objects will be deleted
+        from.
+    """
+    delete_k8s_object = {
+        "deployment":
+        current_k8s_extensions_v1beta1.delete_namespaced_deployment,
+        "service":
+        current_k8s_corev1_api_client.delete_namespaced_service,
+        "ingress":
+        current_k8s_extensions_v1beta1.delete_namespaced_ingress
+    }
+    try:
+        for obj in kubernetes_objects.items():
+            try:
+                kind = obj[0]
+                k8s_object = obj[1]
+                delete_k8s_object[kind](k8s_object.metadata.name, namespace,
+                                        body=k8s_object)
+            except ApiException as k8s_api_exception:
+                if k8s_api_exception.reason == "Not Found":
+                    continue
+                else:
+                    raise
     except KeyError:
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))

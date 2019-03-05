@@ -34,6 +34,7 @@ from reana_workflow_controller.config import (
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
 from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
+                                           delete_k8s_objects_if_exist,
                                            instantiate_k8s_objects)
 
 
@@ -205,48 +206,59 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             session types.
         :return: Relative path to access the interactive session.
         """
+        action_completed = True
         try:
             if (interactive_session_type
                     not in INTERACTIVE_SESSION_TYPES):
                 raise REANAInteractiveSessionError(
                     "Interactive type {} does not exist.".format(
                         interactive_session_type))
+            access_path = self._generate_interactive_workflow_path()
+            self.workflow.interactive_session = access_path
+
             workflow_run_name = \
                 self._workflow_run_name_generator(
                     'interactive', type=interactive_session_type)
-            access_path = self._generate_interactive_workflow_path()
             kubernetes_objects = \
                 build_interactive_k8s_objects[interactive_session_type](
                     workflow_run_name, access_path,
                     access_token=self.workflow.get_owner_access_token(),
                     **kwargs)
-            # do this atomically, if some error occurrs while creating some
-            # of the middle objects the system will be left inconsistent
+
             instantiate_k8s_objects(
                 kubernetes_objects,
                 KubernetesWorkflowRunManager.default_namespace)
-
-            self.workflow.interactive_session = access_path
-            current_db_sessions = Session.object_session(self.workflow)
-            current_db_sessions.add(self.workflow)
-            current_db_sessions.commit()
             return access_path
 
         except KeyError:
+            action_completed = False
             raise REANAInteractiveSessionError(
                 "Unsupported interactive session type {}.".format(
                     interactive_session_type
                 ))
         except ApiException as api_exception:
+            action_completed = False
             raise REANAInteractiveSessionError(
                 "Connection to Kubernetes has failed:\n{}".format(
                     api_exception)
             )
         except Exception as e:
+            action_completed = False
             raise REANAInteractiveSessionError(
                 "Unkown error while starting interactive workflow run:\n{}"
                 .format(e)
             )
+        finally:
+            if not action_completed:
+                self.workflow.interactive_session = None
+                if kubernetes_objects:
+                    delete_k8s_objects_if_exist(
+                        kubernetes_objects,
+                        KubernetesWorkflowRunManager.default_namespace)
+
+            current_db_sessions = Session.object_session(self.workflow)
+            current_db_sessions.add(self.workflow)
+            current_db_sessions.commit()
 
     def stop_batch_workflow_run(self, workflow_run_jobs=None):
         """Stop a batch workflow run along with all its dependent jobs.

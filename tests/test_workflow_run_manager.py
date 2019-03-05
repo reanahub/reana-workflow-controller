@@ -52,3 +52,30 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
             if len(INTERACTIVE_SESSION_TYPES):
                 kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+
+
+def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
+    """Test the correct creation of all objects related to an interactive
+       sesison as well as writing the state to DB, either all should be done
+       or nothing.."""
+    mocked_k8s_client = Mock()
+    mocked_k8s_client.create_namespaced_deployment =\
+        Mock(side_effect=ApiException(
+             reason='Error while creating deployment'))
+    # Raise 404 when deleting Deployment, because it doesn't exist
+    mocked_k8s_client.delete_namespaced_deployment =\
+        Mock(side_effect=ApiException(
+             reason='Not Found'))
+    with patch.multiple('reana_workflow_controller.k8s',
+                        current_k8s_extensions_v1beta1=mocked_k8s_client,
+                        current_k8s_corev1_api_client=DEFAULT) as mocks:
+        try:
+            kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+            if len(INTERACTIVE_SESSION_TYPES):
+                kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+        except REANAInteractiveSessionError:
+            mocks['current_k8s_corev1_api_client']\
+                .delete_namespaced_service.assert_called_once()
+            mocked_k8s_client.delete_namespaced_ingress.assert_called_once()
+            mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
+            assert sample_serial_workflow_in_db.interactive_session is None
