@@ -179,12 +179,27 @@ def instantiate_k8s_objects(kubernetes_objects, namespace):
         current_k8s_extensions_v1beta1.create_namespaced_ingress
     }
     try:
-        for obj in kubernetes_objects.items():
+        parent_k8s_object_references = None
+        for index, obj in enumerate(kubernetes_objects.items()):
             kind = obj[0]
             k8s_object = obj[1]
-            instantiate_k8s_object[kind](namespace, k8s_object)
+            if index == 0:
+                result = instantiate_k8s_object[kind](namespace, k8s_object)
+                parent_k8s_object_references = [{
+                    "uid": result._metadata.uid,
+                    "kind": result._kind,
+                    "name": result._metadata.name,
+                    "apiVersion": result._api_version,
+                }]
+            else:
+                k8s_object.metadata.owner_references =  \
+                    parent_k8s_object_references
+                result = instantiate_k8s_object[kind](namespace, k8s_object)
     except KeyError:
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
+    except ApiException as e:
+        raise Exception("Exception when calling ExtensionsV1beta1Api->"
+                        "create_namespaced_deployment_rollback: %s\n" % e)
 
 
 def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
