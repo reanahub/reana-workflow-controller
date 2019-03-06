@@ -25,8 +25,8 @@ def create_workflow_workspace(path):
     :return: Absolute workspace path.
     """
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    if not reana_fs.exists(path):
-        reana_fs.makedirs(path)
+    reana_fs.makedirs(path, recreate=True)
+    os.chmod(reana_fs.getsyspath(path), mode=0o774)
 
 
 def list_directory_files(directory):

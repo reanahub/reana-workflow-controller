@@ -222,7 +222,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             self.workflow.interactive_session_name = workflow_run_name
             kubernetes_objects = \
                 build_interactive_k8s_objects[interactive_session_type](
-                    workflow_run_name, access_path,
+                    workflow_run_name, self.workflow.get_workspace(),
+                    access_path,
                     access_token=self.workflow.get_owner_access_token(),
                     **kwargs)
 
