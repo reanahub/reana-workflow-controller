@@ -759,7 +759,7 @@ def test_start_input_parameters(app, session, default_user,
         # create workflow
         sample_yadage_workflow_in_db.status = WorkflowStatus.created
         workflow_created_uuid = sample_yadage_workflow_in_db.id_
-        session.add(sample_yadage_workflow_in_db)
+        session.add()
         session.commit()
         workflow = Workflow.query.filter(
             Workflow.id_ == workflow_created_uuid).first()
@@ -1091,3 +1091,44 @@ def test_create_interactive_session_custom_image(app, default_user,
                 .create_namespaced_deployment.call_args
             assert fargs[1].spec.template.spec.containers[0].image ==\
                 custom_image
+
+
+def test_close_interactive_session(app, session, default_user,
+                                   sample_serial_workflow_in_db):
+    """Test close an interactive session."""
+    expected_data = {"message": "The interactive session has been closed"}
+    sample_serial_workflow_in_db.interactive_session = \
+        "/5d9b30fd-f225-4615-9107-b1373afec070"
+    sample_serial_workflow_in_db.interactive_session_name = \
+        "interactive-jupyter-5d9b30fd-f225-4615-9107-b1373afec070-5lswkp"
+    session.add(sample_serial_workflow_in_db)
+    session.commit()
+    with app.test_client() as client:
+        with mock.patch(
+                "reana_workflow_controller.k8s.current_k8s_extensions_v1beta1") as mocks:
+            res = client.post(
+                url_for("api.close_interactive_session",
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_),
+                query_string={"user": default_user.id_},
+                content_type='application/json')
+        assert res.json == expected_data
+
+
+def test_close_interactive_session_not_opened(app, session, default_user,
+                                              sample_serial_workflow_in_db):
+    """Test close an interactive session when session is not opened."""
+    expected_data = \
+        {"message": "Workflow - {} has no open interactive session."
+                    .format(sample_serial_workflow_in_db.id_)}
+    with app.test_client() as client:
+        sample_serial_workflow_in_db.interactive_session = None
+        sample_serial_workflow_in_db.interactive_session_name = None
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+        res = client.post(
+            url_for("api.close_interactive_session",
+                    workflow_id_or_name=sample_serial_workflow_in_db.id_),
+            query_string={"user": default_user.id_},
+            content_type='application/json')
+        assert res.json == expected_data
+        assert res._status_code == 404

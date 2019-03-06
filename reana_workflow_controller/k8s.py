@@ -163,8 +163,8 @@ build_interactive_k8s_objects = {
 """Build interactive k8s deployment objects."""
 
 
-def instantiate_k8s_objects(kubernetes_objects, namespace):
-    """Instantiate Kubernetes objects.
+def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
+    """Instantiate chained Kubernetes objects.
 
     :param kubernetes_objects: Dictionary composed by the object kind as
         key and the object itself as value.
@@ -199,7 +199,8 @@ def instantiate_k8s_objects(kubernetes_objects, namespace):
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
     except ApiException as e:
         raise Exception("Exception when calling ExtensionsV1beta1Api->"
-                        "create_namespaced_deployment_rollback: %s\n" % e)
+                        "create_namespaced_deployment_rollback: {}\n"
+                        .format(e))
 
 
 def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
@@ -232,3 +233,24 @@ def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
                     raise
     except KeyError:
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
+
+
+def delete_k8s_ingress_object(ingress_name, namespace):
+    """Delete Kubernetes ingress object.
+
+    :param ingress_name: name of ingress object to delete.
+    :param namespace: k8s namespace of ingress object.
+    """
+    try:
+        current_k8s_extensions_v1beta1.delete_namespaced_ingress(
+            name=ingress_name,
+            namespace=namespace,
+            body=client.V1DeleteOptions()
+        )
+    except ApiException as k8s_api_exception:
+        if k8s_api_exception.reason == "Not Found":
+            raise Exception("K8s object was not found {}."
+                            .format(ingress_name))
+        raise Exception("Exception when calling ExtensionsV1beta1->"
+                        "Api->delete_namespaced_ingress: {}\n"
+                        .format(k8s_api_exception))
