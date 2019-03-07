@@ -15,15 +15,15 @@ import yaml
 from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
-from reana_commons.config import CVMFS_REPOSITORIES
+from reana_commons.config import CVMFS_REPOSITORIES, INTERACTIVE_SESSION_TYPES
 from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
                                           current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class)
+from reana_db.database import Session
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.config import (
-    K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH,
     MANILA_CEPHFS_PVC,
     REANA_STORAGE_BACKEND,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
@@ -32,9 +32,10 @@ from reana_workflow_controller.config import (
     SHARED_FS_MAPPING,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
-    WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG,
-    DEFAULT_INTERACTIVE_SESSION_IMAGE,
-    DEFAULT_INTERACTIVE_SESSION_PORT)
+    WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
+from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
+                                           delete_k8s_objects_if_exist,
+                                           instantiate_k8s_objects)
 
 
 class WorkflowRunManager():
@@ -104,6 +105,10 @@ class WorkflowRunManager():
             workflow_id=self.workflow.id_,
             workflow_type=type_,
         )
+
+    def _generate_interactive_workflow_path(self):
+        """Generate the path to access the interactive workflow."""
+        return "/{}".format(self.workflow.id_)
 
     def _get_merged_workflow_parameters(self):
         """Return workflow input parameters merged with live ones, if given."""
@@ -194,56 +199,66 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             namespace=KubernetesWorkflowRunManager.default_namespace,
             body=job)
 
-    def start_interactive_session(
-            self, image=None, port=None):
-        """Start an interactive workflow run."""
-        try:
-            image = image or DEFAULT_INTERACTIVE_SESSION_IMAGE
-            port = port or DEFAULT_INTERACTIVE_SESSION_PORT
-            workflow_run_name = \
-                self._workflow_run_name_generator('interactive',
-                                                  type='session')
-            access_path = self.generate_interactive_workflow_path()
-            interactive_deployment_file = pkg_resources.resource_string(
-                "reana_workflow_controller",
-                K8S_INTERACTIVE_DEPLOYMENT_TEMPLATE_PATH).decode("UTF-8")
-            interactive_deployment_replaced = \
-                Template(interactive_deployment_file).substitute(
-                    image=image,
-                    deployment_name=workflow_run_name,
-                    ingress_path=access_path,
-                    service_port=port,
-                    user_access_token=self.workflow.get_owner_access_token(),
-                )
-            ingress, service, deployment = yaml.load_all(
-                interactive_deployment_replaced)
-            current_k8s_extensions_v1beta1.create_namespaced_deployment(
-                'default', deployment)
-            current_k8s_corev1_api_client.create_namespaced_service(
-                'default', service)
-            current_k8s_extensions_v1beta1.create_namespaced_ingress(
-                'default', ingress)
+    def start_interactive_session(self, interactive_session_type, **kwargs):
+        """Start an interactive workflow run.
 
+        :param interactive_session_type: One of the available interactive
+            session types.
+        :return: Relative path to access the interactive session.
+        """
+        action_completed = True
+        try:
+            if (interactive_session_type
+                    not in INTERACTIVE_SESSION_TYPES):
+                raise REANAInteractiveSessionError(
+                    "Interactive type {} does not exist.".format(
+                        interactive_session_type))
+            access_path = self._generate_interactive_workflow_path()
+            self.workflow.interactive_session = access_path
+
+            workflow_run_name = \
+                self._workflow_run_name_generator(
+                    'interactive', type=interactive_session_type)
+            kubernetes_objects = \
+                build_interactive_k8s_objects[interactive_session_type](
+                    workflow_run_name, access_path,
+                    access_token=self.workflow.get_owner_access_token(),
+                    **kwargs)
+
+            instantiate_k8s_objects(
+                kubernetes_objects,
+                KubernetesWorkflowRunManager.default_namespace)
             return access_path
+
+        except KeyError:
+            action_completed = False
+            raise REANAInteractiveSessionError(
+                "Unsupported interactive session type {}.".format(
+                    interactive_session_type
+                ))
         except ApiException as api_exception:
+            action_completed = False
             raise REANAInteractiveSessionError(
                 "Connection to Kubernetes has failed:\n{}".format(
                     api_exception)
             )
-        except ValueError as value_error:
-            raise REANAInteractiveSessionError(
-                "Error while filling the interactive workflow "
-                "run template:\n{}".format(value_error)
-            )
         except Exception as e:
+            action_completed = False
             raise REANAInteractiveSessionError(
                 "Unkown error while starting interactive workflow run:\n{}"
                 .format(e)
             )
+        finally:
+            if not action_completed:
+                self.workflow.interactive_session = None
+                if kubernetes_objects:
+                    delete_k8s_objects_if_exist(
+                        kubernetes_objects,
+                        KubernetesWorkflowRunManager.default_namespace)
 
-    def generate_interactive_workflow_path(self):
-        """Generate the path to access the interactive workflow."""
-        return "/{}".format(self.workflow.id_)
+            current_db_sessions = Session.object_session(self.workflow)
+            current_db_sessions.add(self.workflow)
+            current_db_sessions.commit()
 
     def stop_batch_workflow_run(self, workflow_run_jobs=None):
         """Stop a batch workflow run along with all its dependent jobs.

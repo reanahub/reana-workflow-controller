@@ -29,6 +29,8 @@ from werkzeug.utils import secure_filename
 from reana_workflow_controller.errors import REANAWorkflowDeletionError
 from reana_workflow_controller.rest import START, STOP, _delete_workflow
 from reana_workflow_controller.utils import create_workflow_workspace
+from reana_workflow_controller.workflow_run_manager import WorkflowRunManager
+
 
 status_dict = {
     START: WorkflowStatus.running,
@@ -1033,3 +1035,59 @@ def test_get_workspace_diff(app, default_user,
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
         assert 'An extra line' in response_data['workspace_listing']
+
+
+def test_create_interactive_session(app, default_user,
+                                    sample_serial_workflow_in_db):
+    """Test create interactive session."""
+    wrm = WorkflowRunManager(sample_serial_workflow_in_db)
+    expected_data = {"path": wrm._generate_interactive_workflow_path()}
+    with app.test_client() as client:
+        # create workflow
+        with mock.patch.multiple(
+                'reana_workflow_controller.k8s',
+                current_k8s_corev1_api_client=mock.DEFAULT,
+                current_k8s_extensions_v1beta1=mock.DEFAULT) as mocks:
+            res = client.post(
+                url_for("api.open_interactive_session",
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                        interactive_session_type="jupyter"),
+                query_string={"user": default_user.id_})
+            assert res.json == expected_data
+
+
+def test_create_interactive_session_unknown_type(app, default_user,
+                                                 sample_serial_workflow_in_db):
+    """Test create interactive session for unknown interactive type."""
+    with app.test_client() as client:
+        # create workflow
+        res = client.post(
+            url_for("api.open_interactive_session",
+                    workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                    interactive_session_type="terminl"),
+            query_string={"user": default_user.id_})
+        assert res.status_code == 404
+
+
+def test_create_interactive_session_custom_image(app, default_user,
+                                                 sample_serial_workflow_in_db):
+    """Create an interactive session with custom image."""
+    custom_image = "test/image"
+    interactive_session_configuration = {"image": custom_image}
+    with app.test_client() as client:
+        # create workflow
+        with mock.patch.multiple(
+                "reana_workflow_controller.k8s",
+                current_k8s_corev1_api_client=mock.DEFAULT,
+                current_k8s_extensions_v1beta1=mock.DEFAULT) as mocks:
+            res = client.post(
+                url_for("api.open_interactive_session",
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                        interactive_session_type="jupyter"),
+                query_string={"user": default_user.id_},
+                content_type="application/json",
+                data=json.dumps(interactive_session_configuration))
+            fargs, _ = mocks["current_k8s_extensions_v1beta1"]\
+                .create_namespaced_deployment.call_args
+            assert fargs[1].spec.template.spec.containers[0].image ==\
+                custom_image

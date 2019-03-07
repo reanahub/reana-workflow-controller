@@ -474,7 +474,7 @@
         "summary": "Returns logs of a specific workflow from a workflow engine."
       }
     },
-    "/api/workflows/{workflow_id_or_name}/open": {
+    "/api/workflows/{workflow_id_or_name}/open/{interactive_session_type}": {
       "post": {
         "consumes": [
           "application/json"
@@ -497,17 +497,22 @@
             "type": "string"
           },
           {
-            "description": "Optional. Image to use when spawning the interactive session along with the needed port.",
+            "description": "Optional. Type of interactive session to use, by default Jupyter Notebook.",
+            "in": "path",
+            "name": "interactive_session_type",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Interactive session configuration.",
             "in": "body",
-            "name": "interactive_environment",
+            "name": "interactive_session_configuration",
             "required": false,
             "schema": {
               "properties": {
                 "image": {
+                  "description": "Replaces the default Docker image of an interactive session.",
                   "type": "string"
-                },
-                "port": {
-                  "type": "integer"
                 }
               },
               "type": "object"

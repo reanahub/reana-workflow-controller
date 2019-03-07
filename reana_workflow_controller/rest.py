@@ -21,6 +21,7 @@ import fs
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
 from fs.errors import CreateFailed
+from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import (get_workflow_status_change_verb,
                                  get_workspace_disk_usage)
 from reana_db.database import Session
@@ -29,8 +30,6 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 from werkzeug.exceptions import NotFound
 
 from reana_workflow_controller.config import (
-    DEFAULT_INTERACTIVE_SESSION_IMAGE,
-    DEFAULT_INTERACTIVE_SESSION_PORT,
     DEFAULT_NAME_FOR_WORKFLOWS,
     SHARED_VOLUME_PATH,
     WORKFLOW_QUEUES,
@@ -1158,9 +1157,10 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@restapi_blueprint.route('/workflows/<workflow_id_or_name>/open',
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/open/'
+                         '<interactive_session_type>',
                          methods=['POST'])
-def open_interactive_session(workflow_id_or_name):  # noqa
+def open_interactive_session(workflow_id_or_name, interactive_session_type):  # noqa
     r"""Start an interactive session inside the workflow workspace.
 
     ---
@@ -1185,19 +1185,25 @@ def open_interactive_session(workflow_id_or_name):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
-        - name: interactive_environment
+        - name: interactive_session_type
+          in: path
+          description: >-
+            Optional. Type of interactive session to use, by default Jupyter
+            Notebook.
+          required: false
+          type: string
+        - name: interactive_session_configuration
           in: body
           description: >-
-            Optional. Image to use when spawning the interactive session along
-            with the needed port.
+            Interactive session configuration.
           required: false
           schema:
             type: object
             properties:
               image:
                 type: string
-              port:
-                type: integer
+                description: >-
+                  Replaces the default Docker image of an interactive session.
       responses:
         200:
           description: >-
@@ -1226,8 +1232,8 @@ def open_interactive_session(workflow_id_or_name):  # noqa
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 does not
-                            exist"
+                "message": "Interactive session type terminl not found, try
+                            with one of: [jupyter]"
               }
             application/json:
               {
@@ -1239,18 +1245,21 @@ def open_interactive_session(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if request.json and not request.json.get("image"):
-            raise ValueError("If interactive_environment payload is sent, it˛"
-                             "should contain the image property.")
-
+        if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
+            return jsonify({
+                "message": "Interactive session type {0} not found, try "
+                           "with one of: {1}".format(
+                               interactive_session_type,
+                               INTERACTIVE_SESSION_TYPES)}), 404
+        interactive_session_configuration = request.json or {}
         user_uuid = request.args["user"]
-        image = request.json.get("image", DEFAULT_INTERACTIVE_SESSION_IMAGE)
-        port = request.json.get("port", DEFAULT_INTERACTIVE_SESSION_PORT)
         workflow = None
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
         kwrm = KubernetesWorkflowRunManager(workflow)
-        access_path = kwrm.start_interactive_session(image, port)
+        access_path = kwrm.start_interactive_session(
+          interactive_session_type,
+          image=interactive_session_configuration.get("image", None))
         return jsonify({"path": "{}".format(access_path)}), 200
 
     except (KeyError, ValueError) as e:
