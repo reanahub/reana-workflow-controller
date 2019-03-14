@@ -29,7 +29,7 @@ tests_require = [
     'pytest-pep8>=1.0.6',
     'pytest>=3.8.0,<4.0.0',
     'swagger_spec_validator>=2.1.0',
-    'pytest-reana>=0.5.0.dev20181203',
+    'pytest-reana>=0.5.0.dev20190321',
 ]
 
 extras_require = {
@@ -62,7 +62,7 @@ install_requires = [
     'kubernetes>=6.0.0',
     'marshmallow>=2.13',
     'packaging>=18.0',
-    'reana-commons>=0.5.0.dev20190314,<0.6.0[kubernetes]',
+    'reana-commons>=0.5.0.dev20190321,<0.6.0[kubernetes]',
     'reana-db>=0.5.0.dev20190314,<0.6.0',
     'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',

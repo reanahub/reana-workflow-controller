@@ -10,6 +10,7 @@
 import io
 import json
 import os
+import stat
 import uuid
 from distutils.dir_util import copy_tree
 from pathlib import Path
@@ -200,3 +201,21 @@ def test_delete_recursive_wildcard(tmp_shared_volume_path):
         assert key in deleted_files['deleted']
         assert deleted_files['deleted'][key]['size'] == size
     assert not len(deleted_files['failed'])
+
+
+def test_workspace_permissions(app, session, default_user,
+                               sample_yadage_workflow_in_db,
+                               tmp_shared_volume_path):
+    """Test workspace dir permissions."""
+    create_workflow_workspace(sample_yadage_workflow_in_db.get_workspace())
+    expeted_worspace_permissions = 'drwxrwxr-x'
+    absolute_workflow_workspace = os.path.join(
+        tmp_shared_volume_path,
+        sample_yadage_workflow_in_db.get_workspace())
+    workspace_permissions = \
+        stat.filemode(os.stat(absolute_workflow_workspace).st_mode)
+    assert os.path.exists(absolute_workflow_workspace)
+    assert workspace_permissions == expeted_worspace_permissions
+    _delete_workflow(sample_yadage_workflow_in_db,
+                     hard_delete=True,
+                     workspace=True)
