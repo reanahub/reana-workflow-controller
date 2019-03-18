@@ -257,9 +257,9 @@ def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
     except KeyError:
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
     except ApiException as e:
-        raise Exception("Exception when calling ExtensionsV1beta1Api->"
-                        "create_namespaced_deployment_rollback: {}\n"
-                        .format(e))
+        raise ApiException("Exception when calling ExtensionsV1beta1Api->"
+                           "create_namespaced_deployment_rollback: {}\n"
+                           .format(e))
 
 
 def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
