@@ -215,6 +215,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "Interactive type {} does not exist.".format(
                         interactive_session_type))
             access_path = self._generate_interactive_workflow_path()
+            self.workflow.interactive_session_type = interactive_session_type
             self.workflow.interactive_session = access_path
             workflow_run_name = \
                 self._workflow_run_name_generator(

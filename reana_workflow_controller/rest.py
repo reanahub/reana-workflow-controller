@@ -74,6 +74,11 @@ def get_workflows():  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
+        - name: type
+          in: query
+          description: Required. Type of workflows.
+          required: true
+          type: string
         - name: verbose
           in: query
           description: Optional flag to show more information.
@@ -161,6 +166,7 @@ def get_workflows():  # noqa
     try:
         user_uuid = request.args['user']
         user = User.query.filter(User.id_ == user_uuid).first()
+        type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         if not user:
             return jsonify(
@@ -174,6 +180,14 @@ def get_workflows():  # noqa
                                  'created': workflow.created.
                                  strftime(WORKFLOW_TIME_FORMAT),
                                  'size': '-'}
+            if type == 'interactive':
+                if not workflow.interactive_session_type:
+                    continue
+                else:
+                    workflow_response['session_type'] = \
+                        workflow.interactive_session_type
+                    workflow_response['session_uri'] = \
+                        workflow.interactive_session
             if verbose:
                 reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
                 if reana_fs.exists(workflow.get_workspace()):
