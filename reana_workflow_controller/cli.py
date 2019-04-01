@@ -12,15 +12,14 @@ import logging
 
 import click
 
+from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
+
 from reana_workflow_controller.consumer import JobStatusConsumer
 
 
 @click.command('consume-job-queue')
 def consume_job_queue():
     """Consumes job queue and updates job status."""
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
-    )
+    logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT)
     consumer = JobStatusConsumer()
     consumer.run()
