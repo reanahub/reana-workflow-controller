@@ -27,6 +27,10 @@ def create_workflow_workspace(path):
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
     if not reana_fs.exists(path):
         reana_fs.makedirs(path)
+        if os.environ.get("VC3USERID", None):
+            vc3_uid = int(os.environ.get("VC3USERID"))
+            owner_gid = os.stat(reana_fs.getsyspath(path)).st_gid
+            os.chown(reana_fs.getsyspath(path), vc3_uid, owner_gid)
 
 
 def list_directory_files(directory):
