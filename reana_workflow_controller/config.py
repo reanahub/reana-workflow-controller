@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018 CERN.
+# Copyright (C) 2017, 2018, 2019 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -80,10 +80,6 @@ REANA_WORKFLOW_ENGINE_IMAGE_SERIAL = os.getenv(
 """Serial workflow engine version."""
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
-   {
-      'name': 'ZMQ_PROXY_CONNECT',
-      'value': 'tcp://zeromq-msg-proxy.default.svc.cluster.local:8666'
-   },
    {
       'name': 'SHARED_VOLUME_PATH',
       'value': SHARED_VOLUME_PATH
