@@ -10,11 +10,12 @@
 import os
 from pathlib import Path
 
-import fs
-from flask import current_app as app
 from reana_db.database import Session
 from reana_db.models import Job, JobCache
 
+import fs
+from flask import current_app as app
+from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
 
 
@@ -24,13 +25,13 @@ def create_workflow_workspace(path):
     :param path: Relative path to workspace directory.
     :return: Absolute workspace path.
     """
+    os.umask(REANA_WORKFLOW_UMASK)
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    if not reana_fs.exists(path):
-        reana_fs.makedirs(path)
-        if os.environ.get("VC3USERID", None):
-            vc3_uid = int(os.environ.get("VC3USERID"))
-            owner_gid = os.stat(reana_fs.getsyspath(path)).st_gid
-            os.chown(reana_fs.getsyspath(path), vc3_uid, owner_gid)
+    reana_fs.makedirs(path, recreate=True)
+    if os.environ.get("VC3USERID", None):
+        vc3_uid = int(os.environ.get("VC3USERID"))
+        owner_gid = os.stat(reana_fs.getsyspath(path)).st_gid
+        os.chown(reana_fs.getsyspath(path), vc3_uid, owner_gid)
 
 
 def list_directory_files(directory):

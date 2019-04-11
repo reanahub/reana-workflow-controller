@@ -6,15 +6,18 @@
 
 """REANA Workflow Controller Kubernetes utils."""
 
+import os
+
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 
+from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.k8s.api_client import (current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
+from reana_commons.k8s.volumes import get_shared_volume
 from reana_workflow_controller.config import (
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
-    JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT
-)
+    JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT, SHARED_VOLUME_PATH)
 
 
 class InteractiveDeploymentK8sBuilder(object):
@@ -26,9 +29,21 @@ class InteractiveDeploymentK8sBuilder(object):
        port exposed by deployment itself, the one which can change
        from one interactive session application to other."""
 
-    def __init__(self, deployment_name, image, port, path):
-        """Initialise basic interactive deployment builder for Kubernetes."""
+    def __init__(self, deployment_name, workspace, image, port, path):
+        """Initialise basic interactive deployment builder for Kubernetes.
+
+        :param deployment_name: Name which identifies all deployment objects
+            and maps to the workflow it belongs.
+        :param workspace: Path to the interactive session workspace, which
+            matches with the workflow workspace the interactive session
+            belongs to.
+        :param image: Docker image which the deployment will use as base.
+        :param port: Port exposed by the Docker image.
+        :param path: Path where the interactive session will be accessible
+            from outside the cluster.
+        """
         self.deployment_name = deployment_name
+        self.workspace = workspace
         self.image = image
         self.port = port
         self.path = path
@@ -119,17 +134,51 @@ class InteractiveDeploymentK8sBuilder(object):
         self.kubernetes_objects["deployment"].spec.template.spec. \
             containers[0].args = args
 
+    def add_reana_shared_storage(self):
+        """Add the REANA shared file system volume mount to the deployment."""
+        volume_mount, volume = get_shared_volume(self.workspace,
+                                                 SHARED_VOLUME_PATH)
+        self.kubernetes_objects["deployment"].spec.template.spec. \
+            containers[0].volume_mounts = [volume_mount]
+        self.kubernetes_objects["deployment"].spec.template.spec.volumes = \
+            [volume]
+
+    def add_environment_variable(self, name, value):
+        """Add an environment variable.
+
+        :param name: Environment variable name.
+        :param value: Environment variable value.
+        """
+        env_var = client.V1EnvVar(name, str(value))
+        if isinstance(self.kubernetes_objects["deployment"].spec.template.
+                      spec.containers[0].env, list):
+            self.kubernetes_objects["deployment"].spec.template. \
+                spec.containers[0].env.append(env_var)
+        else:
+            self.kubernetes_objects["deployment"].spec.template. \
+                spec.containers[0].env = [env_var]
+
+    def add_run_with_root_permissions(self):
+        """Run interactive session with root."""
+        security_context = client.V1SecurityContext(run_as_user=0)
+        self.kubernetes_objects["deployment"].spec.template. \
+            spec.containers[0].security_context = security_context
+
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
         return self.kubernetes_objects
 
 
 def build_interactive_jupyter_deployment_k8s_objects(
-        deployment_name, access_path, access_token=None, image=None):
+        deployment_name, workspace, access_path, access_token=None,
+        image=None):
     """Build the Kubernetes specification for a Jupyter NB interactive session.
 
-    :param workflow_run_name: The workflow run name will be used to tag
-        all Kubernetes objects spawned for the given interactive session.
+    :param deployment_name: Name used to tag all Kubernetes objects spawned
+        for the given interactive session.
+    :param workspace: Path to the interactive session workspace, which
+        matches with the workflow workspace the interactive session
+        belongs to.
     :param access_path: URL path where the interactive session will be
         accessible. Note that this path should be set as base path of
         the interactive session service whenever redirections are needed,
@@ -143,17 +192,27 @@ def build_interactive_jupyter_deployment_k8s_objects(
     image = image or JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE
     port = JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT
     deployment_builder = InteractiveDeploymentK8sBuilder(deployment_name,
+                                                         workspace,
                                                          image, port,
                                                          access_path)
-    deployment_builder.add_command(["start-notebook.sh"])
     command_args = [
-        "--NotebookApp.base_url='{base_url}'".format(base_url=access_path)
+        "start-notebook.sh",
+        "--NotebookApp.base_url='{base_url}'".format(base_url=access_path),
+        "--notebook-dir='{workflow_workspace}'".format(
+            workflow_workspace=os.path.join(SHARED_VOLUME_PATH, workspace))
     ]
     if access_token:
         command_args.append("--NotebookApp.token='{access_token}'".format(
             access_token=access_token
         ))
     deployment_builder.add_command_arguments(command_args)
+    deployment_builder.add_reana_shared_storage()
+    deployment_builder.add_environment_variable("NB_GID", 0)
+    # Changes umask so all files generated by the Jupyter Notebook can be
+    # modified by the root group users.
+    deployment_builder.add_environment_variable("NB_UMASK",
+                                                REANA_WORKFLOW_UMASK)
+    deployment_builder.add_run_with_root_permissions()
     return deployment_builder.get_deployment_objects()
 
 
@@ -163,8 +222,8 @@ build_interactive_k8s_objects = {
 """Build interactive k8s deployment objects."""
 
 
-def instantiate_k8s_objects(kubernetes_objects, namespace):
-    """Instantiate Kubernetes objects.
+def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
+    """Instantiate chained Kubernetes objects.
 
     :param kubernetes_objects: Dictionary composed by the object kind as
         key and the object itself as value.
@@ -179,12 +238,28 @@ def instantiate_k8s_objects(kubernetes_objects, namespace):
         current_k8s_extensions_v1beta1.create_namespaced_ingress
     }
     try:
-        for obj in kubernetes_objects.items():
+        parent_k8s_object_references = None
+        for index, obj in enumerate(kubernetes_objects.items()):
             kind = obj[0]
             k8s_object = obj[1]
-            instantiate_k8s_object[kind](namespace, k8s_object)
+            if index == 0:
+                result = instantiate_k8s_object[kind](namespace, k8s_object)
+                parent_k8s_object_references = [{
+                    "uid": result._metadata.uid,
+                    "kind": result._kind,
+                    "name": result._metadata.name,
+                    "apiVersion": result._api_version,
+                }]
+            else:
+                k8s_object.metadata.owner_references =  \
+                    parent_k8s_object_references
+                result = instantiate_k8s_object[kind](namespace, k8s_object)
     except KeyError:
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
+    except ApiException as e:
+        raise ApiException("Exception when calling ExtensionsV1beta1Api->"
+                           "create_namespaced_deployment_rollback: {}\n"
+                           .format(e))
 
 
 def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
@@ -217,3 +292,24 @@ def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
                     raise
     except KeyError:
         raise Exception("Unsupported Kubernetes object kind {}.".format(kind))
+
+
+def delete_k8s_ingress_object(ingress_name, namespace):
+    """Delete Kubernetes ingress object.
+
+    :param ingress_name: name of ingress object to delete.
+    :param namespace: k8s namespace of ingress object.
+    """
+    try:
+        current_k8s_extensions_v1beta1.delete_namespaced_ingress(
+            name=ingress_name,
+            namespace=namespace,
+            body=client.V1DeleteOptions()
+        )
+    except ApiException as k8s_api_exception:
+        if k8s_api_exception.reason == "Not Found":
+            raise Exception("K8s object was not found {}."
+                            .format(ingress_name))
+        raise Exception("Exception when calling ExtensionsV1beta1->"
+                        "Api->delete_namespaced_ingress: {}\n"
+                        .format(k8s_api_exception))

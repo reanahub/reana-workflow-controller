@@ -17,6 +17,11 @@ import traceback
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from reana_db.database import Session
+from reana_db.models import Job, User, Workflow, WorkflowStatus
+from reana_db.utils import _get_workflow_with_uuid_or_name
+from werkzeug.exceptions import NotFound
+
 import fs
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
@@ -24,20 +29,15 @@ from fs.errors import CreateFailed
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import (get_workflow_status_change_verb,
                                  get_workspace_disk_usage)
-from reana_db.database import Session
-from reana_db.models import Job, User, Workflow, WorkflowStatus
-from reana_db.utils import _get_workflow_with_uuid_or_name
-from werkzeug.exceptions import NotFound
-
-from reana_workflow_controller.config import (
-    DEFAULT_NAME_FOR_WORKFLOWS,
-    SHARED_VOLUME_PATH,
-    WORKFLOW_QUEUES,
-    WORKFLOW_TIME_FORMAT)
+from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
+                                              SHARED_VOLUME_PATH,
+                                              WORKFLOW_QUEUES,
+                                              WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAUploadPathError,
                                               REANAWorkflowControllerError,
                                               REANAWorkflowDeletionError,
                                               REANAWorkflowNameError)
+from reana_workflow_controller.k8s import delete_k8s_ingress_object
 from reana_workflow_controller.utils import (create_workflow_workspace,
                                              list_directory_files,
                                              remove_files_recursive_wildcard,
@@ -72,6 +72,11 @@ def get_workflows():  # noqa
         - name: user
           in: query
           description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: type
+          in: query
+          description: Required. Type of workflows.
           required: true
           type: string
         - name: verbose
@@ -161,6 +166,7 @@ def get_workflows():  # noqa
     try:
         user_uuid = request.args['user']
         user = User.query.filter(User.id_ == user_uuid).first()
+        type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         if not user:
             return jsonify(
@@ -174,6 +180,14 @@ def get_workflows():  # noqa
                                  'created': workflow.created.
                                  strftime(WORKFLOW_TIME_FORMAT),
                                  'size': '-'}
+            if type == 'interactive':
+                if not workflow.interactive_session_type:
+                    continue
+                else:
+                    workflow_response['session_type'] = \
+                        workflow.interactive_session_type
+                    workflow_response['session_uri'] = \
+                        workflow.interactive_session
             if verbose:
                 reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
                 if reana_fs.exists(workflow.get_workspace()):
@@ -1261,6 +1275,89 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
           interactive_session_type,
           image=interactive_session_configuration.get("image", None))
         return jsonify({"path": "{}".format(access_path)}), 200
+
+    except (KeyError, ValueError) as e:
+        status_code = 400 if workflow else 404
+        return jsonify({"message": str(e)}), status_code
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@restapi_blueprint.route('/workflows/<workflow_id_or_name>/close',
+                         methods=['POST'])
+def close_interactive_session(workflow_id_or_name):  # noqa
+    r"""Close an interactive workflow session.
+
+    ---
+    post:
+      summary: Close an interactive workflow session.
+      description: >-
+        This resource is expecting a workflow to close an interactive session
+        within its workspace.
+      operationId: close_interactive_session
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The interactive session has been closed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "The interactive session has been closed",
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_uuid = request.args["user"]
+        workflow = None
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_uuid)
+        if workflow.interactive_session_name is None:
+            return jsonify(
+                {"message": "Workflow - {} has no open interactive session."
+                            .format(workflow_id_or_name)}), 404
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        kwrm.stop_interactive_session()
+        return jsonify(
+            {"message": "The interactive session has been closed"}), 200
 
     except (KeyError, ValueError) as e:
         status_code = 400 if workflow else 404
