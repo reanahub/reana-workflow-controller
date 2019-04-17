@@ -18,9 +18,8 @@ import pytest
 from flask import url_for
 from pytest_reana.fixtures import (cwl_workflow_with_name,
                                    cwl_workflow_without_name, default_user,
-                                   sample_yadage_workflow_in_db,
                                    sample_workflow_workspace,
-                                   session,
+                                   sample_yadage_workflow_in_db, session,
                                    tmp_shared_volume_path,
                                    yadage_workflow_with_name)
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
@@ -30,7 +29,6 @@ from reana_workflow_controller.errors import REANAWorkflowDeletionError
 from reana_workflow_controller.rest import START, STOP, _delete_workflow
 from reana_workflow_controller.utils import create_workflow_workspace
 from reana_workflow_controller.workflow_run_manager import WorkflowRunManager
-
 
 status_dict = {
     START: WorkflowStatus.running,

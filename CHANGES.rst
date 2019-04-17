@@ -1,5 +1,22 @@
 Changes
 =======
+Version 0.5.0 (2019-04-23)
+--------------------------
+
+- Adds support to create interactive sessions so the workspace can be explored
+  and modified through a Jupyter notebook.
+- Creates workflow engine instances on demand for each user and makes CVMFS
+  available inside of them.
+- Adds new endpoint to compare two workflows. The output is a ``git`` like
+  diff which can be configured to show differences at metadata level,
+  workspace level or both.
+- Adds new endpoint to delete workflows including the stopped ones.
+- Adds new endpoints to delete and move files whithin the workspace.
+  The deletion can be also done recursively with a wildcard.
+- Adds new endpoint which returns workflow parameters.
+- Adds new endpoint to query the disk usage of a given workspace.
+- Makes docker image slimmer by using ``python:3.6-slim``.
+- Centralises log level and log format configuration.
 
 Version 0.4.0 (2018-11-06)
 --------------------------

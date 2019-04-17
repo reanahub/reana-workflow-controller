@@ -16,8 +16,8 @@ import pkg_resources
 import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
-
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
+
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import \
     KubernetesWorkflowRunManager

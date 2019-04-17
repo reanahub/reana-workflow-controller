@@ -5,7 +5,7 @@
 .. image:: https://img.shields.io/travis/reanahub/reana-workflow-controller.svg
       :target: https://travis-ci.org/reanahub/reana-workflow-controller
 
-.. image:: https://readthedocs.org/projects/docs/badge/?version=latest
+.. image:: https://readthedocs.org/projects/reana-workflow-controller/badge/?version=latest
       :target: https://reana-workflow-controller.readthedocs.io/en/latest/?badge=latest
 
 .. image:: https://img.shields.io/coveralls/reanahub/reana-workflow-controller.svg
@@ -29,7 +29,7 @@ Features
 
 - start workflow execution
 - control workflow steps
-- support for several workflow specifications (CWL, Yadage)
+- support for several workflow specifications (CWL, Yadage, Serial)
 
 Useful links
 ------------

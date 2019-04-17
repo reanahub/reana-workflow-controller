@@ -13,9 +13,9 @@ from __future__ import absolute_import
 import logging
 
 from flask import Flask
+from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.database import Session
 
-from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.models import Base  # isort:skip  # noqa
 
 

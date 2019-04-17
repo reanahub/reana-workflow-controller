@@ -10,12 +10,12 @@
 import os
 from pathlib import Path
 
-from reana_db.database import Session
-from reana_db.models import Job, JobCache
-
 import fs
 from flask import current_app as app
 from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_db.database import Session
+from reana_db.models import Job, JobCache
+
 from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
 
 
@@ -72,16 +72,20 @@ def remove_workflow_jobs_from_cache(workflow):
 
 
 def remove_files_recursive_wildcard(directory_path, path):
-    """Remove file(s) from workflow workspace.
+    """Remove file(s) fitting the wildcard from the workspace.
 
-    :param directory_path: FIXME.
-    :param path: FIXME.
-    :return: FIXME.
+    :param directory_path: Directory to delete files from.
+    :param path: Wildcard pattern to use for the removal.
+    :return: Dictionary with the results:
+       - dictionary with names of succesfully deleted files and their sizes
+       - dictionary with names of failed deletions and corresponding
+       error messages.
     """
     deleted = {"deleted": {}, "failed": {}}
     secure_path = remove_upper_level_references(path)
     posix_dir_prefix = Path(directory_path)
     paths = list(posix_dir_prefix.glob(secure_path))
+    # sort paths by length to start with the leaves of the directory tree
     paths.sort(key=lambda path: len(str(path)), reverse=True)
     for posix_path in paths:
         try:
