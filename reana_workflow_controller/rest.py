@@ -17,11 +17,6 @@ import traceback
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from reana_db.database import Session
-from reana_db.models import Job, User, Workflow, WorkflowStatus
-from reana_db.utils import _get_workflow_with_uuid_or_name
-from werkzeug.exceptions import NotFound
-
 import fs
 from flask import (Blueprint, abort, current_app, jsonify, request,
                    send_from_directory)
@@ -29,6 +24,11 @@ from fs.errors import CreateFailed
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import (get_workflow_status_change_verb,
                                  get_workspace_disk_usage)
+from reana_db.database import Session
+from reana_db.models import Job, User, Workflow, WorkflowStatus
+from reana_db.utils import _get_workflow_with_uuid_or_name
+from werkzeug.exceptions import NotFound
+
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
                                               SHARED_VOLUME_PATH,
                                               WORKFLOW_QUEUES,

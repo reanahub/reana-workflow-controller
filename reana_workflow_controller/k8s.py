@@ -10,14 +10,15 @@ import os
 
 from kubernetes import client
 from kubernetes.client.rest import ApiException
-
 from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.k8s.api_client import (current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
 from reana_commons.k8s.volumes import get_shared_volume
-from reana_workflow_controller.config import (
+
+from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
-    JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT, SHARED_VOLUME_PATH)
+    JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
+    SHARED_VOLUME_PATH)
 
 
 class InteractiveDeploymentK8sBuilder(object):

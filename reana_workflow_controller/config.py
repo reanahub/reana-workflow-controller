@@ -11,6 +11,7 @@
 import os
 
 from packaging.version import parse
+
 from reana_workflow_controller.version import __version__
 
 BROKER_URL = os.getenv('RABBIT_MQ_URL',

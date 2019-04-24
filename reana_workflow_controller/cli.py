@@ -11,7 +11,6 @@
 import logging
 
 import click
-
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 
 from reana_workflow_controller.consumer import JobStatusConsumer

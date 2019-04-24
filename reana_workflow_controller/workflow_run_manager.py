@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2018 CERN.
+# Copyright (C) 2018, 2019 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -22,8 +22,14 @@ from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class)
 from reana_db.database import Session
+
 from reana_workflow_controller.errors import REANAInteractiveSessionError
-from reana_workflow_controller.config import (
+from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
+                                           delete_k8s_ingress_object,
+                                           delete_k8s_objects_if_exist,
+                                           instantiate_chained_k8s_objects)
+
+from reana_workflow_controller.config import (  # isort:skip
     MANILA_CEPHFS_PVC,
     REANA_STORAGE_BACKEND,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
@@ -33,10 +39,6 @@ from reana_workflow_controller.config import (
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
-from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
-                                           delete_k8s_objects_if_exist,
-                                           instantiate_chained_k8s_objects,
-                                           delete_k8s_ingress_object)
 
 
 class WorkflowRunManager():
