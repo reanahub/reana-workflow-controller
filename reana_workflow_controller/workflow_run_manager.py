@@ -15,9 +15,11 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import CVMFS_REPOSITORIES, INTERACTIVE_SESSION_TYPES
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
+from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class)
 from reana_db.database import Session
+from reana_db.models import User
 
 from reana_workflow_controller.errors import (REANAInteractiveSessionError,
                                               REANAWorkflowControllerError)
@@ -151,6 +153,10 @@ class WorkflowRunManager():
         """Return necessary environment variables for the workflow engine."""
         env_vars = list(WorkflowRunManager.engine_mapping[
             self.workflow.type_]['environment_variables'])
+        env_vars.extend([{
+            'name': 'REANA_USER_ID',
+            'value': str(self.workflow.owner_id)
+        }])
         cvmfs_volumes = 'false'
         for resource, value in self.workflow.reana_specification['workflow'].\
                 get('resources', {}).items():
@@ -306,6 +312,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         image = image or self._workflow_engine_image()
         command = command or self._workflow_engine_command()
         env_vars = env_vars or self._workflow_engine_env_vars()
+        owner_id = str(self.workflow.owner_id)
         job_controller_env_vars = []
         if isinstance(command, str):
             command = [command]
@@ -358,11 +365,40 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         if os.getenv('FLASK_ENV') == 'development':
             job_controller_env_vars.extend(
                 current_app.config['DEBUG_ENV_VARS'])
+        job_controller_env_vars.extend([{
+            'name': 'REANA_USER_ID',
+            'value': owner_id
+        }])
+
+        secrets_store = REANAUserSecretsStore(owner_id)
+        user_secrets = secrets_store.get_secrets()
+        job_controller_env_secrets = []
+
+        for secret in user_secrets:
+            name = secret['name']
+            if secret['type'] == 'env':
+                job_controller_env_secrets.append(
+                    {
+                        'name': name,
+                        'valueFrom': {
+                            'secretKeyRef': {
+                                'name': owner_id,
+                                'key': name
+                            }
+                        }
+                    })
+
         job_controller_container.env.extend(job_controller_env_vars)
+        job_controller_container.env.extend(job_controller_env_secrets)
         job_controller_container.volume_mounts = [
             {
                 'name': 'default-shared-volume',
                 'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
+            },
+            {
+                'name': owner_id,
+                'mountPath': "/etc/reana/secrets",
+                'readOnly': True
             },
         ]
         job_controller_container.ports = [{
@@ -374,7 +410,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             containers=containers)
         spec.template.spec.volumes = [
             KubernetesWorkflowRunManager.k8s_shared_volume
-            [REANA_STORAGE_BACKEND]
+            [REANA_STORAGE_BACKEND],
+            {
+                'name': owner_id,
+                'secret': {
+                    'secretName': owner_id
+                }
+            },
         ]
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
