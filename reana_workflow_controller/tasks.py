@@ -13,14 +13,17 @@ from __future__ import absolute_import
 import uuid
 
 from celery import Celery
+from kubernetes.client.rest import ApiException
+from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
                                  calculate_job_input_hash)
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow
+from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
 from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import BROKER, PROGRESS_STATUSES
+from reana_workflow_controller.errors import REANAWorkflowControllerError
 
 celery = Celery('tasks',
                 broker=BROKER)
@@ -33,6 +36,10 @@ def _update_workflow_status(workflow_uuid, status, logs):
     """Update workflow status in DB."""
     Workflow.update_workflow_status(Session, workflow_uuid,
                                     status, logs, None)
+    alive_statuses = \
+        [WorkflowStatus.created, WorkflowStatus.running, WorkflowStatus.queued]
+    if status not in alive_statuses:
+        _delete_workflow_engine_pod(workflow_uuid)
 
 
 def _update_run_progress(workflow_uuid, msg):
@@ -128,3 +135,21 @@ def _update_job_cache(msg):
     cached_job.result_path = msg['caching_info'].get('result_path')
     cached_job.workspace_hash = workspace_hash
     Session.add(cached_job)
+
+
+def _delete_workflow_engine_pod(workflow_uuid):
+    """Delete workflow engine pod."""
+    try:
+        jobs = current_k8s_batchv1_api_client.list_namespaced_job(
+            namespace='default',
+        )
+        for job in jobs.items:
+            if workflow_uuid in job.metadata.name:
+                current_k8s_batchv1_api_client.delete_namespaced_job(
+                    namespace='default',
+                    propagation_policy="Background",
+                    name=job.metadata.name)
+                break
+    except ApiException as e:
+        raise REANAWorkflowControllerError(
+            "Workflow engine pod cound not be deleted {}.".format(e))

@@ -8,22 +8,19 @@
 import base64
 import json
 import os
-from string import Template
 
-import pkg_resources
-import yaml
+from flask import current_app
 from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import CVMFS_REPOSITORIES, INTERACTIVE_SESSION_TYPES
-from reana_commons.k8s.api_client import (current_k8s_batchv1_api_client,
-                                          current_k8s_corev1_api_client,
-                                          current_k8s_extensions_v1beta1)
+from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class)
 from reana_db.database import Session
 
-from reana_workflow_controller.errors import REANAInteractiveSessionError
+from reana_workflow_controller.errors import (REANAInteractiveSessionError,
+                                              REANAWorkflowControllerError)
 from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
                                            delete_k8s_ingress_object,
                                            delete_k8s_objects_if_exist,
@@ -38,7 +35,7 @@ from reana_workflow_controller.config import (  # isort:skip
     SHARED_FS_MAPPING,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
-    WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
+    DEBUG_ENV_VARS)
 
 
 class WorkflowRunManager():
@@ -46,7 +43,7 @@ class WorkflowRunManager():
 
     if os.getenv('FLASK_ENV') == 'development':
         WORKFLOW_ENGINE_COMMON_ENV_VARS.extend(
-            WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG)
+            DEBUG_ENV_VARS)
 
     engine_mapping = {
         'cwl': {'image': '{}'.
@@ -198,9 +195,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """Start a batch workflow run."""
         workflow_run_name = self._workflow_run_name_generator('batch')
         job = self._create_job_spec(workflow_run_name)
-        current_k8s_batchv1_api_client.create_namespaced_job(
-            namespace=KubernetesWorkflowRunManager.default_namespace,
-            body=job)
+        try:
+            current_k8s_batchv1_api_client.create_namespaced_job(
+                namespace=KubernetesWorkflowRunManager.default_namespace,
+                body=job)
+        except ApiException as e:
+            raise REANAWorkflowControllerError(
+                "Workflow engine pod cound not be created {}.".format(e))
 
     def start_interactive_session(self, interactive_session_type, **kwargs):
         """Start an interactive workflow run.
@@ -305,6 +306,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         image = image or self._workflow_engine_image()
         command = command or self._workflow_engine_command()
         env_vars = env_vars or self._workflow_engine_env_vars()
+        job_controller_env_vars = []
         if isinstance(command, str):
             command = [command]
         elif not isinstance(command, list):
@@ -319,19 +321,57 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec = client.V1JobSpec(
             template=client.V1PodTemplateSpec())
         spec.template.metadata = workflow_metadata
-        container = client.V1Container(name=name, image=image,
-                                       image_pull_policy='IfNotPresent',
-                                       env=[], volume_mounts=[],
-                                       command=['/bin/bash', '-c'],
-                                       args=command)
-        container.env.extend(env_vars)
-        container.volume_mounts = [
+        workflow_enginge_container = client.V1Container(
+            name=name,
+            image=image,
+            image_pull_policy='IfNotPresent',
+            env=[],
+            volume_mounts=[],
+            command=['/bin/bash', '-c'],
+            args=command)
+        job_controller_vars = [
+            {
+                'name': 'JOB_CONTROLLER_SERVICE_PORT_HTTP',
+                'value':
+                    str(current_app.config['JOB_CONTROLLER_CONTAINER_PORT'])
+            },
+            {
+                'name': 'JOB_CONTROLLER_SERVICE_HOST',
+                'value': 'localhost'}
+        ]
+        env_vars.extend(job_controller_vars)
+        workflow_enginge_container.env.extend(env_vars)
+        workflow_enginge_container.volume_mounts = [
             {
                 'name': 'default-shared-volume',
                 'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
             },
         ]
-        spec.template.spec = client.V1PodSpec(containers=[container])
+
+        job_controller_container = client.V1Container(
+            name=current_app.config['JOB_CONTROLLER_NAME'],
+            image=current_app.config['JOB_CONTROLLER_IMAGE'],
+            image_pull_policy='IfNotPresent',
+            env=[],
+            volume_mounts=[],
+            ports=[])
+        if os.getenv('FLASK_ENV') == 'development':
+            job_controller_env_vars.extend(
+                current_app.config['DEBUG_ENV_VARS'])
+        job_controller_container.env.extend(job_controller_env_vars)
+        job_controller_container.volume_mounts = [
+            {
+                'name': 'default-shared-volume',
+                'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
+            },
+        ]
+        job_controller_container.ports = [{
+            "containerPort":
+                current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
+        }]
+        containers = [workflow_enginge_container, job_controller_container]
+        spec.template.spec = client.V1PodSpec(
+            containers=containers)
         spec.template.spec.volumes = [
             KubernetesWorkflowRunManager.k8s_shared_volume
             [REANA_STORAGE_BACKEND]

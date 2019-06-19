@@ -88,10 +88,10 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
 ]
 """Common to all workflow engines environment variables."""
 
-WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG = ({'name': 'WDB_SOCKET_SERVER',
-                                          'value': 'wdb'},
-                                         {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
-                                          'value': 'True'})
+DEBUG_ENV_VARS = ({'name': 'WDB_SOCKET_SERVER',
+                   'value': 'wdb'},
+                  {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
+                   'value': 'True'})
 """Common to all workflow engines environment variables for debug mode."""
 
 TTL_SECONDS_AFTER_FINISHED = 60
@@ -103,3 +103,14 @@ JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook"
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT = 8888
 """Default port for Jupyter based interactive session deployments."""
+
+JOB_CONTROLLER_IMAGE = os.getenv(
+    'REANA_JOB_CONTROLLER_IMAGE',
+    'reanahub/reana-job-controller:latest')
+"""Default image for REANA Job Controller sidecar."""
+
+JOB_CONTROLLER_CONTAINER_PORT = 5000
+"""Default container port for REANA Job Controller sidecar."""
+
+JOB_CONTROLLER_NAME = 'job-controller'
+"""Default job controller container name."""
