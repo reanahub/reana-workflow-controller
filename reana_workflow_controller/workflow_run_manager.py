@@ -331,6 +331,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
             },
         ]
+        security_context = None
+        if os.environ.get("VC3USERID", None):
+            security_context = client.V1SecurityContext(run_as_user=int(os.environ.get("VC3USERID")))
         spec.template.spec = client.V1PodSpec(containers=[container])
         spec.template.spec.volumes = [
             KubernetesWorkflowRunManager.k8s_shared_volume
