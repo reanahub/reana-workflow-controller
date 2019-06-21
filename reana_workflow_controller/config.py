@@ -114,3 +114,6 @@ JOB_CONTROLLER_CONTAINER_PORT = 5000
 
 JOB_CONTROLLER_NAME = 'job-controller'
 """Default job controller container name."""
+
+WORKFLOW_ENGINE_NAME = 'workflow-engine'
+"""Default workflow engine container name."""

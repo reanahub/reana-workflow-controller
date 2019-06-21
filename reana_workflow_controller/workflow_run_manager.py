@@ -322,7 +322,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             template=client.V1PodTemplateSpec())
         spec.template.metadata = workflow_metadata
         workflow_enginge_container = client.V1Container(
-            name=name,
+            name=current_app.config['WORKFLOW_ENGINE_NAME'],
             image=image,
             image_pull_policy='IfNotPresent',
             env=[],
