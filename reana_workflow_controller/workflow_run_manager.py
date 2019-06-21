@@ -291,7 +291,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             current_k8s_batchv1_api_client.delete_namespaced_job(
                 job,
                 KubernetesWorkflowRunManager.default_namespace,
-                V1DeleteOptions(propagation_policy='Background'))
+                body=V1DeleteOptions(propagation_policy='Background'))
 
     def _create_job_spec(self, name, command=None, image=None,
                          env_vars=None):
