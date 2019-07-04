@@ -7,19 +7,23 @@
 """Workflow run manager interface."""
 import base64
 import json
+import logging
 import os
 
 from flask import current_app
 from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
-from reana_commons.config import CVMFS_REPOSITORIES, INTERACTIVE_SESSION_TYPES
+from reana_commons.config import (CVMFS_REPOSITORIES,
+                                  INTERACTIVE_SESSION_TYPES,
+                                  WORKFLOW_RUNTIME_USER_GID,
+                                  WORKFLOW_RUNTIME_USER_NAME,
+                                  WORKFLOW_RUNTIME_USER_UID)
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
-                                 create_cvmfs_storage_class)
+                                 create_cvmfs_storage_class, format_cmd)
 from reana_db.database import Session
-from reana_db.models import User
 
 from reana_workflow_controller.errors import (REANAInteractiveSessionError,
                                               REANAWorkflowControllerError)
@@ -35,6 +39,7 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
+    SHARED_VOLUME_PATH,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS)
@@ -206,8 +211,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 namespace=KubernetesWorkflowRunManager.default_namespace,
                 body=job)
         except ApiException as e:
-            raise REANAWorkflowControllerError(
-                "Workflow engine pod cound not be created {}.".format(e))
+            msg = 'Workflow engine/job controller pod ' \
+                  'creation failed {}'.format(e)
+            logging.error(msg, exc_info=True)
+            raise REANAWorkflowControllerError(e)
 
     def start_interactive_session(self, interactive_session_type, **kwargs):
         """Start an interactive workflow run.
@@ -311,14 +318,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """
         image = image or self._workflow_engine_image()
         command = command or self._workflow_engine_command()
-        env_vars = env_vars or self._workflow_engine_env_vars()
-        owner_id = str(self.workflow.owner_id)
+        workflow_engine_env_vars = env_vars or self._workflow_engine_env_vars()
         job_controller_env_vars = []
-        if isinstance(command, str):
-            command = [command]
-        elif not isinstance(command, list):
-            raise ValueError('Command should be a list or a string and not {}'
-                             .format(type(command)))
+        owner_id = str(self.workflow.owner_id)
+        command = format_cmd(command)
 
         workflow_metadata = client.V1ObjectMeta(name=name)
         job = client.V1Job()
@@ -328,6 +331,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec = client.V1JobSpec(
             template=client.V1PodTemplateSpec())
         spec.template.metadata = workflow_metadata
+
         workflow_enginge_container = client.V1Container(
             name=current_app.config['WORKFLOW_ENGINE_NAME'],
             image=image,
@@ -336,7 +340,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             volume_mounts=[],
             command=['/bin/bash', '-c'],
             args=command)
-        job_controller_vars = [
+        job_controller_address = [
             {
                 'name': 'JOB_CONTROLLER_SERVICE_PORT_HTTP',
                 'value':
@@ -346,29 +350,19 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'name': 'JOB_CONTROLLER_SERVICE_HOST',
                 'value': 'localhost'}
         ]
-        env_vars.extend(job_controller_vars)
-        workflow_enginge_container.env.extend(env_vars)
+        workflow_engine_env_vars.extend(job_controller_address)
+        workflow_enginge_container.env.extend(workflow_engine_env_vars)
+        workflow_enginge_container.security_context = \
+            client.V1SecurityContext(
+                run_as_group=WORKFLOW_RUNTIME_USER_GID,
+                run_as_user=WORKFLOW_RUNTIME_USER_UID
+            )
         workflow_enginge_container.volume_mounts = [
             {
                 'name': 'default-shared-volume',
                 'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
-            },
+            }
         ]
-
-        job_controller_container = client.V1Container(
-            name=current_app.config['JOB_CONTROLLER_NAME'],
-            image=current_app.config['JOB_CONTROLLER_IMAGE'],
-            image_pull_policy='IfNotPresent',
-            env=[],
-            volume_mounts=[],
-            ports=[])
-        if os.getenv('FLASK_ENV') == 'development':
-            job_controller_env_vars.extend(
-                current_app.config['DEBUG_ENV_VARS'])
-        job_controller_env_vars.extend([{
-            'name': 'REANA_USER_ID',
-            'value': owner_id
-        }])
 
         secrets_store = REANAUserSecretsStore(owner_id)
         user_secrets = secrets_store.get_secrets()
@@ -387,9 +381,40 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                             }
                         }
                     })
+        user = \
+            secrets_store.get_secret_value('HTCONDORCERN_USERNAME') or \
+            WORKFLOW_RUNTIME_USER_NAME
+
+        job_controller_container = client.V1Container(
+            name=current_app.config['JOB_CONTROLLER_NAME'],
+            image=current_app.config['JOB_CONTROLLER_IMAGE'],
+            image_pull_policy='IfNotPresent',
+            env=[],
+            volume_mounts=[],
+            command=['/bin/bash', '-c'],
+            args=self._create_job_controller_startup_cmd(user),
+            ports=[])
+
+        if os.getenv('FLASK_ENV') == 'development':
+            job_controller_env_vars.extend(
+                current_app.config['DEBUG_ENV_VARS'])
+
+        job_controller_env_vars.extend([
+            {
+                'name': 'REANA_USER_ID',
+                'value': owner_id
+            }, {
+                'name': 'CERN_USER',
+                'value': user
+            }, {
+                'name': 'USER',  # Required by HTCondor
+                'value': user
+            }
+        ])
 
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
+
         job_controller_container.volume_mounts = [
             {
                 'name': 'default-shared-volume',
@@ -418,8 +443,27 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 }
             },
         ]
+
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
         job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
         job.spec.backoff_limit = 0
         return job
+
+    def _create_job_controller_startup_cmd(self, user=None):
+        """Create job controller startup cmd."""
+        base_cmd = 'flask run -h 0.0.0.0;'
+        if user:
+            add_user_cmd = 'useradd -u {} -g {} -M {};'.format(
+                WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
+                user)
+            chown_workspace_cmd = 'chown -R {} {};'.format(
+                WORKFLOW_RUNTIME_USER_UID,
+                SHARED_VOLUME_PATH + '/' + self.workflow.get_workspace()
+            )
+            run_app_cmd = 'su {} /bin/bash -c "{}"'.format(user, base_cmd)
+            full_cmd = add_user_cmd + chown_workspace_cmd + run_app_cmd
+            return [full_cmd]
+        else:
+            return base_cmd.split()

@@ -1856,7 +1856,7 @@ def _get_current_job_progress(workflow_id):
         if job:
             current_job_commands[str(job.id_)] = {
                 'prettified_cmd': job.prettified_cmd,
-                'current_job_name': job.name}
+                'current_job_name': job.job_name}
     return current_job_commands
 
 
