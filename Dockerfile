@@ -17,7 +17,7 @@ COPY reana_workflow_controller/version.py /code/reana_workflow_controller/
 
 WORKDIR /code
 RUN pip install requirements-builder && \
-    requirements-builder -e all -l pypi setup.py | pip install -r /dev/stdin && \
+    requirements-builder -l pypi setup.py | pip install -r /dev/stdin && \
     pip uninstall -y requirements-builder
 
 COPY . /code
