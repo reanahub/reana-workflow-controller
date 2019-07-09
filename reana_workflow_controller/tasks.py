@@ -63,23 +63,13 @@ def _update_run_progress(workflow_uuid, msg):
                     job_progress['total'] = \
                         msg['progress']['total']
             else:
-                new_total = 0
-                for job_id in msg['progress'][status]['job_ids']:
-                    job = Session.query(Job).\
-                        filter_by(id_=job_id).one_or_none()
-                    if job:
-                        if job.status != status or \
-                                (cached_jobs and
-                                 str(job.id_) in cached_jobs['job_ids']):
-                            new_total += 1
-                new_total += previous_total
                 if previous_status:
                     new_job_ids = set(previous_status.get('job_ids') or
                                       set()) | \
                         set(msg['progress'][status]['job_ids'])
                 else:
                     new_job_ids = set(msg['progress'][status]['job_ids'])
-                job_progress[status] = {'total': new_total,
+                job_progress[status] = {'total': len(new_job_ids),
                                         'job_ids': list(new_job_ids)}
     workflow.job_progress = job_progress
     flag_modified(workflow, 'job_progress')
@@ -88,8 +78,6 @@ def _update_run_progress(workflow_uuid, msg):
 
 def _update_job_progress(workflow_uuid, msg):
     """Update job progress for jobs in received message."""
-    workflow = Session.query(Workflow).filter_by(
-        id_=workflow_uuid).one_or_none()
     for status in PROGRESS_STATUSES:
         if status in msg['progress']:
             status_progress = msg['progress'][status]
