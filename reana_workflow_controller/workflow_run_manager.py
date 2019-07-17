@@ -366,6 +366,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         secrets_store = REANAUserSecretsStore(owner_id)
         user_secrets = secrets_store.get_secrets()
+        file_secrets_items = []
         job_controller_env_secrets = []
 
         for secret in user_secrets:
@@ -381,6 +382,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                             }
                         }
                     })
+            elif secret['type'] == 'file':
+                file_secrets_items.append({
+                    'key': secret['name'],
+                    'path': secret['name'],
+                })
+
         user = \
             secrets_store.get_secret_value('HTCONDORCERN_USERNAME') or \
             WORKFLOW_RUNTIME_USER_NAME
@@ -411,7 +418,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'value': user
             }
         ])
-
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
 
@@ -439,7 +445,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             {
                 'name': owner_id,
                 'secret': {
-                    'secretName': owner_id
+                    'secretName': owner_id,
+                    'items': file_secrets_items
                 }
             },
         ]
