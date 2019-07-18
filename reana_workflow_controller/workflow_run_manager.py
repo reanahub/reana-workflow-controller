@@ -367,28 +367,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
         workflow_enginge_container.volume_mounts = [workspace_mount]
         secrets_store = REANAUserSecretsStore(owner_id)
-        user_secrets = secrets_store.get_secrets()
-        file_secrets_items = []
-        job_controller_env_secrets = []
-
-        for secret in user_secrets:
-            name = secret['name']
-            if secret['type'] == 'env':
-                job_controller_env_secrets.append(
-                    {
-                        'name': name,
-                        'valueFrom': {
-                            'secretKeyRef': {
-                                'name': owner_id,
-                                'key': name
-                            }
-                        }
-                    })
-            elif secret['type'] == 'file':
-                file_secrets_items.append({
-                    'key': secret['name'],
-                    'path': secret['name'],
-                })
+        job_controller_env_secrets = secrets_store.\
+            get_env_secrets_as_k8s_spec()
 
         user = \
             secrets_store.get_secret_value('HTCONDORCERN_USERNAME') or \
@@ -433,13 +413,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             }
             ])
 
+        secrets_volume_mount = \
+            secrets_store.get_secrets_volume_mount_as_k8s_spec()
         job_controller_container.volume_mounts = [workspace_mount, db_mount]
-        job_controller_container.volume_mounts.append(
-            {
-                'name': owner_id,
-                'mountPath': "/etc/reana/secrets",
-                'readOnly': True
-            })
+        job_controller_container.volume_mounts.append(secrets_volume_mount)
+
         job_controller_container.ports = [{
             "containerPort":
                 current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
@@ -450,13 +428,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec.template.spec.volumes = [
             KubernetesWorkflowRunManager.k8s_shared_volume
             [REANA_STORAGE_BACKEND],
-            {
-                'name': owner_id,
-                'secret': {
-                    'secretName': owner_id,
-                    'items': file_secrets_items
-                }
-            },
+            secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 
         job.spec = spec
