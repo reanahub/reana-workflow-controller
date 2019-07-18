@@ -21,6 +21,7 @@ from reana_commons.config import (CVMFS_REPOSITORIES,
                                   WORKFLOW_RUNTIME_USER_UID)
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.volumes import get_shared_volume
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class, format_cmd)
 from reana_db.config import SQLALCHEMY_DATABASE_URI
@@ -186,16 +187,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     k8s_shared_volume = {
         'cephfs': {
-            'name': 'default-shared-volume',
+            'name': 'reana-shared-volume',
             'persistentVolumeClaim': {
                 'claimName': MANILA_CEPHFS_PVC,
                 'readOnly': False,
             }
         },
         'local': {
-            'name': 'default-shared-volume',
+            'name': 'reana-shared-volume',
             'hostPath': {
-                'path': SHARED_FS_MAPPING['MOUNT_SOURCE_PATH'],
+                'path': SHARED_FS_MAPPING['MOUNT_SOURCE_PATH']
             }
         }
     }
@@ -323,6 +324,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
+        workspace_mount, _ = get_shared_volume(
+            self.workflow.get_workspace(),
+            KubernetesWorkflowRunManager.k8s_shared_volume
+            [REANA_STORAGE_BACKEND]['hostPath']['path']
+        )
+        db_mount, _ = get_shared_volume(
+            'db',
+            KubernetesWorkflowRunManager.k8s_shared_volume
+            [REANA_STORAGE_BACKEND]['hostPath']['path']
+        )
 
         workflow_metadata = client.V1ObjectMeta(name=name)
         job = client.V1Job()
@@ -358,13 +369,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 run_as_group=WORKFLOW_RUNTIME_USER_GID,
                 run_as_user=WORKFLOW_RUNTIME_USER_UID
             )
-        workflow_enginge_container.volume_mounts = [
-            {
-                'name': 'default-shared-volume',
-                'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
-            }
-        ]
-
+        workflow_enginge_container.volume_mounts = [workspace_mount]
         secrets_store = REANAUserSecretsStore(owner_id)
         user_secrets = secrets_store.get_secrets()
         file_secrets_items = []
@@ -427,17 +432,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'value': SQLALCHEMY_DATABASE_URI
             }])
 
-        job_controller_container.volume_mounts = [
-            {
-                'name': 'default-shared-volume',
-                'mountPath': SHARED_FS_MAPPING['MOUNT_DEST_PATH'],
-            },
+        job_controller_container.volume_mounts = [workspace_mount, db_mount]
+        job_controller_container.volume_mounts.append(
             {
                 'name': owner_id,
                 'mountPath': "/etc/reana/secrets",
                 'readOnly': True
-            },
-        ]
+            })
         job_controller_container.ports = [{
             "containerPort":
                 current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
