@@ -23,6 +23,7 @@ from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class, format_cmd)
+from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
 
 from reana_workflow_controller.errors import (REANAInteractiveSessionError,
@@ -420,6 +421,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         ])
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
+        job_controller_container.env.extend([
+            {
+                'name': 'REANA_SQLALCHEMY_DATABASE_URI',
+                'value': SQLALCHEMY_DATABASE_URI
+            }])
 
         job_controller_container.volume_mounts = [
             {
