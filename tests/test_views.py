@@ -474,7 +474,6 @@ def test_set_workflow_status(app, corev1_api_client_with_user_secrets,
             Workflow.id_ == workflow_created_uuid).first()
         assert workflow.status == WorkflowStatus.created
         payload = START
-        # replace celery task with Mock()
         with mock.patch(
              'reana_workflow_controller.workflow_run_manager.'
              'current_k8s_batchv1_api_client') as k8s_api_client:
@@ -489,8 +488,6 @@ def test_set_workflow_status(app, corev1_api_client_with_user_secrets,
                                                "status": "start"})
                 json_response = json.loads(res.data.decode())
                 assert json_response.get('status') == status_dict[payload].name
-                # assert the celery task was called with the following
-                # arguments
                 k8s_api_client.create_namespaced_job.assert_called_once()
 
 
@@ -513,7 +510,6 @@ def test_start_already_started_workflow(app, session, default_user,
             Workflow.id_ == workflow_created_uuid).first()
         assert workflow.status == WorkflowStatus.created
         payload = START
-        # replace celery task with Mock()
         with mock.patch('reana_workflow_controller.workflow_run_manager.'
                         'current_k8s_batchv1_api_client'):
             # provide user secret store
@@ -778,7 +774,6 @@ def test_start_input_parameters(app, session, default_user, user_secrets,
         payload = START
         parameters = {'input_parameters': {'first': 'test'},
                       'operational_options': {}}
-        # replace celery task with Mock()
         with mock.patch('reana_workflow_controller.workflow_run_manager.'
                         'current_k8s_batchv1_api_client'):
             # provide user secret store
