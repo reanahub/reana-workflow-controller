@@ -12,14 +12,18 @@ from pathlib import Path
 
 import fs
 from flask import current_app as app
+from git import Repo
 from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import Job, JobCache
 
-from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
+from reana_workflow_controller.config import (REANA_GITLAB_HOST,
+                                              WORKFLOW_TIME_FORMAT)
 
 
-def create_workflow_workspace(path):
+def create_workflow_workspace(path, user_id=None,
+                              git_url=None, git_branch=None, git_ref=None):
     """Create workflow workspace.
 
     :param path: Relative path to workspace directory.
@@ -28,6 +32,17 @@ def create_workflow_workspace(path):
     os.umask(REANA_WORKFLOW_UMASK)
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
     reana_fs.makedirs(path, recreate=True)
+    if git_url and git_ref:
+        secret_store = REANAUserSecretsStore(user_id)
+        gitlab_access_token = secret_store\
+            .get_secret_value('gitlab_access_token')
+        url = "https://oauth2:{0}@{1}/{2}.git"\
+            .format(gitlab_access_token, REANA_GITLAB_HOST, git_url)
+        repo = Repo.clone_from(url=url,
+                               to_path=os.path.abspath(
+                                   reana_fs.root_path + '/' + path),
+                               branch=git_branch)
+        repo.head.reset(commit=git_ref)
 
 
 def list_directory_files(directory):

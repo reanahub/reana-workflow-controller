@@ -249,6 +249,10 @@ def create_workflow():  # noqa
               workflow_name:
                 type: string
                 description: Workflow name. If empty name will be generated.
+              git_data:
+                type: object
+                description: >-
+                  GitLab data.
             required: [reana_specification,
                        workflow_name,
                        operational_options]
@@ -306,6 +310,10 @@ def create_workflow():  # noqa
                 # `workflow_name` contains something else than just ASCII.
                 raise REANAWorkflowNameError('Workflow name {} is not valid.'.
                                              format(workflow_name))
+        git_ref = ''
+        if 'git_data' in request.json:
+            git_data = request.json['git_data']
+            git_ref = git_data['git_commit_sha']
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,
                             name=workflow_name,
@@ -317,9 +325,17 @@ def create_workflow():  # noqa
                             type_=request.json[
                                 'reana_specification']['workflow']['type'],
                             logs='')
+        workflow.git_ref = git_ref
         Session.add(workflow)
         Session.object_session(workflow).commit()
-        create_workflow_workspace(workflow.get_workspace())
+        if git_ref:
+            create_workflow_workspace(workflow.get_workspace(),
+                                      user_id=user.id_,
+                                      git_url=git_data['git_url'],
+                                      git_branch=git_data['git_branch'],
+                                      git_ref=git_ref)
+        else:
+            create_workflow_workspace(workflow.get_workspace())
         return jsonify({'message': 'Workflow workspace created',
                         'workflow_id': workflow.id_,
                         'workflow_name': _get_workflow_name(workflow)}), 201

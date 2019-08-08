@@ -13,9 +13,11 @@ from __future__ import absolute_import
 import json
 import uuid
 
+import requests
 from kubernetes.client.rest import ApiException
 from reana_commons.consumer import BaseConsumer
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
+from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
                                  calculate_job_input_hash)
@@ -23,7 +25,8 @@ from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
 from sqlalchemy.orm.attributes import flag_modified
 
-from reana_workflow_controller.config import PROGRESS_STATUSES
+from reana_workflow_controller.config import (PROGRESS_STATUSES,
+                                              REANA_GITLAB_URL, REANA_URL)
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 
 
@@ -67,10 +70,35 @@ def _update_workflow_status(workflow_uuid, status, logs):
     """Update workflow status in DB."""
     Workflow.update_workflow_status(Session, workflow_uuid,
                                     status, logs, None)
+    workflow = Session.query(Workflow).filter_by(id_=workflow_uuid)\
+        .one_or_none()
+    if workflow.git_ref:
+        _update_commit_status(workflow, status)
     alive_statuses = \
         [WorkflowStatus.created, WorkflowStatus.running, WorkflowStatus.queued]
     if status not in alive_statuses:
         _delete_workflow_engine_pod(workflow_uuid)
+
+
+def _update_commit_status(workflow, status):
+    if status == WorkflowStatus.finished:
+        state = "success"
+    elif status == WorkflowStatus.failed:
+        state = "failed"
+    elif status == WorkflowStatus.stopped or status == WorkflowStatus.deleted:
+        state = "canceled"
+    else:
+        state = "running"
+    secret_store = REANAUserSecretsStore(workflow.owner_id)
+    gitlab_access_token = secret_store.get_secret_value('gitlab_access_token')
+    target_url = REANA_URL + "/api/workflows/{0}/logs".format(workflow.id_)
+    commit_status_url = REANA_GITLAB_URL + "/api/v4/projects/{0}/" + \
+        "statuses/{1}?access_token={2}&state={3}&target_url={4}"
+    requests.post(commit_status_url.format(workflow.name,
+                                           workflow.git_ref,
+                                           gitlab_access_token,
+                                           state,
+                                           target_url))
 
 
 def _update_run_progress(workflow_uuid, msg):

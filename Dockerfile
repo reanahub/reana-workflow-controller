@@ -12,6 +12,10 @@ RUN apt-get update && \
       vim-tiny && \
     pip install --upgrade pip
 
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y git
+
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_workflow_controller/version.py /code/reana_workflow_controller/
 

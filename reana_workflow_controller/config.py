@@ -114,3 +114,12 @@ JOB_CONTROLLER_NAME = 'job-controller'
 
 WORKFLOW_ENGINE_NAME = 'workflow-engine'
 """Default workflow engine container name."""
+
+REANA_GITLAB_HOST = os.getenv('REANA_GITLAB_HOST', 'CHANGE_ME')
+"""GitLab API HOST"""
+
+REANA_GITLAB_URL = 'https://{}'.format(REANA_GITLAB_HOST)
+"""GitLab API URL"""
+
+REANA_URL = os.getenv('REANA_URL', 'CHANGE_ME')
+"""REANA URL"""
