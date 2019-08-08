@@ -426,7 +426,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             {
                 'name': 'REANA_SQLALCHEMY_DATABASE_URI',
                 'value': SQLALCHEMY_DATABASE_URI
-            }])
+            },
+            {
+                'name': 'REANA_STORAGE_BACKEND',
+                'value': REANA_STORAGE_BACKEND
+            }
+            ])
 
         job_controller_container.volume_mounts = [workspace_mount, db_mount]
         job_controller_container.volume_mounts.append(
