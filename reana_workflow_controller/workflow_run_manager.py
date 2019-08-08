@@ -325,14 +325,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
         workspace_mount, _ = get_shared_volume(
-            self.workflow.get_workspace(),
-            KubernetesWorkflowRunManager.k8s_shared_volume
-            [REANA_STORAGE_BACKEND]['hostPath']['path']
+            self.workflow.get_workspace(), SHARED_VOLUME_PATH
         )
         db_mount, _ = get_shared_volume(
-            'db',
-            KubernetesWorkflowRunManager.k8s_shared_volume
-            [REANA_STORAGE_BACKEND]['hostPath']['path']
+            'db', SHARED_VOLUME_PATH
         )
 
         workflow_metadata = client.V1ObjectMeta(name=name)
