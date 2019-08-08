@@ -47,9 +47,6 @@ WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
                    'yadage': 'yadage-default-queue',
                    'serial': 'serial-default-queue'}
 
-REANA_STORAGE_BACKEND = os.getenv('REANA_STORAGE_BACKEND', 'local')
-"""Type of storage attached to the engines, one of ['local', 'cephfs']."""
-
 MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
 """If CEPH storage backend is used, this represents the name of the
 Kubernetes persistent volume claim."""

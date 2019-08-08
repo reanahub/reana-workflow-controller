@@ -16,6 +16,7 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (CVMFS_REPOSITORIES,
                                   INTERACTIVE_SESSION_TYPES,
+                                  REANA_STORAGE_BACKEND,
                                   WORKFLOW_RUNTIME_USER_GID,
                                   WORKFLOW_RUNTIME_USER_NAME,
                                   WORKFLOW_RUNTIME_USER_UID)
@@ -36,7 +37,6 @@ from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
 
 from reana_workflow_controller.config import (  # isort:skip
     MANILA_CEPHFS_PVC,
-    REANA_STORAGE_BACKEND,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
