@@ -143,6 +143,10 @@
             "required": true,
             "schema": {
               "properties": {
+                "git_data": {
+                  "description": "GitLab data.",
+                  "type": "object"
+                },
                 "operational_options": {
                   "description": "Operational options.",
                   "type": "object"

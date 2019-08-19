@@ -47,9 +47,6 @@ WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
                    'yadage': 'yadage-default-queue',
                    'serial': 'serial-default-queue'}
 
-REANA_STORAGE_BACKEND = os.getenv('REANA_STORAGE_BACKEND', 'local')
-"""Type of storage attached to the engines, one of ['local', 'cephfs']."""
-
 MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
 """If CEPH storage backend is used, this represents the name of the
 Kubernetes persistent volume claim."""
@@ -88,10 +85,10 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
 ]
 """Common to all workflow engines environment variables."""
 
-WORKFLOW_ENGINE_COMMON_ENV_VARS_DEBUG = ({'name': 'WDB_SOCKET_SERVER',
-                                          'value': 'wdb'},
-                                         {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
-                                          'value': 'True'})
+DEBUG_ENV_VARS = ({'name': 'WDB_SOCKET_SERVER',
+                   'value': 'wdb'},
+                  {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
+                   'value': 'True'})
 """Common to all workflow engines environment variables for debug mode."""
 
 TTL_SECONDS_AFTER_FINISHED = 60
@@ -103,3 +100,26 @@ JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook"
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT = 8888
 """Default port for Jupyter based interactive session deployments."""
+
+JOB_CONTROLLER_IMAGE = os.getenv(
+    'REANA_JOB_CONTROLLER_IMAGE',
+    'reanahub/reana-job-controller:latest')
+"""Default image for REANA Job Controller sidecar."""
+
+JOB_CONTROLLER_CONTAINER_PORT = 5000
+"""Default container port for REANA Job Controller sidecar."""
+
+JOB_CONTROLLER_NAME = 'job-controller'
+"""Default job controller container name."""
+
+WORKFLOW_ENGINE_NAME = 'workflow-engine'
+"""Default workflow engine container name."""
+
+REANA_GITLAB_HOST = os.getenv('REANA_GITLAB_HOST', 'CHANGE_ME')
+"""GitLab API HOST"""
+
+REANA_GITLAB_URL = 'https://{}'.format(REANA_GITLAB_HOST)
+"""GitLab API URL"""
+
+REANA_URL = os.getenv('REANA_URL', 'CHANGE_ME')
+"""REANA URL"""

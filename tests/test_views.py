@@ -457,7 +457,8 @@ def test_get_workflow_status_unknown_workflow(app, default_user,
         assert res.status_code == 404
 
 
-def test_set_workflow_status(app, session, default_user,
+def test_set_workflow_status(app, corev1_api_client_with_user_secrets,
+                             user_secrets, session, default_user,
                              yadage_workflow_with_name):
     """Test set workflow status "Start"."""
     with app.test_client() as client:
@@ -473,22 +474,26 @@ def test_set_workflow_status(app, session, default_user,
             Workflow.id_ == workflow_created_uuid).first()
         assert workflow.status == WorkflowStatus.created
         payload = START
-        # replace celery task with Mock()
         with mock.patch(
              'reana_workflow_controller.workflow_run_manager.'
              'current_k8s_batchv1_api_client') as k8s_api_client:
-            # set workflow status to START
-            res = client.put(url_for('api.set_workflow_status',
-                             workflow_id_or_name=workflow_created_uuid),
-                             query_string={"user": default_user.id_,
-                                           "status": "start"})
-            json_response = json.loads(res.data.decode())
-            assert json_response.get('status') == status_dict[payload].name
-            # assert the celery task was called with the following arguments
-            k8s_api_client.create_namespaced_job.assert_called_once()
+            # provide user secret store
+            with mock.patch('reana_commons.k8s.secrets.'
+                            'current_k8s_corev1_api_client',
+                            corev1_api_client_with_user_secrets(user_secrets)):
+                # set workflow status to START
+                res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id_or_name=workflow_created_uuid),
+                                 query_string={"user": default_user.id_,
+                                               "status": "start"})
+                json_response = json.loads(res.data.decode())
+                assert json_response.get('status') == status_dict[payload].name
+                k8s_api_client.create_namespaced_job.assert_called_once()
 
 
 def test_start_already_started_workflow(app, session, default_user,
+                                        corev1_api_client_with_user_secrets,
+                                        user_secrets,
                                         yadage_workflow_with_name):
     """Test start workflow twice."""
     with app.test_client() as client:
@@ -505,26 +510,29 @@ def test_start_already_started_workflow(app, session, default_user,
             Workflow.id_ == workflow_created_uuid).first()
         assert workflow.status == WorkflowStatus.created
         payload = START
-        # replace celery task with Mock()
         with mock.patch('reana_workflow_controller.workflow_run_manager.'
                         'current_k8s_batchv1_api_client'):
-            # set workflow status to START
-            res = client.put(url_for('api.set_workflow_status',
-                             workflow_id_or_name=workflow_created_uuid),
-                             query_string={"user": default_user.id_,
-                                           "status": "start"})
-            json_response = json.loads(res.data.decode())
-            assert json_response.get('status') == status_dict[payload].name
-            res = client.put(url_for('api.set_workflow_status',
-                             workflow_id_or_name=workflow_created_uuid),
-                             query_string={"user": default_user.id_,
-                                           "status": "start"})
-            json_response = json.loads(res.data.decode())
-            assert res.status_code == 409
-            expected_message = ("Workflow {0} could not be started because"
-                                " it is already running.").format(
-                                    workflow_created_uuid)
-            assert json_response.get('message') == expected_message
+            # provide user secret store
+            with mock.patch('reana_commons.k8s.secrets.'
+                            'current_k8s_corev1_api_client',
+                            corev1_api_client_with_user_secrets(user_secrets)):
+                # set workflow status to START
+                res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id_or_name=workflow_created_uuid),
+                                 query_string={"user": default_user.id_,
+                                               "status": "start"})
+                json_response = json.loads(res.data.decode())
+                assert json_response.get('status') == status_dict[payload].name
+                res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id_or_name=workflow_created_uuid),
+                                 query_string={"user": default_user.id_,
+                                               "status": "start"})
+                json_response = json.loads(res.data.decode())
+                assert res.status_code == 409
+                expected_message = ("Workflow {0} could not be started because"
+                                    " it is already running.").format(
+                                        workflow_created_uuid)
+                assert json_response.get('message') == expected_message
 
 
 @pytest.mark.parametrize(
@@ -750,7 +758,8 @@ def test_get_workflow_logs_unauthorized(app, default_user,
         assert res.status_code == 403
 
 
-def test_start_input_parameters(app, session, default_user,
+def test_start_input_parameters(app, session, default_user, user_secrets,
+                                corev1_api_client_with_user_secrets,
                                 sample_serial_workflow_in_db):
     """Test start workflow with inupt parameters."""
     with app.test_client() as client:
@@ -765,21 +774,25 @@ def test_start_input_parameters(app, session, default_user,
         payload = START
         parameters = {'input_parameters': {'first': 'test'},
                       'operational_options': {}}
-        # replace celery task with Mock()
         with mock.patch('reana_workflow_controller.workflow_run_manager.'
                         'current_k8s_batchv1_api_client'):
-            # set workflow status to START and pass parameters
-            res = client.put(url_for('api.set_workflow_status',
-                             workflow_id_or_name=workflow_created_uuid),
-                             query_string={"user": default_user.id_,
-                                           "status": "start"},
-                             content_type='application/json',
-                             data=json.dumps(parameters))
-            json_response = json.loads(res.data.decode())
-            assert json_response.get('status') == status_dict[payload].name
-            workflow = Workflow.query.filter(
-                Workflow.id_ == workflow_created_uuid).first()
-            assert workflow.input_parameters == parameters['input_parameters']
+            # provide user secret store
+            with mock.patch('reana_commons.k8s.secrets.'
+                            'current_k8s_corev1_api_client',
+                            corev1_api_client_with_user_secrets(user_secrets)):
+                # set workflow status to START and pass parameters
+                res = client.put(url_for('api.set_workflow_status',
+                                 workflow_id_or_name=workflow_created_uuid),
+                                 query_string={"user": default_user.id_,
+                                               "status": "start"},
+                                 content_type='application/json',
+                                 data=json.dumps(parameters))
+                json_response = json.loads(res.data.decode())
+                assert json_response.get('status') == status_dict[payload].name
+                workflow = Workflow.query.filter(
+                    Workflow.id_ == workflow_created_uuid).first()
+                assert workflow.input_parameters == \
+                    parameters['input_parameters']
 
 
 @pytest.mark.parametrize("status", [WorkflowStatus.created,

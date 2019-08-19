@@ -19,16 +19,7 @@ readme = open('README.rst').read()
 history = open('CHANGES.rst').read()
 
 tests_require = [
-    'apispec>=0.21.0,<0.40',
-    'check-manifest>=0.25',
-    'coverage>=4.0',
-    'isort>=4.2.2,<4.3',
-    'pydocstyle>=1.0.0',
-    'pytest-cache>=1.0',
-    'pytest-cov>=1.8.0',
-    'pytest-pep8>=1.0.6',
-    'swagger_spec_validator>=2.1.0',
-    'pytest-reana>=0.5.0',
+    'pytest-reana>=0.6.0.dev20190705,<0.7.0',
 ]
 
 extras_require = {
@@ -53,16 +44,15 @@ setup_requires = [
 ]
 
 install_requires = [
-    'celery>=4.1.0,<4.3',
     'Flask-SQLAlchemy>=2.2',
     'Flask>=0.12',
     'fs>=2.0',
+    'gitpython>=2.1',
     'jsonpickle>=0.9.6',
-    'kubernetes>=9.0.0',
     'marshmallow>=2.13',
     'packaging>=18.0',
-    'reana-commons>=0.5.0,<0.6.0[kubernetes]',
-    'reana-db>=0.5.0,<0.6.0',
+    'reana-commons[kubernetes]>=0.6.0.dev20190812,<0.7.0',
+    'reana-db>=0.6.0.dev20190715,<0.7.0',
     'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',
     'urllib3<1.25,>=1.21.1',
