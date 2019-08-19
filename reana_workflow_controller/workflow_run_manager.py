@@ -423,8 +423,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
         }]
         containers = [workflow_enginge_container, job_controller_container]
+        security_context = None
+        if os.environ.get("VC3USERID", None):
+            security_context = client.V1SecurityContext(run_as_user=int(os.environ.get("VC3USERID")))
         spec.template.spec = client.V1PodSpec(
-            containers=containers)
+            containers=containers, security_context=security_context)
+
         spec.template.spec.volumes = [
             KubernetesWorkflowRunManager.k8s_shared_volume
             [REANA_STORAGE_BACKEND],

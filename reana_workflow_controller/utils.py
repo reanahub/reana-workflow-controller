@@ -32,6 +32,10 @@ def create_workflow_workspace(path, user_id=None,
     os.umask(REANA_WORKFLOW_UMASK)
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
     reana_fs.makedirs(path, recreate=True)
+    if os.environ.get("VC3USERID", None):
+        vc3_uid = int(os.environ.get("VC3USERID"))
+        owner_gid = os.stat(reana_fs.getsyspath(path)).st_gid
+        os.chown(reana_fs.getsyspath(path), vc3_uid, owner_gid)
     if git_url and git_ref:
         secret_store = REANAUserSecretsStore(user_id)
         gitlab_access_token = secret_store\
