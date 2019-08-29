@@ -362,8 +362,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workflow_enginge_container.env.extend(workflow_engine_env_vars)
         workflow_enginge_container.security_context = \
             client.V1SecurityContext(
-                run_as_group=WORKFLOW_RUNTIME_USER_GID,
-                run_as_user=WORKFLOW_RUNTIME_USER_UID
+                run_as_group=int(WORKFLOW_RUNTIME_USER_GID),
+                run_as_user=int(WORKFLOW_RUNTIME_USER_UID)
             )
         workflow_enginge_container.volume_mounts = [workspace_mount]
         secrets_store = REANAUserSecretsStore(owner_id)
