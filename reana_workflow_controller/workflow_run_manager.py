@@ -44,6 +44,8 @@ from reana_workflow_controller.config import (  # isort:skip
     SHARED_VOLUME_PATH,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
+    REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR,
+    REANA_JOB_CONTROLLER_EXTRA_MOUNTPOINTS,
     DEBUG_ENV_VARS)
 
 
@@ -400,6 +402,21 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'value': user
             }
         ])
+        
+        job_controller_env_vars.extend([
+            {
+                'name': 'SHARED_VOLUME_PATH',
+                'value': SHARED_VOLUME_PATH
+            }
+        ])
+        if REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR:
+            job_controller_env_vars.extend([
+                {
+                    'name': 'REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR',
+                    'value': REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR
+                }
+            ])
+
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
         job_controller_container.env.extend([
@@ -411,11 +428,20 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'name': 'REANA_STORAGE_BACKEND',
                 'value': REANA_STORAGE_BACKEND
             }
-            ])
+        ])
 
         secrets_volume_mount = \
             secrets_store.get_secrets_volume_mount_as_k8s_spec()
-        job_controller_container.volume_mounts = [workspace_mount, db_mount]
+
+        extra_mounts=[]
+        for mount_point in REANA_JOB_CONTROLLER_EXTRA_MOUNTPOINTS.split(','):
+            mount_point = mount_point.lstrip()
+            basedir = os.path.basename(mount_point)
+            parentdir = os.path.dirname(mount_point)
+            mount, _ = get_shared_volume(basedir, parentdir)
+            extra_mounts.append(mount)
+
+        job_controller_container.volume_mounts = [workspace_mount, db_mount] + extra_mounts
         job_controller_container.volume_mounts.append(secrets_volume_mount)
 
         job_controller_container.ports = [{
@@ -423,11 +449,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
         }]
         containers = [workflow_enginge_container, job_controller_container]
-        security_context = None
-        if os.environ.get("VC3USERID", None):
-            security_context = client.V1SecurityContext(run_as_user=int(os.environ.get("VC3USERID")))
         spec.template.spec = client.V1PodSpec(
-            containers=containers, security_context=security_context)
+            containers=containers)
 
         spec.template.spec.volumes = [
             KubernetesWorkflowRunManager.k8s_shared_volume
