@@ -45,7 +45,7 @@ from reana_workflow_controller.config import (  # isort:skip
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR,
-    REANA_JOB_CONTROLLER_EXTRA_MOUNTPOINTS,
+    REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR,
     DEBUG_ENV_VARS)
 
 
@@ -433,16 +433,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         secrets_volume_mount = \
             secrets_store.get_secrets_volume_mount_as_k8s_spec()
 
-        extra_mounts=[]
-        for mount_point in REANA_JOB_CONTROLLER_EXTRA_MOUNTPOINTS.split(','):
-            mount_point = mount_point.lstrip()
-            basedir = os.path.basename(mount_point)
-            parentdir = os.path.dirname(mount_point)
-            mount = get_shared_volume(basedir, parentdir)
-            extra_mounts.append(mount)
-
-        job_controller_container.volume_mounts = [workspace_mount, db_mount] + extra_mounts
+        job_controller_container.volume_mounts = [workspace_mount, db_mount]
         job_controller_container.volume_mounts.append(secrets_volume_mount)
+
+        tmp_mount, tmp_volume = self._share_tmpdir_with_job_controller()
+
+        if tmp_mount and tmp_volume:
+            job_controller_container.volume_mounts.append(tmp_mount)
 
         job_controller_container.ports = [{
             "containerPort":
@@ -458,11 +455,34 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 
+        if tmp_volume and tmp_mount:
+            spec.template.spec.volumes.append(tmp_volume)
+
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
         job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
         job.spec.backoff_limit = 0
         return job
+
+    # TODO: Move this to reana-commons
+    def _share_tmpdir_with_job_controller(self):
+        rjc_hostPath = {}
+        rjc_mountPath = {}
+        vol_name = "rjc-temp"
+        if REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR:
+            rjc_hostPath = {
+                "name": vol_name,
+                "hostPath":{
+                    "path": "/tmp"
+                }
+            }
+
+            rjc_mountPath = {
+                "name": vol_name,
+                "mountPath": "/tmp"
+            }
+                    
+        return rjc_mountPath, rjc_hostPath
 
     def _create_job_controller_startup_cmd(self, user=None):
         """Create job controller startup cmd."""
