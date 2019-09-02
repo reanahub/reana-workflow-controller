@@ -52,24 +52,41 @@ def add_kubernetes_jobs_to_workflow(session):
                                                             backend='htcondor',
                                                             num_jobs=4)
     """
-    def add_kubernetes_jobs_to_workflow_callable(workflow_uuid, backend=None,
-                                                 num_jobs=2):
+    def add_kubernetes_jobs_to_workflow_callable(workflow, backend=None,
+                                                 num_jobs=2, status=None):
         """Add Kubernetes jobs to a given workflow.
 
         :param workflow_uuid: Workflow which the jobs should belong to.
         :param backend: Backend of the created jobs.
         :param num_jobs: Number of jobs to create.
+        :param status: String representing the status of the created jobs,
+            by default ``running``.
         """
         jobs = []
+        if status and status not in JobStatus.__members__:
+            raise ValueError('Unknown status {} use one of {}'.format(
+                status, JobStatus.__members__))
+
+        status = status or JobStatus.running.name
         backend = backend or 'kubernetes'
+        progress_dict = {
+            'total': {'job_ids': [], 'total': 0},
+            JobStatus.running.name: {'job_ids': [], 'total': 0},
+            JobStatus.failed.name: {'job_ids': [], 'total': 0},
+            JobStatus.finished.name: {'job_ids': [], 'total': 0},
+        }
         for num in range(num_jobs):
             reana_job_id = uuid.uuid4()
             backend_job_id = uuid.uuid4()
             job = Job(id_=reana_job_id,
                       backend_job_id=str(backend_job_id),
-                      workflow_uuid=workflow_uuid)
+                      workflow_uuid=workflow.id_)
+            progress_dict[status]['job_ids'].append(str(job.id_))
+            progress_dict[status]['total'] += 1
             session.add(job)
-            session.commit()
             jobs.append(job)
+        workflow.job_progress = progress_dict
+        session.add(workflow)
+        session.commit()
         return jobs
     yield add_kubernetes_jobs_to_workflow_callable

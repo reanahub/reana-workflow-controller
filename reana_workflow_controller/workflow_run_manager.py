@@ -182,10 +182,12 @@ class WorkflowRunManager():
 
         return (env_vars)
 
-    def resolve_backend_ids(self, reana_job_ids):
-        """Resolve REANA Job IDs to specific backend IDs."""
+    def get_workflow_running_jobs_as_backend_ids(self):
+        """Get all running jobs of a workflow as backend job IDs."""
         session = Session.object_session(self.workflow)
-        rows = session.query(Job).filter(Job.id_.in_(reana_job_ids))
+        job_list = self.workflow.job_progress.get(
+            'running', {}).get('job_ids', [])
+        rows = session.query(Job).filter(Job.id_.in_(job_list))
         backend_ids = [j.backend_job_id for j in rows.all()]
         return backend_ids
 
@@ -301,15 +303,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         current_db_sessions.add(self.workflow)
         current_db_sessions.commit()
 
-    def stop_batch_workflow_run(self, workflow_run_jobs=None):
-        """Stop a batch workflow run along with all its dependent jobs.
-
-        :param workflow_run_jobs: List of active job id's spawned by the
-            workflow run.
-        """
+    def stop_batch_workflow_run(self):
+        """Stop a batch workflow run along with all its dependent jobs."""
         workflow_run_name = self._workflow_run_name_generator('batch')
-        workflow_run_jobs = workflow_run_jobs or []
-        to_delete = self.resolve_backend_ids(workflow_run_jobs) + \
+        to_delete = self.get_workflow_running_jobs_as_backend_ids() + \
             [workflow_run_name]
         for job in to_delete:
             current_k8s_batchv1_api_client.delete_namespaced_job(

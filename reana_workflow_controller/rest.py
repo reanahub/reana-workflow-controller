@@ -1829,9 +1829,8 @@ def _stop_workflow(workflow):
     """Stop a given workflow."""
     if workflow.status == WorkflowStatus.running:
         kwrm = KubernetesWorkflowRunManager(workflow)
-        job_list = workflow.job_progress.get('running', {}).get('job_ids', [])
         workflow.run_stopped_at = datetime.now()
-        kwrm.stop_batch_workflow_run(job_list)
+        kwrm.stop_batch_workflow_run()
         workflow.status = WorkflowStatus.stopped
         current_db_sessions = Session.object_session(workflow)
         current_db_sessions.add(workflow)

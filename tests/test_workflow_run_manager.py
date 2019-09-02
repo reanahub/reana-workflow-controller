@@ -90,14 +90,12 @@ def test_stop_workflow_backend_only_kubernetes(
     """Test deletion of workflows with only Kubernetes based jobs."""
     workflow = sample_serial_workflow_in_db
     workflow.status = WorkflowStatus.running
-    workflow_jobs = add_kubernetes_jobs_to_workflow(workflow.id_)
+    workflow_jobs = add_kubernetes_jobs_to_workflow(workflow)
     backend_job_ids = [job.backend_job_id for job in workflow_jobs]
-    workflow_job_reana_ids = \
-        [str(workflow.id_) for workflow in workflow_jobs]
     with patch("reana_workflow_controller.workflow_run_manager."
                "current_k8s_batchv1_api_client") as api_client:
         kwrm = KubernetesWorkflowRunManager(workflow)
-        kwrm.stop_batch_workflow_run(workflow_job_reana_ids)
+        kwrm.stop_batch_workflow_run()
         for delete_call in api_client.delete_namespaced_job.call_args_list:
             if delete_call.args[0] in backend_job_ids:
                 del backend_job_ids[backend_job_ids.index(
