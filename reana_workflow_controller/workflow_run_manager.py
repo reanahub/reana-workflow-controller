@@ -27,6 +27,7 @@ from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class, format_cmd)
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
+from reana_db.models import Job
 
 from reana_workflow_controller.errors import (REANAInteractiveSessionError,
                                               REANAWorkflowControllerError)
@@ -183,6 +184,15 @@ class WorkflowRunManager():
 
         return (env_vars)
 
+    def get_workflow_running_jobs_as_backend_ids(self):
+        """Get all running jobs of a workflow as backend job IDs."""
+        session = Session.object_session(self.workflow)
+        job_list = self.workflow.job_progress.get(
+            'running', {}).get('job_ids', [])
+        rows = session.query(Job).filter(Job.id_.in_(job_list))
+        backend_ids = [j.backend_job_id for j in rows.all()]
+        return backend_ids
+
 
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
@@ -295,15 +305,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         current_db_sessions.add(self.workflow)
         current_db_sessions.commit()
 
-    def stop_batch_workflow_run(self, workflow_run_jobs=None):
-        """Stop a batch workflow run along with all its dependent jobs.
-
-        :param workflow_run_jobs: List of active job id's spawned by the
-            workflow run.
-        """
+    def stop_batch_workflow_run(self):
+        """Stop a batch workflow run along with all its dependent jobs."""
         workflow_run_name = self._workflow_run_name_generator('batch')
-        workflow_run_jobs = workflow_run_jobs or []
-        to_delete = workflow_run_jobs + [workflow_run_name]
+        to_delete = self.get_workflow_running_jobs_as_backend_ids() + \
+            [workflow_run_name]
         for job in to_delete:
             current_k8s_batchv1_api_client.delete_namespaced_job(
                 job,
