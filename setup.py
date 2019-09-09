@@ -55,7 +55,6 @@ install_requires = [
     'reana-db>=0.6.0.dev20190828,<0.7.0',
     'requests==2.20.0',
     'sqlalchemy-utils>=0.31.0',
-    'urllib3<1.25,>=1.21.1',
     'uwsgi-tools>=1.1.1',
     'uWSGI>=2.0.17',
     'uwsgitop>=0.10',
