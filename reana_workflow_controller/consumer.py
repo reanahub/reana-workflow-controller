@@ -14,9 +14,7 @@ import json
 import uuid
 
 import requests
-from kubernetes.client.rest import ApiException
 from reana_commons.consumer import BaseConsumer
-from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (calculate_file_access_time,
                                  calculate_hash_of_dir,
@@ -27,7 +25,6 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import (PROGRESS_STATUSES,
                                               REANA_GITLAB_URL, REANA_URL)
-from reana_workflow_controller.errors import REANAWorkflowControllerError
 
 
 class JobStatusConsumer(BaseConsumer):
@@ -74,10 +71,6 @@ def _update_workflow_status(workflow_uuid, status, logs):
         .one_or_none()
     if workflow.git_ref:
         _update_commit_status(workflow, status)
-    alive_statuses = \
-        [WorkflowStatus.created, WorkflowStatus.running, WorkflowStatus.queued]
-    if status not in alive_statuses:
-        _delete_workflow_engine_pod(workflow_uuid)
 
 
 def _update_commit_status(workflow, status):
@@ -182,21 +175,3 @@ def _update_job_cache(msg):
     cached_job.result_path = msg['caching_info'].get('result_path')
     cached_job.workspace_hash = workspace_hash
     Session.add(cached_job)
-
-
-def _delete_workflow_engine_pod(workflow_uuid):
-    """Delete workflow engine pod."""
-    try:
-        jobs = current_k8s_batchv1_api_client.list_namespaced_job(
-            namespace='default',
-        )
-        for job in jobs.items:
-            if workflow_uuid in job.metadata.name:
-                current_k8s_batchv1_api_client.delete_namespaced_job(
-                    namespace='default',
-                    propagation_policy="Background",
-                    name=job.metadata.name)
-                break
-    except ApiException as e:
-        raise REANAWorkflowControllerError(
-            "Workflow engine pod cound not be deleted {}.".format(e))
