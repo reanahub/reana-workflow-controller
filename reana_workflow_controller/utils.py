@@ -7,6 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """Workflow persistence management."""
 
+import logging
 import os
 from pathlib import Path
 
@@ -50,11 +51,19 @@ def list_directory_files(directory):
     fs_ = fs.open_fs(directory)
     file_list = []
     for file_name in fs_.walk.files():
-        file_details = fs_.getinfo(file_name, namespaces=['details'])
-        file_list.append({'name': file_name.lstrip('/'),
-                          'last-modified': file_details.modified.
-                          strftime(WORKFLOW_TIME_FORMAT),
-                          'size': file_details.size})
+        try:
+            file_details = fs_.getinfo(file_name, namespaces=['details'])
+            file_list.append({'name': file_name.lstrip('/'),
+                              'last-modified': file_details.modified
+                              .strftime(WORKFLOW_TIME_FORMAT),
+                              'size': file_details.size})
+        except fs.errors.ResourceNotFound as e:
+            if os.path.islink(fs_.root_path + file_name):
+                target = os.path.realpath(fs_.root_path + file_name)
+                msg = 'Symbolic link {} targeting {} could not be resolved: \
+                {}'.format(file_name, target, e)
+                logging.error(msg, exc_info=True)
+            continue
     return file_list
 
 
