@@ -12,6 +12,7 @@ import difflib
 import json
 import os
 import pprint
+import shutil
 import subprocess
 import traceback
 from datetime import datetime
@@ -27,6 +28,7 @@ from reana_commons.utils import (get_workflow_status_change_verb,
 from reana_db.database import Session
 from reana_db.models import Job, User, Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
+from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import NotFound
 
 from reana_workflow_controller.config import (DEFAULT_NAME_FOR_WORKFLOWS,
@@ -359,7 +361,7 @@ def upload_file(workflow_id_or_name):
         workspace.
       operationId: upload_file
       consumes:
-        - multipart/form-data
+        - application/octet-stream
       produces:
         - application/json
       parameters:
@@ -373,11 +375,12 @@ def upload_file(workflow_id_or_name):
           description: Required. Workflow UUID or name.
           required: true
           type: string
-        - name: file_content
-          in: formData
+        - name: file
+          in: body
           description: Required. File to add to the workspace.
           required: true
-          type: file
+          schema:
+            type: string
         - name: file_name
           in: query
           description: Required. File name.
@@ -419,8 +422,13 @@ def upload_file(workflow_id_or_name):
             Request failed. Internal controller error.
     """
     try:
+        if not ('application/octet-stream' in
+                request.headers.get('Content-Type')):
+                return jsonify(
+                    {"message": f'Wrong Content-Type '
+                                f'{request.headers.get("Content-Type")} '
+                                f'use application/octet-stream'}), 400
         user_uuid = request.args['user']
-        file_ = request.files['file_content']
         full_file_name = request.args['file_name']
         if not full_file_name:
             raise ValueError('The file transferred needs to have name.')
@@ -444,8 +452,10 @@ def upload_file(workflow_id_or_name):
                                                    "/".join(dirs))
             if not os.path.exists(absolute_workspace_path):
                 os.makedirs(absolute_workspace_path)
+        absolute_file_path = os.path.join(absolute_workspace_path, filename)
+        with open(absolute_file_path, 'wb') as fdest:
+            shutil.copyfileobj(request.stream, fdest)
 
-        file_.save(os.path.join(absolute_workspace_path, filename))
         return jsonify(
           {'message': '{} has been successfully uploaded.'.format(
             full_file_name)}), 200
@@ -456,7 +466,7 @@ def upload_file(workflow_id_or_name):
                                    'Please set your REANA_WORKON environment'
                                    'variable appropriately.'.
                                    format(workflow_id_or_name)}), 404
-    except (KeyError, ValueError) as e:
+    except (KeyError, ) as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500

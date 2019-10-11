@@ -1024,7 +1024,7 @@
       },
       "post": {
         "consumes": [
-          "multipart/form-data"
+          "application/octet-stream"
         ],
         "description": "This resource is expecting a workflow UUID and a file to place in the workspace.",
         "operationId": "upload_file",
@@ -1045,10 +1045,12 @@
           },
           {
             "description": "Required. File to add to the workspace.",
-            "in": "formData",
-            "name": "file_content",
+            "in": "body",
+            "name": "file",
             "required": true,
-            "type": "file"
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "description": "Required. File name.",

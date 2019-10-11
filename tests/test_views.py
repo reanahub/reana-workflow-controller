@@ -633,9 +633,8 @@ def test_upload_file(app, session, default_user,
                     workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "file_name": file_name},
-            content_type='multipart/form-data',
-            data={'file_content': (io.BytesIO(file_binary_content),
-                                   file_name)})
+            content_type='application/octet-stream',
+            input_stream=io.BytesIO(file_binary_content))
         assert res.status_code == 200
         # remove workspace directory from path
         workflow_workspace = workflow.get_workspace()
@@ -664,9 +663,8 @@ def test_upload_file_unknown_workflow(app, default_user):
                     workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "file_name": file_name},
-            content_type='multipart/form-data',
-            data={'file_content': (io.BytesIO(file_binary_content),
-                                   file_name)})
+            content_type='application/octet-stream',
+            input_stream=io.BytesIO(file_binary_content))
         assert res.status_code == 404
 
 
