@@ -453,9 +453,8 @@ def upload_file(workflow_id_or_name):
             if not os.path.exists(absolute_workspace_path):
                 os.makedirs(absolute_workspace_path)
         absolute_file_path = os.path.join(absolute_workspace_path, filename)
-        with open(absolute_file_path, 'wb') as fdest:
-            shutil.copyfileobj(request.stream, fdest)
 
+        FileStorage(request.stream).save(absolute_file_path, buffer_size=32768)
         return jsonify(
           {'message': '{} has been successfully uploaded.'.format(
             full_file_name)}), 200
@@ -466,7 +465,7 @@ def upload_file(workflow_id_or_name):
                                    'Please set your REANA_WORKON environment'
                                    'variable appropriately.'.
                                    format(workflow_id_or_name)}), 404
-    except (KeyError, ) as e:
+    except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
