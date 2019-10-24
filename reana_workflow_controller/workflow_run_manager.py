@@ -16,6 +16,7 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (CVMFS_REPOSITORIES,
                                   INTERACTIVE_SESSION_TYPES,
+                                  K8S_CERN_EOS_AVAILABLE,
                                   REANA_STORAGE_BACKEND, SHARED_VOLUME_PATH,
                                   WORKFLOW_RUNTIME_USER_GID,
                                   WORKFLOW_RUNTIME_USER_NAME,
@@ -384,6 +385,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             }, {
                 'name': 'USER',  # Required by HTCondor
                 'value': user
+            },
+            {
+                'name': 'K8S_CERN_EOS_AVAILABLE',
+                'value': K8S_CERN_EOS_AVAILABLE
             }
         ])
         job_controller_container.env.extend(job_controller_env_vars)
