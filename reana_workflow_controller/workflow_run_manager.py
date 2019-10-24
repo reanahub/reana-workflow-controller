@@ -447,7 +447,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """Create job controller startup cmd."""
         base_cmd = 'flask run -h 0.0.0.0;'
         if user:
-            add_group_cmd = 'groupadd -g {} {};'.format(
+            add_group_cmd = 'groupadd -f -g {} {};'.format(
                 WORKFLOW_RUNTIME_USER_GID,
                 WORKFLOW_RUNTIME_USER_GID)
             add_user_cmd = 'useradd -u {} -g {} -M {};'.format(
