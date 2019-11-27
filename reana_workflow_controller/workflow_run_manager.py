@@ -16,7 +16,7 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (CVMFS_REPOSITORIES,
                                   INTERACTIVE_SESSION_TYPES,
-                                  REANA_STORAGE_BACKEND,
+                                  REANA_STORAGE_BACKEND, SHARED_VOLUME_PATH,
                                   WORKFLOW_RUNTIME_USER_GID,
                                   WORKFLOW_RUNTIME_USER_NAME,
                                   WORKFLOW_RUNTIME_USER_UID)
@@ -42,7 +42,6 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
-    SHARED_VOLUME_PATH,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS)
@@ -195,22 +194,6 @@ class WorkflowRunManager():
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
 
-    k8s_shared_volume = {
-        'cephfs': {
-            'name': 'reana-shared-volume',
-            'persistentVolumeClaim': {
-                'claimName': MANILA_CEPHFS_PVC,
-                'readOnly': False,
-            }
-        },
-        'local': {
-            'name': 'reana-shared-volume',
-            'hostPath': {
-                'path': SHARED_FS_MAPPING['MOUNT_SOURCE_PATH']
-            }
-        }
-    }
-
     default_namespace = 'default'
     """Default Kubernetes namespace."""
 
@@ -330,12 +313,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
-        workspace_mount, _ = get_shared_volume(
-            self.workflow.get_workspace(), SHARED_VOLUME_PATH
-        )
-        db_mount, _ = get_shared_volume(
-            'db', SHARED_VOLUME_PATH
-        )
+        workspace_mount, workspace_volume = \
+            get_shared_volume(self.workflow.get_workspace())
+        db_mount, _ = get_shared_volume('db')
 
         workflow_metadata = client.V1ObjectMeta(name=name)
         job = client.V1Job()
@@ -432,8 +412,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec.template.spec = client.V1PodSpec(
             containers=containers)
         spec.template.spec.volumes = [
-            KubernetesWorkflowRunManager.k8s_shared_volume
-            [REANA_STORAGE_BACKEND],
+            workspace_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 

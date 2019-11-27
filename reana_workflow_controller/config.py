@@ -11,6 +11,7 @@
 import os
 
 from packaging.version import parse
+from reana_commons.config import SHARED_VOLUME_PATH
 
 from reana_workflow_controller.version import __version__
 
@@ -26,8 +27,6 @@ BROKER = os.getenv('RABBIT_MQ', 'amqp://{0}:{1}@{2}//'.format(BROKER_USER,
                                                               BROKER_URL))
 
 BROKER_PORT = os.getenv('RABBIT_MQ_PORT', 5672)
-
-SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/var/reana')
 
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
