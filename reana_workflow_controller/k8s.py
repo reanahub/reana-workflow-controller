@@ -11,7 +11,8 @@ import os
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import REANA_WORKFLOW_UMASK
-from reana_commons.k8s.api_client import (current_k8s_corev1_api_client,
+from reana_commons.k8s.api_client import (current_k8s_appsv1_api_client,
+                                          current_k8s_corev1_api_client,
                                           current_k8s_extensions_v1beta1)
 from reana_commons.k8s.volumes import get_shared_volume
 
@@ -63,16 +64,17 @@ class InteractiveDeploymentK8sBuilder(object):
         :param metadata: Common Kubernetes metadata for the interactive
             deployment.
         """
-        ingress_backend = client.V1beta1IngressBackend(
+        ingress_backend = client.ExtensionsV1beta1IngressBackend(
             service_name=self.deployment_name,
             service_port=InteractiveDeploymentK8sBuilder.internal_service_port
         )
-        ingress_rule_value = client.V1beta1HTTPIngressRuleValue([
-            client.V1beta1HTTPIngressPath(
+        ingress_rule_value = client.ExtensionsV1beta1HTTPIngressRuleValue([
+            client.ExtensionsV1beta1HTTPIngressPath(
                 path=self.path, backend=ingress_backend)])
-        spec = client.V1beta1IngressSpec(
-            rules=[client.V1beta1IngressRule(http=ingress_rule_value)])
-        ingress = client.V1beta1Ingress(
+        spec = client.ExtensionsV1beta1IngressSpec(
+            rules=[client.ExtensionsV1beta1IngressRule(
+                http=ingress_rule_value)])
+        ingress = client.ExtensionsV1beta1Ingress(
             api_version="extensions/v1beta1",
             kind="Ingress",
             spec=spec,
@@ -118,7 +120,7 @@ class InteractiveDeploymentK8sBuilder(object):
             replicas=1,
             template=template)
         deployment = client.V1Deployment(
-            api_version="extensions/v1beta1",
+            api_version="apps/v1",
             kind="Deployment",
             metadata=metadata,
             spec=spec,
@@ -137,8 +139,7 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_reana_shared_storage(self):
         """Add the REANA shared file system volume mount to the deployment."""
-        volume_mount, volume = get_shared_volume(self.workspace,
-                                                 SHARED_VOLUME_PATH)
+        volume_mount, volume = get_shared_volume(self.workspace)
         self.kubernetes_objects["deployment"].spec.template.spec. \
             containers[0].volume_mounts = [volume_mount]
         self.kubernetes_objects["deployment"].spec.template.spec.volumes = \
@@ -232,7 +233,7 @@ def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
     """
     instantiate_k8s_object = {
         "deployment":
-        current_k8s_extensions_v1beta1.create_namespaced_deployment,
+        current_k8s_appsv1_api_client.create_namespaced_deployment,
         "service":
         current_k8s_corev1_api_client.create_namespaced_service,
         "ingress":

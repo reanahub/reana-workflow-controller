@@ -1056,7 +1056,8 @@ def test_create_interactive_session(app, default_user,
         with mock.patch.multiple(
                 'reana_workflow_controller.k8s',
                 current_k8s_corev1_api_client=mock.DEFAULT,
-                current_k8s_extensions_v1beta1=mock.DEFAULT) as mocks:
+                current_k8s_extensions_v1beta1=mock.DEFAULT,
+                current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
                 url_for("api.open_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_,
@@ -1088,7 +1089,8 @@ def test_create_interactive_session_custom_image(app, default_user,
         with mock.patch.multiple(
                 "reana_workflow_controller.k8s",
                 current_k8s_corev1_api_client=mock.DEFAULT,
-                current_k8s_extensions_v1beta1=mock.DEFAULT) as mocks:
+                current_k8s_extensions_v1beta1=mock.DEFAULT,
+                current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
                 url_for("api.open_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_,
@@ -1096,7 +1098,7 @@ def test_create_interactive_session_custom_image(app, default_user,
                 query_string={"user": default_user.id_},
                 content_type="application/json",
                 data=json.dumps(interactive_session_configuration))
-            fargs, _ = mocks["current_k8s_extensions_v1beta1"]\
+            fargs, _ = mocks["current_k8s_appsv1_api_client"]\
                 .create_namespaced_deployment.call_args
             assert fargs[1].spec.template.spec.containers[0].image ==\
                 custom_image
