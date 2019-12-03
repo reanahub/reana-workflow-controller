@@ -357,7 +357,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             get_env_secrets_as_k8s_spec()
 
         user = \
-            secrets_store.get_secret_value('HTCONDORCERN_USERNAME') or \
+            secrets_store.get_secret_value('CERN_USER') or \
             WORKFLOW_RUNTIME_USER_NAME
 
         job_controller_container = client.V1Container(
