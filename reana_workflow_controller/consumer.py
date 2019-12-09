@@ -34,7 +34,7 @@ class JobStatusConsumer(BaseConsumer):
     """Consumer of jobs-status queue."""
 
     def __init__(self):
-        """Constructor."""
+        """Initialise JobStatusConsumer class."""
         super(JobStatusConsumer, self).__init__(queue='jobs-status')
 
     def get_consumers(self, Consumer, channel):
