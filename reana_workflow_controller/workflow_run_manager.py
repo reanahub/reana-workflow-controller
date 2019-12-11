@@ -17,6 +17,7 @@ from kubernetes.client.rest import ApiException
 from reana_commons.config import (CVMFS_REPOSITORIES,
                                   INTERACTIVE_SESSION_TYPES,
                                   K8S_CERN_EOS_AVAILABLE,
+                                  K8S_REANA_SERVICE_ACCOUNT_NAME,
                                   REANA_STORAGE_BACKEND, SHARED_VOLUME_PATH,
                                   WORKFLOW_RUNTIME_USER_GID,
                                   WORKFLOW_RUNTIME_USER_NAME,
@@ -416,6 +417,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         containers = [workflow_enginge_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(
             containers=containers)
+        spec.template.spec.service_account_name = \
+            K8S_REANA_SERVICE_ACCOUNT_NAME
         spec.template.spec.volumes = [
             workspace_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),

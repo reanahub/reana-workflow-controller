@@ -1056,7 +1056,7 @@ def test_create_interactive_session(app, default_user,
         with mock.patch.multiple(
                 'reana_workflow_controller.k8s',
                 current_k8s_corev1_api_client=mock.DEFAULT,
-                current_k8s_extensions_v1beta1=mock.DEFAULT,
+                current_k8s_networking_v1beta1=mock.DEFAULT,
                 current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
                 url_for("api.open_interactive_session",
@@ -1089,7 +1089,7 @@ def test_create_interactive_session_custom_image(app, default_user,
         with mock.patch.multiple(
                 "reana_workflow_controller.k8s",
                 current_k8s_corev1_api_client=mock.DEFAULT,
-                current_k8s_extensions_v1beta1=mock.DEFAULT,
+                current_k8s_networking_v1beta1=mock.DEFAULT,
                 current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
                 url_for("api.open_interactive_session",
@@ -1117,7 +1117,7 @@ def test_close_interactive_session(app, session, default_user,
     with app.test_client() as client:
         with mock.patch(
                 "reana_workflow_controller.k8s"
-                ".current_k8s_extensions_v1beta1") as mocks:
+                ".current_k8s_networking_v1beta1") as mocks:
             res = client.post(
                 url_for("api.close_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_),
