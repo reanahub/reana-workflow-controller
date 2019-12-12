@@ -441,8 +441,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 WORKFLOW_RUNTIME_USER_UID,
                 WORKFLOW_RUNTIME_USER_GID,
                 user)
-            chown_workspace_cmd = 'chown -R {} {};'.format(
+            chown_workspace_cmd = 'chown -R {}:{} {};'.format(
                 WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
                 SHARED_VOLUME_PATH + '/' + self.workflow.get_workspace()
             )
             run_app_cmd = 'su {} /bin/bash -c "{}"'.format(user, base_cmd)
