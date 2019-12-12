@@ -313,9 +313,11 @@ def create_workflow():  # noqa
                 raise REANAWorkflowNameError('Workflow name {} is not valid.'.
                                              format(workflow_name))
         git_ref = ''
+        git_repo = ''
         if 'git_data' in request.json:
             git_data = request.json['git_data']
             git_ref = git_data['git_commit_sha']
+            git_repo = git_data['git_url']
         # add spec and params to DB as JSON
         workflow = Workflow(id_=workflow_uuid,
                             name=workflow_name,
@@ -326,8 +328,9 @@ def create_workflow():  # noqa
                                 'operational_options'),
                             type_=request.json[
                                 'reana_specification']['workflow']['type'],
-                            logs='')
-        workflow.git_ref = git_ref
+                            logs='',
+                            git_ref=git_ref,
+                            git_repo=git_repo)
         Session.add(workflow)
         Session.object_session(workflow).commit()
         if git_ref:

@@ -29,6 +29,11 @@ from reana_workflow_controller.config import (PROGRESS_STATUSES,
                                               REANA_GITLAB_URL, REANA_URL)
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 
+try:
+    from urllib import parse as urlparse
+except ImportError:
+    from urlparse import urlparse
+
 
 class JobStatusConsumer(BaseConsumer):
     """Consumer of jobs-status queue."""
@@ -92,8 +97,9 @@ def _update_commit_status(workflow, status):
     secret_store = REANAUserSecretsStore(workflow.owner_id)
     gitlab_access_token = secret_store.get_secret_value('gitlab_access_token')
     target_url = f"https://{REANA_URL}/api/workflows/{workflow.id_}/logs"
+    workflow_name = urlparse.quote_plus(workflow.git_repo)
     commit_status_url = (
-        f"{REANA_GITLAB_URL}/api/v4/projects/{workflow.name}/statuses/"
+        f"{REANA_GITLAB_URL}/api/v4/projects/{workflow_name}/statuses/"
         f"{workflow.git_ref}?access_token={gitlab_access_token}&state={state}&"
         f"target_url={target_url}"
     )
