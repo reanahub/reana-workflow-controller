@@ -1,5 +1,18 @@
 Changes
 =======
+
+Version 0.6.0 (2019-12-20)
+--------------------------
+
+- Modifies the batch workflow run creation, including an instance of
+  REANA-Job-Controller running alongside with the workflow engine (sidecar
+  pattern). Only DB and workflow worksapce are mounted.
+- Refactors volume mounts using `reana-commons` base.
+- Provides user secrets to the job controller.
+- Extends workflow APIs for GitLab integration.
+- Allows stream file uploads.
+
+
 Version 0.5.0 (2019-04-23)
 --------------------------
 
