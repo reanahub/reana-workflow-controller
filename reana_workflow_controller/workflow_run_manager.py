@@ -284,6 +284,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         self.workflow.interactive_session_name = None
         self.workflow.interactive_session = None
+        self.workflow.interactive_session_type = None
         current_db_sessions = Session.object_session(self.workflow)
         current_db_sessions.add(self.workflow)
         current_db_sessions.commit()

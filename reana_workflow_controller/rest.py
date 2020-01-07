@@ -183,7 +183,9 @@ def get_workflows():  # noqa
                                  strftime(WORKFLOW_TIME_FORMAT),
                                  'size': '-'}
             if type == 'interactive':
-                if not workflow.interactive_session_type:
+                if not workflow.interactive_session or \
+                   not workflow.interactive_session_name or \
+                   not workflow.interactive_session_type:
                     continue
                 else:
                     workflow_response['session_type'] = \

@@ -60,7 +60,7 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
 def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
     """Test atomic creation of interactive sessions.
 
-    All interactive session should be created as  well as writing the state
+    All interactive session should be created as well as writing the state
     to DB, either all should be done or nothing.
     """
     mocked_k8s_client = Mock()
@@ -106,3 +106,23 @@ def test_stop_workflow_backend_only_kubernetes(
                     delete_call.args[0])]
 
         assert not backend_job_ids
+
+
+def test_interactive_session_closure(sample_serial_workflow_in_db):
+    """Test closure of an interactive sessions."""
+    mocked_k8s_client = Mock()
+    workflow = sample_serial_workflow_in_db
+    with patch.multiple('reana_workflow_controller.k8s',
+                        current_k8s_appsv1_api_client=mocked_k8s_client,
+                        current_k8s_networking_v1beta1=DEFAULT,
+                        current_k8s_corev1_api_client=DEFAULT) as mocks:
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        if len(INTERACTIVE_SESSION_TYPES):
+            kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+            assert workflow.interactive_session_name
+            assert workflow.interactive_session
+            assert workflow.interactive_session_type
+            kwrm.stop_interactive_session()
+            assert workflow.interactive_session_name is None
+            assert workflow.interactive_session is None
+            assert workflow.interactive_session_type is None
