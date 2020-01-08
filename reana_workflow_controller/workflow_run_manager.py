@@ -111,7 +111,7 @@ class WorkflowRunManager():
             ``interactive``.
         """
         type_ = type or self.workflow.type_
-        return '{mode}-{workflow_type}-{workflow_id}'.format(
+        return 'reana-{mode}-{workflow_type}-{workflow_id}'.format(
             mode=mode,
             workflow_id=self.workflow.id_,
             workflow_type=type_,
@@ -339,12 +339,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             args=command)
         job_controller_address = [
             {
-                'name': 'JOB_CONTROLLER_SERVICE_PORT_HTTP',
+                'name': 'REANA_JOB_CONTROLLER_SERVICE_PORT_HTTP',
                 'value':
                     str(current_app.config['JOB_CONTROLLER_CONTAINER_PORT'])
             },
             {
-                'name': 'JOB_CONTROLLER_SERVICE_HOST',
+                'name': 'REANA_JOB_CONTROLLER_SERVICE_HOST',
                 'value': 'localhost'}
         ]
         workflow_engine_env_vars.extend(job_controller_address)
