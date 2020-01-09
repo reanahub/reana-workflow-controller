@@ -86,6 +86,11 @@ def get_workflows():  # noqa
           description: Optional flag to show more information.
           required: false
           type: boolean
+        - name: block_size
+          in: query
+          description: Size format, either 'b' (bytes) or 'k' (kilobytes).
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -170,6 +175,7 @@ def get_workflows():  # noqa
         user = User.query.filter(User.id_ == user_uuid).first()
         type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
+        block_size = request.args.get('block_size')
         if not user:
             return jsonify(
                 {'message': 'User {} does not exist'.format(user)}), 404
@@ -198,7 +204,7 @@ def get_workflows():  # noqa
                     absolute_workspace_path = reana_fs.getospath(
                         workflow.get_workspace())
                     disk_usage_info = get_workspace_disk_usage(
-                        absolute_workspace_path)
+                        absolute_workspace_path, block_size=block_size)
                     if disk_usage_info:
                         workflow_response['size'] = disk_usage_info[-1]['size']
                     else:
