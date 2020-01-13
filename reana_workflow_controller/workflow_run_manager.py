@@ -373,10 +373,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             args=self._create_job_controller_startup_cmd(user),
             ports=[])
 
-        if os.getenv('FLASK_ENV') == 'development':
-            job_controller_env_vars.extend(
-                current_app.config['DEBUG_ENV_VARS'])
-
         job_controller_env_vars.extend([
             {
                 'name': 'REANA_USER_ID',
@@ -424,6 +420,28 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             workspace_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
+
+        if os.getenv('FLASK_ENV') == 'development':
+            code_volume_name = 'reana-code'
+            code_mount_path = '/code'
+            k8s_code_volume = client.V1Volume(
+                name=code_volume_name
+            )
+            k8s_code_volume.host_path = client.V1HostPathVolumeSource(
+                code_mount_path
+            )
+            spec.template.spec.volumes.append(k8s_code_volume)
+
+            for container in spec.template.spec.containers:
+                container.env.extend(current_app.config['DEBUG_ENV_VARS'])
+                sub_path = f'reana-{container.name}'
+                if container.name == 'workflow-engine':
+                    sub_path += f'-{self.workflow.type_}'
+                container.volume_mounts.append({
+                    'name': code_volume_name,
+                    'mountPath': code_mount_path,
+                    'subPath': sub_path
+                })
 
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'

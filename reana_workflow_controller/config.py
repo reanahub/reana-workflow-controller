@@ -85,9 +85,11 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
 """Common to all workflow engines environment variables."""
 
 DEBUG_ENV_VARS = ({'name': 'WDB_SOCKET_SERVER',
-                   'value': 'wdb'},
+                   'value': 'reana-wdb'},
                   {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
-                   'value': 'True'})
+                   'value': 'True'},
+                  {'name': 'FLASK_ENV',
+                   'value': 'development'})
 """Common to all workflow engines environment variables for debug mode."""
 
 TTL_SECONDS_AFTER_FINISHED = 60
