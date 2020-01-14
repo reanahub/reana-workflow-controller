@@ -1876,7 +1876,19 @@ def _get_workflow_logs(workflow):
         Job.created).all()
     all_logs = {}
     for job in jobs:
-        all_logs[str(job.id_)] = job.logs or ''
+        item = {
+            'workflow_uuid': str(job.workflow_uuid) or '',
+            'job_name': job.job_name or '',
+            'compute_backend': job.compute_backend or '',
+            'backend_job_id': job.backend_job_id or '',
+            'docker_img': job.docker_img or '',
+            'cmd': job.prettified_cmd or '',
+            'status': job.status.name or '',
+            'logs': job.logs or '',
+
+        }
+        all_logs[str(job.id_)] = item
+
     return all_logs
 
 
