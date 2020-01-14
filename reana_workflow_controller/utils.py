@@ -42,7 +42,8 @@ def create_workflow_workspace(path, user_id=None,
         repo = Repo.clone_from(url=url,
                                to_path=os.path.abspath(
                                    reana_fs.root_path + '/' + path),
-                               branch=git_branch)
+                               branch=git_branch,
+                               depth=1)
         repo.head.reset(commit=git_ref)
 
 
