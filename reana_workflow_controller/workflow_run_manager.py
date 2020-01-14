@@ -329,7 +329,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             template=client.V1PodTemplateSpec())
         spec.template.metadata = workflow_metadata
 
-        workflow_enginge_container = client.V1Container(
+        workflow_engine_container = client.V1Container(
             name=current_app.config['WORKFLOW_ENGINE_NAME'],
             image=image,
             image_pull_policy='IfNotPresent',
@@ -348,13 +348,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'value': 'localhost'}
         ]
         workflow_engine_env_vars.extend(job_controller_address)
-        workflow_enginge_container.env.extend(workflow_engine_env_vars)
-        workflow_enginge_container.security_context = \
+        workflow_engine_container.env.extend(workflow_engine_env_vars)
+        workflow_engine_container.security_context = \
             client.V1SecurityContext(
                 run_as_group=WORKFLOW_RUNTIME_USER_GID,
                 run_as_user=WORKFLOW_RUNTIME_USER_UID
             )
-        workflow_enginge_container.volume_mounts = [workspace_mount]
+        workflow_engine_container.volume_mounts = [workspace_mount]
         secrets_store = REANAUserSecretsStore(owner_id)
         job_controller_env_secrets = secrets_store.\
             get_env_secrets_as_k8s_spec()
@@ -415,7 +415,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             "containerPort":
                 current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
         }]
-        containers = [workflow_enginge_container, job_controller_container]
+        containers = [workflow_engine_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(
             containers=containers)
         spec.template.spec.service_account_name = \
