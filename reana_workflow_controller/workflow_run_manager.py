@@ -63,6 +63,7 @@ class WorkflowRunManager():
                             "--workflow-uuid {id} "
                             "--workflow-workspace {workspace} "
                             "--workflow-json '{workflow_json}' "
+                            "--workflow-file '{workflow_file}' "
                             "--workflow-parameters '{parameters}' "
                             "--operational-options '{options}' "),
                 'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
@@ -72,6 +73,7 @@ class WorkflowRunManager():
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
                                "--workflow-json '{workflow_json}' "
+                               "--workflow-file '{workflow_file}' "
                                "--workflow-parameters '{parameters}' "),
                    'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
         'serial': {'image': '{}'.
@@ -181,6 +183,8 @@ class WorkflowRunManager():
                     workspace=self.workflow.get_workspace(),
                     workflow_json=base64.standard_b64encode(json.dumps(
                         self.workflow.get_specification()).encode()),
+                    workflow_file=self.workflow.reana_specification.get(
+                        'workflow').get('file'),
                     parameters=base64.standard_b64encode(json.dumps(
                         self._get_merged_workflow_input_parameters(
                             overwrite=overwrite_input_parameters
