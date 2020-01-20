@@ -16,18 +16,12 @@ import fs
 import mock
 import pytest
 from flask import url_for
-from pytest_reana.fixtures import (cwl_workflow_with_name,
-                                   cwl_workflow_without_name, default_user,
-                                   sample_workflow_workspace,
-                                   sample_yadage_workflow_in_db, session,
-                                   tmp_shared_volume_path,
-                                   yadage_workflow_with_name)
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
 from werkzeug.utils import secure_filename
 
-from reana_workflow_controller.errors import REANAWorkflowDeletionError
-from reana_workflow_controller.rest import START, STOP, _delete_workflow
-from reana_workflow_controller.utils import create_workflow_workspace
+from reana_workflow_controller.rest.utils import (create_workflow_workspace,
+                                                  delete_workflow)
+from reana_workflow_controller.rest.workflows_status import START, STOP
 from reana_workflow_controller.workflow_run_manager import WorkflowRunManager
 
 status_dict = {
@@ -52,7 +46,7 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
             logs='')
         session.add(workflow)
         session.commit()
-        res = client.get(url_for('api.get_workflows'),
+        res = client.get(url_for('workflows.get_workflows'),
                          query_string={"user": default_user.id_})
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
@@ -74,7 +68,7 @@ def test_get_workflows_wrong_user(app):
     """Test list of workflows for unknown user."""
     with app.test_client() as client:
         random_user_uuid = uuid.uuid4()
-        res = client.get(url_for('api.get_workflows'),
+        res = client.get(url_for('workflows.get_workflows'),
                          query_string={"user": random_user_uuid})
         assert res.status_code == 404
 
@@ -82,7 +76,7 @@ def test_get_workflows_wrong_user(app):
 def test_get_workflows_missing_user(app):
     """Test listing all workflows with missing user."""
     with app.test_client() as client:
-        res = client.get(url_for('api.get_workflows'),
+        res = client.get(url_for('workflows.get_workflows'),
                          query_string={})
         assert res.status_code == 400
 
@@ -92,7 +86,7 @@ def test_create_workflow_with_name(app, session, default_user,
                                    cwl_workflow_with_name):
     """Test create workflow and its workspace by specifying a name."""
     with app.test_client() as client:
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={
                               "user": default_user.id_},
                           content_type='application/json',
@@ -123,7 +117,7 @@ def test_create_workflow_without_name(app, session, default_user,
                                       cwl_workflow_without_name):
     """Test create workflow and its workspace without specifying a name."""
     with app.test_client() as client:
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={
                               "user": default_user.id_},
                           content_type='application/json',
@@ -161,7 +155,7 @@ def test_create_workflow_wrong_user(app, session, tmp_shared_volume_path,
     """Test create workflow providing unknown user."""
     with app.test_client() as client:
         random_user_uuid = uuid.uuid4()
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": random_user_uuid},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -179,7 +173,7 @@ def test_download_missing_file(app, default_user,
     """Test download missing file."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -189,7 +183,7 @@ def test_download_missing_file(app, default_user,
         workflow_uuid = response_data.get('workflow_id')
         file_name = 'input.csv'
         res = client.get(
-            url_for('api.download_file',
+            url_for('workspaces.download_file',
                     workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_},
@@ -207,7 +201,7 @@ def test_download_file(app, session, default_user,
     """Test download file from workspace."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -233,7 +227,7 @@ def test_download_file(app, session, default_user,
         with open(file_path, 'wb+') as f:
             f.write(file_binary_content)
         res = client.get(
-            url_for('api.download_file',
+            url_for('workspaces.download_file',
                     workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_},
@@ -248,7 +242,7 @@ def test_download_file_with_path(app, session, default_user,
     """Test download file prepended with path."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -273,7 +267,7 @@ def test_download_file_with_path(app, session, default_user,
         with open(file_path, 'wb+') as f:
             f.write(file_binary_content)
         res = client.get(
-            url_for('api.download_file',
+            url_for('workspaces.download_file',
                     workflow_id_or_name=workflow_uuid,
                     file_name=file_name),
             query_string={"user": default_user.id_},
@@ -288,7 +282,7 @@ def test_get_files(app, session, default_user,
     """Test get files list."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -312,7 +306,7 @@ def test_get_files(app, session, default_user,
             test_files.append(os.path.join(subdir_name, file_name))
 
         res = client.get(
-            url_for('api.get_files',
+            url_for('workspaces.get_files',
                     workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_},
             content_type='application/json',
@@ -327,7 +321,7 @@ def test_get_files_unknown_workflow(app, default_user):
         # create workflow
         random_workflow_uuid = str(uuid.uuid4())
         res = client.get(
-            url_for('api.get_files',
+            url_for('workspaces.get_files',
                     workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_},
             content_type='application/json')
@@ -347,7 +341,7 @@ def test_get_workflow_status_with_uuid(app, session, default_user,
     """Test get workflow status."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -357,7 +351,7 @@ def test_get_workflow_status_with_uuid(app, session, default_user,
         workflow = Workflow.query.filter(
             Workflow.id_ == workflow_uuid).first()
 
-        res = client.get(url_for('api.get_workflow_status',
+        res = client.get(url_for('statuses.get_workflow_status',
                                  workflow_id_or_name=workflow_uuid),
                          query_string={"user": default_user.id_},
                          content_type='application/json',
@@ -367,7 +361,7 @@ def test_get_workflow_status_with_uuid(app, session, default_user,
         workflow.status = WorkflowStatus.finished
         session.commit()
 
-        res = client.get(url_for('api.get_workflow_status',
+        res = client.get(url_for('statuses.get_workflow_status',
                                  workflow_id_or_name=workflow_uuid),
                          query_string={"user": default_user.id_},
                          content_type='application/json',
@@ -398,7 +392,7 @@ def test_get_workflow_status_with_name(app, session, default_user,
         workflow = Workflow.query.filter(
             Workflow.name == workflow_name).first()
 
-        res = client.get(url_for('api.get_workflow_status',
+        res = client.get(url_for('statuses.get_workflow_status',
                                  workflow_id_or_name=workflow_name + '.1'),
                          query_string={"user": default_user.id_},
                          content_type='application/json',
@@ -409,7 +403,7 @@ def test_get_workflow_status_with_name(app, session, default_user,
         workflow.status = WorkflowStatus.finished
         session.commit()
 
-        res = client.get(url_for('api.get_workflow_status',
+        res = client.get(url_for('statuses.get_workflow_status',
                                  workflow_id_or_name=workflow_name + '.1'),
                          query_string={"user": default_user.id_},
                          content_type='application/json',
@@ -423,7 +417,7 @@ def test_get_workflow_status_unauthorized(app, default_user,
     """Test get workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -431,7 +425,7 @@ def test_get_workflow_status_unauthorized(app, default_user,
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get('workflow_id')
         random_user_uuid = uuid.uuid4()
-        res = client.get(url_for('api.get_workflow_status',
+        res = client.get(url_for('statuses.get_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
                          query_string={"user": random_user_uuid},
                          content_type='application/json',
@@ -444,12 +438,12 @@ def test_get_workflow_status_unknown_workflow(app, default_user,
     """Test get workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
         random_workflow_uuid = uuid.uuid4()
-        res = client.get(url_for('api.get_workflow_status',
+        res = client.get(url_for('statuses.get_workflow_status',
                                  workflow_id_or_name=random_workflow_uuid),
                          query_string={"user": default_user.id_},
                          content_type='application/json',
@@ -463,7 +457,7 @@ def test_set_workflow_status(app, corev1_api_client_with_user_secrets,
     """Test set workflow status "Start"."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(yadage_workflow_with_name))
@@ -482,7 +476,7 @@ def test_set_workflow_status(app, corev1_api_client_with_user_secrets,
                             'current_k8s_corev1_api_client',
                             corev1_api_client_with_user_secrets(user_secrets)):
                 # set workflow status to START
-                res = client.put(url_for('api.set_workflow_status',
+                res = client.put(url_for('statuses.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
                                  query_string={"user": default_user.id_,
                                                "status": "start"})
@@ -499,7 +493,7 @@ def test_start_already_started_workflow(app, session, default_user,
     with app.test_client() as client:
         os.environ["TESTS"] = "True"
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(yadage_workflow_with_name))
@@ -517,13 +511,13 @@ def test_start_already_started_workflow(app, session, default_user,
                             'current_k8s_corev1_api_client',
                             corev1_api_client_with_user_secrets(user_secrets)):
                 # set workflow status to START
-                res = client.put(url_for('api.set_workflow_status',
+                res = client.put(url_for('statuses.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
                                  query_string={"user": default_user.id_,
                                                "status": "start"})
                 json_response = json.loads(res.data.decode())
                 assert json_response.get('status') == status_dict[payload].name
-                res = client.put(url_for('api.set_workflow_status',
+                res = client.put(url_for('statuses.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
                                  query_string={"user": default_user.id_,
                                                "status": "start"})
@@ -558,7 +552,7 @@ def test_stop_workflow(current_status, expected_status,
                         'current_k8s_batchv1_api_client') \
                 as stop_workflow_mock:
             res = client.put(
-                url_for('api.set_workflow_status',
+                url_for('statuses.set_workflow_status',
                         workflow_id_or_name=sample_serial_workflow_in_db.name),
                 query_string={"user": default_user.id_,
                               "status": "stop"})
@@ -573,7 +567,7 @@ def test_set_workflow_status_unauthorized(app, default_user,
     """Test set workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(yadage_workflow_with_name))
@@ -582,7 +576,7 @@ def test_set_workflow_status_unauthorized(app, default_user,
         workflow_created_uuid = response_data.get('workflow_id')
         random_user_uuid = uuid.uuid4()
         payload = START
-        res = client.put(url_for('api.set_workflow_status',
+        res = client.put(url_for('statuses.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
                          query_string={"user": random_user_uuid,
                                        "status": payload},
@@ -595,13 +589,13 @@ def test_set_workflow_status_unknown_workflow(app, default_user,
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(yadage_workflow_with_name))
         random_workflow_uuid = uuid.uuid4()
         payload = START
-        res = client.put(url_for('api.set_workflow_status',
+        res = client.put(url_for('statuses.set_workflow_status',
                                  workflow_id_or_name=random_workflow_uuid),
                          query_string={"user": default_user.id_},
                          content_type='application/json',
@@ -615,7 +609,7 @@ def test_upload_file(app, session, default_user,
     """Test upload file."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
@@ -629,7 +623,7 @@ def test_upload_file(app, session, default_user,
         file_binary_content = b'1,2,3,4\n5,6,7,8'
 
         res = client.post(
-            url_for('api.upload_file',
+            url_for('workspaces.upload_file',
                     workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "file_name": file_name},
@@ -659,7 +653,7 @@ def test_upload_file_unknown_workflow(app, default_user):
         file_binary_content = b'1,2,3,4\n5,6,7,8'
 
         res = client.post(
-            url_for('api.upload_file',
+            url_for('workspaces.upload_file',
                     workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "file_name": file_name},
@@ -684,7 +678,7 @@ def test_delete_file(app, default_user, sample_serial_workflow_in_db):
     assert os.path.exists(abs_path_to_file)
     with app.test_client() as client:
         res = client.delete(
-            url_for('api.delete_file',
+            url_for('workspaces.delete_file',
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                     file_name=file_name),
             query_string={"user": default_user.id_})
@@ -696,14 +690,14 @@ def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
     """Test get workflow logs."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(cwl_workflow_with_name))
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
         workflow_name = response_data.get('workflow_name')
-        res = client.get(url_for('api.get_workflow_logs',
+        res = client.get(url_for('statuses.get_workflow_logs',
                                  workflow_id_or_name=workflow_uuid),
                          query_string={"user": default_user.id_},
                          content_type='application/json')
@@ -725,12 +719,12 @@ def test_get_unknown_workflow_logs(app, default_user,
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(yadage_workflow_with_name))
         random_workflow_uuid = uuid.uuid4()
-        res = client.get(url_for('api.get_workflow_logs',
+        res = client.get(url_for('statuses.get_workflow_logs',
                                  workflow_id_or_name=random_workflow_uuid),
                          query_string={"user": default_user.id_},
                          content_type='application/json')
@@ -742,14 +736,14 @@ def test_get_workflow_logs_unauthorized(app, default_user,
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={"user": default_user.id_},
                           content_type='application/json',
                           data=json.dumps(yadage_workflow_with_name))
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get('workflow_id')
         random_user_uuid = uuid.uuid4()
-        res = client.get(url_for('api.get_workflow_logs',
+        res = client.get(url_for('statuses.get_workflow_logs',
                                  workflow_id_or_name=workflow_uuid),
                          query_string={"user": random_user_uuid},
                          content_type='application/json')
@@ -779,7 +773,7 @@ def test_start_input_parameters(app, session, default_user, user_secrets,
                             'current_k8s_corev1_api_client',
                             corev1_api_client_with_user_secrets(user_secrets)):
                 # set workflow status to START and pass parameters
-                res = client.put(url_for('api.set_workflow_status',
+                res = client.put(url_for('statuses.set_workflow_status',
                                  workflow_id_or_name=workflow_created_uuid),
                                  query_string={"user": default_user.id_,
                                                "status": "start"},
@@ -813,7 +807,7 @@ def test_delete_workflow(app,
     session.commit()
     with app.test_client() as client:
         res = client.put(
-            url_for('api.set_workflow_status',
+            url_for('statuses.set_workflow_status',
                     workflow_id_or_name=sample_yadage_workflow_in_db.id_),
             query_string={
                 'user': default_user.id_,
@@ -854,7 +848,7 @@ def test_delete_all_workflow_runs(app,
         filter_by(name=yadage_workflow_with_name['name']).first()
     with app.test_client() as client:
         res = client.put(
-            url_for('api.set_workflow_status',
+            url_for('statuses.set_workflow_status',
                     workflow_id_or_name=first_workflow.id_),
             query_string={
                 'user': default_user.id_,
@@ -883,7 +877,7 @@ def test_workspace_deletion(app,
                             hard_delete):
     """Test workspace deletion."""
     with app.test_client() as client:
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={
                               "user": default_user.id_},
                           content_type='application/json',
@@ -910,7 +904,7 @@ def test_workspace_deletion(app,
         assert os.path.exists(absolute_workflow_workspace)
         with app.test_client() as client:
             res = client.put(
-                url_for('api.set_workflow_status',
+                url_for('statuses.set_workflow_status',
                         workflow_id_or_name=workflow.id_),
                 query_string={
                     'user': default_user.id_,
@@ -937,7 +931,7 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
         tmp_shared_volume_path):
     """Test workspace deletion of an already deleted workflow."""
     with app.test_client() as client:
-        res = client.post(url_for('api.create_workflow'),
+        res = client.post(url_for('workflows.create_workflow'),
                           query_string={
                               "user": default_user.id_},
                           content_type='application/json',
@@ -957,7 +951,7 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
         assert os.path.exists(absolute_workflow_workspace)
         with app.test_client() as client:
             res = client.put(
-                url_for('api.set_workflow_status',
+                url_for('statuses.set_workflow_status',
                         workflow_id_or_name=workflow.id_),
                 query_string={
                     'user': default_user.id_,
@@ -968,9 +962,9 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
                                  'workspace': False}))
         assert os.path.exists(absolute_workflow_workspace)
 
-        _delete_workflow(workflow,
-                         hard_delete=False,
-                         workspace=True)
+        delete_workflow(workflow,
+                        hard_delete=False,
+                        workspace=True)
         assert not os.path.exists(absolute_workflow_workspace)
 
 
@@ -982,7 +976,7 @@ def test_get_workflow_diff(app, default_user,
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         res = client.get(url_for(
-            'api.get_workflow_diff',
+            'workflows.get_workflow_diff',
             workflow_id_or_name_a=sample_serial_workflow_in_db.id_,
             workflow_id_or_name_b=sample_yadage_workflow_in_db.id_),
             query_string={'user': default_user.id_},
@@ -1036,7 +1030,7 @@ def test_get_workspace_diff(app, default_user,
         f.flush()
     with app.test_client() as client:
         res = client.get(url_for(
-            'api.get_workflow_diff',
+            'workflows.get_workflow_diff',
             workflow_id_or_name_a=sample_serial_workflow_in_db.id_,
             workflow_id_or_name_b=sample_yadage_workflow_in_db.id_),
             query_string={'user': default_user.id_},
@@ -1059,7 +1053,7 @@ def test_create_interactive_session(app, default_user,
                 current_k8s_networking_v1beta1=mock.DEFAULT,
                 current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
-                url_for("api.open_interactive_session",
+                url_for("workflows_session.open_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_,
                         interactive_session_type="jupyter"),
                 query_string={"user": default_user.id_})
@@ -1072,7 +1066,7 @@ def test_create_interactive_session_unknown_type(app, default_user,
     with app.test_client() as client:
         # create workflow
         res = client.post(
-            url_for("api.open_interactive_session",
+            url_for("workflows_session.open_interactive_session",
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                     interactive_session_type="terminl"),
             query_string={"user": default_user.id_})
@@ -1092,7 +1086,7 @@ def test_create_interactive_session_custom_image(app, default_user,
                 current_k8s_networking_v1beta1=mock.DEFAULT,
                 current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
-                url_for("api.open_interactive_session",
+                url_for("workflows_session.open_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_,
                         interactive_session_type="jupyter"),
                 query_string={"user": default_user.id_},
@@ -1119,7 +1113,7 @@ def test_close_interactive_session(app, session, default_user,
                 "reana_workflow_controller.k8s"
                 ".current_k8s_networking_v1beta1") as mocks:
             res = client.post(
-                url_for("api.close_interactive_session",
+                url_for("workflows_session.close_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_),
                 query_string={"user": default_user.id_},
                 content_type='application/json')
@@ -1138,7 +1132,7 @@ def test_close_interactive_session_not_opened(app, session, default_user,
         session.add(sample_serial_workflow_in_db)
         session.commit()
         res = client.post(
-            url_for("api.close_interactive_session",
+            url_for("workflows_session.close_interactive_session",
                     workflow_id_or_name=sample_serial_workflow_in_db.id_),
             query_string={"user": default_user.id_},
             content_type='application/json')

@@ -10,9 +10,6 @@
 
 from __future__ import absolute_import, print_function
 
-from string import Template
-
-import pkg_resources
 import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch

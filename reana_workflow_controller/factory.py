@@ -29,7 +29,15 @@ def create_app(config_mapping=None):
 
     app.secret_key = "super secret key"
     # Register API routes
-    from .rest import restapi_blueprint  # noqa
-    app.register_blueprint(restapi_blueprint, url_prefix='/api')
+    from reana_workflow_controller.rest import (
+        workflows_session,
+        workflows_status,
+        workflows_workspace,
+        workflows,
+    )  # noqa
+    app.register_blueprint(workflows_session.blueprint, url_prefix='/api')
+    app.register_blueprint(workflows.blueprint, url_prefix='/api')
+    app.register_blueprint(workflows_status.blueprint, url_prefix='/api')
+    app.register_blueprint(workflows_workspace.blueprint, url_prefix='/api')
     app.session = Session
     return app
