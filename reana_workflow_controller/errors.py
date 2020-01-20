@@ -27,3 +27,7 @@ class REANAWorkflowDeletionError(Exception):
 
 class REANAInteractiveSessionError(Exception):
     """Error when trying to create an interactive session."""
+
+
+class REANAExternalCallError(Exception):
+    """Error when connecting to an external service."""

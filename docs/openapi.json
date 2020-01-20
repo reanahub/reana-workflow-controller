@@ -958,6 +958,14 @@
                 "message": "Status resume is not supported yet."
               }
             }
+          },
+          "502": {
+            "description": "Request failed. Connection to a third party system has failed.",
+            "examples": {
+              "application/json": {
+                "message": "Connection to database timed out, please retry."
+              }
+            }
           }
         },
         "summary": "Set workflow status."

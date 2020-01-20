@@ -121,15 +121,42 @@ class WorkflowRunManager():
         """Generate the path to access the interactive workflow."""
         return "/{}".format(self.workflow.id_)
 
-    def _get_merged_workflow_parameters(self):
+    def _get_merged_workflow_input_parameters(self, overwrite=None):
         """Return workflow input parameters merged with live ones, if given."""
+        overwrite = overwrite or {}
+        input_parameters = dict(self.workflow.get_input_parameters(),
+                                **overwrite)
         if self.workflow.input_parameters:
-            return dict(self.workflow.get_input_parameters(),
-                        **self.workflow.input_parameters)
-        else:
-            return self.workflow.get_input_parameters()
+            input_parameters = dict(input_parameters,
+                                    **self.workflow.input_parameters)
+        return input_parameters
 
-    def start_batch_workflow_run(self):
+    def _get_merged_workflow_operational_options(self, overwrite=None):
+        """Return workflow input parameters merged with live ones, if given."""
+        merged_operational_options = None
+        if self.workflow.type_ == 'serial':
+            overwrite = overwrite or {}
+            merged_operational_options = \
+                dict(self.workflow.operational_options, **overwrite)
+        elif self.workflow.type_ == 'cwl':
+            overwrite = overwrite or []
+            if isinstance(self.workflow.operational_options, list):
+                merged_operational_options = \
+                    self.workflow.operational_options + overwrite
+            else:
+                merged_operational_options = overwrite
+        elif self.workflow.type_ == 'yadage':
+            merged_operational_options = self.workflow.operational_options
+            logging.error(
+                f'{self.workflow.type_} doesn\'t support operational '
+                f'options.\n'
+                f'skipping operational options expansion.')
+        else:
+            logging.error(f'Unknown workflow type {self.workflow.type_}')
+        return merged_operational_options
+
+    def start_batch_workflow_run(self, overwrite_input_params=None,
+                                 overwrite_operational_options=None):
         """Start a batch workflow run."""
         raise NotImplementedError('')
 
@@ -145,7 +172,8 @@ class WorkflowRunManager():
         """Return the correct image for the current workflow type."""
         return WorkflowRunManager.engine_mapping[self.workflow.type_]['image']
 
-    def _workflow_engine_command(self):
+    def _workflow_engine_command(self, overwrite_input_parameters=None,
+                                 overwrite_operational_options=None):
         """Return the command to be run for a given workflow engine."""
         return (WorkflowRunManager.engine_mapping[self.workflow.type_]
                 ['command'].format(
@@ -154,9 +182,13 @@ class WorkflowRunManager():
                     workflow_json=base64.standard_b64encode(json.dumps(
                         self.workflow.get_specification()).encode()),
                     parameters=base64.standard_b64encode(json.dumps(
-                        self._get_merged_workflow_parameters()).encode()),
+                        self._get_merged_workflow_input_parameters(
+                            overwrite=overwrite_input_parameters
+                        )).encode()),
                     options=base64.standard_b64encode(json.dumps(
-                        self.workflow.operational_options).encode())))
+                        self._get_merged_workflow_operational_options(
+                            overwrite=overwrite_operational_options
+                        )).encode())))
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
@@ -199,10 +231,22 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
     default_namespace = 'default'
     """Default Kubernetes namespace."""
 
-    def start_batch_workflow_run(self):
-        """Start a batch workflow run."""
+    def start_batch_workflow_run(self, overwrite_input_params=None,
+                                 overwrite_operational_options=None):
+        """Start a batch workflow run.
+
+        :param overwrite_input_params: Dictionary with parameters to be
+            overwritten or added to the current workflow run.
+        :param type: Dict
+        :param overwrite_operational_options: Dictionary with operational
+            options to be overwritten or added to the current workflow run.
+        :param type: Dict
+        """
         workflow_run_name = self._workflow_run_name_generator('batch')
-        job = self._create_job_spec(workflow_run_name)
+        job = self._create_job_spec(
+            workflow_run_name,
+            overwrite_input_parameters=overwrite_input_params,
+            overwrite_operational_options=overwrite_operational_options)
         try:
             current_k8s_batchv1_api_client.create_namespaced_job(
                 namespace=KubernetesWorkflowRunManager.default_namespace,
@@ -211,7 +255,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             msg = 'Workflow engine/job controller pod ' \
                   'creation failed {}'.format(e)
             logging.error(msg, exc_info=True)
-            raise REANAWorkflowControllerError(e)
+            raise e
 
     def start_interactive_session(self, interactive_session_type, **kwargs):
         """Start an interactive workflow run.
@@ -301,7 +345,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 body=V1DeleteOptions(propagation_policy='Background'))
 
     def _create_job_spec(self, name, command=None, image=None,
-                         env_vars=None):
+                         env_vars=None, overwrite_input_parameters=None,
+                         overwrite_operational_options=None):
         """Instantiate a Kubernetes job.
 
         :param name: Name of the job.
@@ -309,9 +354,20 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         :param command: List of commands to run on the given job.
         :param env_vars: List of environment variables (dictionaries) to
             inject into the workflow engine container.
+        :param interactive_session_type: One of the available interactive
+            session types.
+        :param overwrite_input_params: Dictionary with parameters to be
+            overwritten or added to the current workflow run.
+        :param type: Dict
+        :param overwrite_operational_options: Dictionary with operational
+            options to be overwritten or added to the current workflow run.
+        :param type: Dict
         """
         image = image or self._workflow_engine_image()
-        command = command or self._workflow_engine_command()
+        command = command or self._workflow_engine_command(
+            overwrite_input_parameters=overwrite_input_parameters,
+            overwrite_operational_options=overwrite_operational_options
+        )
         workflow_engine_env_vars = env_vars or self._workflow_engine_env_vars()
         job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)

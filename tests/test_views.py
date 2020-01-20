@@ -787,6 +787,58 @@ def test_start_input_parameters(app, session, default_user, user_secrets,
                     parameters['input_parameters']
 
 
+def test_start_workflow_db_failure(app, session, default_user, user_secrets,
+                                   corev1_api_client_with_user_secrets,
+                                   sample_serial_workflow_in_db):
+    """Test starting workflow with a DB failure."""
+    mock_session_cls = mock.Mock()
+    mock_session = mock.Mock()
+    mock_session_cls.object_session.return_value = mock_session
+    from sqlalchemy.exc import SQLAlchemyError
+    mock_session.commit = mock.Mock(
+        side_effect=SQLAlchemyError('Could not connect to the server.'))
+    mock_k8s_run_manager_cls = mock.Mock()
+    k8s_workflow_run_manager = mock.Mock()
+    mock_k8s_run_manager_cls.return_value = k8s_workflow_run_manager
+    with mock.patch.multiple(
+           'reana_workflow_controller.rest.utils',
+            Session=mock_session_cls,
+            KubernetesWorkflowRunManager=mock_k8s_run_manager_cls):
+        with app.test_client() as client:
+            res = client.put(
+                url_for('statuses.set_workflow_status',
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_),
+                query_string={"user": default_user.id_,
+                              "status": "start"},
+                content_type='application/json',
+                data=json.dumps({}))
+            assert res.status_code == 502
+
+
+def test_start_workflow_kubernetes_failure(
+        app, session, default_user, user_secrets,
+        corev1_api_client_with_user_secrets, sample_serial_workflow_in_db):
+    """Test starting workflow with a Kubernetes failure when creating jobs."""
+    mock_k8s_run_manager_cls = mock.Mock()
+    k8s_workflow_run_manager = mock.Mock()
+    from kubernetes.client.rest import ApiException
+    k8s_workflow_run_manager.start_batch_workflow_run = mock.Mock(
+        side_effect=ApiException('Could not connect to Kubernetes.'))
+    mock_k8s_run_manager_cls.return_value = k8s_workflow_run_manager
+    with mock.patch.multiple(
+            'reana_workflow_controller.rest.utils',
+            KubernetesWorkflowRunManager=mock_k8s_run_manager_cls):
+        with app.test_client() as client:
+            res = client.put(
+                url_for('statuses.set_workflow_status',
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_),
+                query_string={"user": default_user.id_,
+                              "status": "start"},
+                content_type='application/json',
+                data=json.dumps({}))
+            assert res.status_code == 502
+
+
 @pytest.mark.parametrize("status", [WorkflowStatus.created,
                                     WorkflowStatus.failed,
                                     WorkflowStatus.finished,

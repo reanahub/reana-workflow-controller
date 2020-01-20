@@ -15,7 +15,8 @@ from flask import Blueprint, jsonify, request
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
-from reana_workflow_controller.errors import REANAWorkflowControllerError
+from reana_workflow_controller.errors import (REANAExternalCallError,
+                                              REANAWorkflowControllerError)
 from reana_workflow_controller.rest.utils import (build_workflow_logs,
                                                   delete_workflow,
                                                   get_current_job_progress,
@@ -425,6 +426,14 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               {
                 "message": "Status resume is not supported yet."
               }
+        502:
+          description: >-
+            Request failed. Connection to a third party system has failed.
+          examples:
+            application/json:
+              {
+                "message": "Connection to database timed out, please retry."
+              }
     """
 
     try:
@@ -478,5 +487,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 400
     except NotImplementedError as e:
         return jsonify({"message": str(e)}), 501
+    except REANAExternalCallError as e:
+        return jsonify({"message": str(e)}), 502
     except Exception as e:
         return jsonify({"message": str(e)}), 500

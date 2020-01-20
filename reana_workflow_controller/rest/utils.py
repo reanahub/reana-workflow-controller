@@ -25,10 +25,13 @@ from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_workflow_status_change_verb
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
+from sqlalchemy.exc import SQLAlchemyError
+from kubernetes.client.rest import ApiException
 
 from reana_workflow_controller.config import (REANA_GITLAB_HOST,
                                               WORKFLOW_TIME_FORMAT)
-from reana_workflow_controller.errors import (REANAWorkflowControllerError,
+from reana_workflow_controller.errors import (REANAExternalCallError,
+                                              REANAWorkflowControllerError,
                                               REANAWorkflowDeletionError)
 from reana_workflow_controller.workflow_run_manager import \
     KubernetesWorkflowRunManager
@@ -36,6 +39,19 @@ from reana_workflow_controller.workflow_run_manager import \
 
 def start_workflow(workflow, parameters):
     """Start a workflow."""
+    def _start_workflow_db(workflow, parameters):
+        workflow.run_started_at = datetime.now()
+        workflow.status = WorkflowStatus.running
+        if parameters:
+            workflow.input_parameters = parameters.get('input_parameters')
+            workflow.operational_options = \
+                parameters.get('operational_options')
+        current_db_sessions.add(workflow)
+        current_db_sessions.commit()
+
+    current_db_sessions = Session.object_session(workflow)
+    kwrm = KubernetesWorkflowRunManager(workflow)
+
     failure_message = \
         ("Workflow {id_} could not be started because it {verb} "
          "already {status}.").format(
@@ -51,16 +67,29 @@ def start_workflow(workflow, parameters):
     elif workflow.status not in \
             [WorkflowStatus.created, WorkflowStatus.queued]:
         raise REANAWorkflowControllerError(failure_message)
-    workflow.run_started_at = datetime.now()
-    workflow.status = WorkflowStatus.running
-    if parameters:
-        workflow.input_parameters = parameters.get('input_parameters')
-        workflow.operational_options = parameters.get('operational_options')
-    current_db_sessions = Session.object_session(workflow)
-    current_db_sessions.add(workflow)
-    current_db_sessions.commit()
-    kwrm = KubernetesWorkflowRunManager(workflow)
-    kwrm.start_batch_workflow_run()
+
+    try:
+        kwrm.start_batch_workflow_run(
+            overwrite_input_params=parameters.get('input_parameters'),
+            overwrite_operational_options=parameters.get('operational_options')
+        )
+        _start_workflow_db(workflow, parameters)
+    except SQLAlchemyError as e:
+        message = \
+            'Database connection failed, please retry.'
+        logging.error(f'Error while creating {workflow.id_}: {message}\n{e}',
+                      exc_info=True)
+        # Rollback Kubernetes job creation
+        kwrm.stop_batch_workflow_run()
+        logging.error(f'Stopping Kubernetes jobs associated with workflow '
+                      f'{workflow.id_} ...')
+        raise REANAExternalCallError(message)
+    except ApiException as e:
+        message = \
+            "Kubernetes connection failed, please retry."
+        logging.error(f"Error while creating {workflow.id_}: {message}\n{e}",
+                      exc_info=True)
+        raise REANAExternalCallError(message)
 
 
 def stop_workflow(workflow):
