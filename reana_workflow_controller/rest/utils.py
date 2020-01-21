@@ -36,26 +36,31 @@ from reana_workflow_controller.workflow_run_manager import \
 
 def start_workflow(workflow, parameters):
     """Start a workflow."""
-    if workflow.status in [WorkflowStatus.created, WorkflowStatus.queued]:
-        workflow.run_started_at = datetime.now()
-        workflow.status = WorkflowStatus.running
-        if parameters:
-            workflow.input_parameters = parameters.get('input_parameters')
-            workflow.operational_options = \
-                parameters.get('operational_options')
-        current_db_sessions = Session.object_session(workflow)
-        current_db_sessions.add(workflow)
-        current_db_sessions.commit()
-        kwrm = KubernetesWorkflowRunManager(workflow)
-        kwrm.start_batch_workflow_run()
-    else:
-        message = \
-            ("Workflow {id_} could not be started because it {verb}"
-             " already {status}.").format(
-               id_=workflow.id_,
-               verb=get_workflow_status_change_verb(workflow.status.name),
-               status=str(workflow.status.name))
-        raise REANAWorkflowControllerError(message)
+    failure_message = \
+        ("Workflow {id_} could not be started because it {verb} "
+         "already {status}.").format(
+            id_=workflow.id_,
+            verb=get_workflow_status_change_verb(workflow.status.name),
+            status=str(workflow.status.name))
+    if 'restart' in parameters.keys():
+        if parameters['restart']:
+            if workflow.status not in \
+                    [WorkflowStatus.failed, WorkflowStatus.finished,
+                     WorkflowStatus.queued]:
+                raise REANAWorkflowControllerError(failure_message)
+    elif workflow.status not in \
+            [WorkflowStatus.created, WorkflowStatus.queued]:
+        raise REANAWorkflowControllerError(failure_message)
+    workflow.run_started_at = datetime.now()
+    workflow.status = WorkflowStatus.running
+    if parameters:
+        workflow.input_parameters = parameters.get('input_parameters')
+        workflow.operational_options = parameters.get('operational_options')
+    current_db_sessions = Session.object_session(workflow)
+    current_db_sessions.add(workflow)
+    current_db_sessions.commit()
+    kwrm = KubernetesWorkflowRunManager(workflow)
+    kwrm.start_batch_workflow_run()
 
 
 def stop_workflow(workflow):
