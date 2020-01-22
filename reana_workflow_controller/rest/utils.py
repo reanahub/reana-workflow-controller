@@ -16,16 +16,16 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.utils import get_workflow_status_change_verb
+
 import fs
 from flask import current_app as app
 from flask import jsonify
 from git import Repo
-from reana_commons.config import REANA_WORKFLOW_UMASK
-from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_commons.utils import get_workflow_status_change_verb
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
-
 from reana_workflow_controller.config import (REANA_GITLAB_HOST,
                                               WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAWorkflowControllerError,
@@ -42,20 +42,28 @@ def start_workflow(workflow, parameters):
             id_=workflow.id_,
             verb=get_workflow_status_change_verb(workflow.status.name),
             status=str(workflow.status.name))
-    if 'restart' in parameters.keys():
-        if parameters['restart']:
-            if workflow.status not in \
-                    [WorkflowStatus.failed, WorkflowStatus.finished,
-                     WorkflowStatus.queued]:
-                raise REANAWorkflowControllerError(failure_message)
-    elif workflow.status not in \
-            [WorkflowStatus.created, WorkflowStatus.queued]:
-        raise REANAWorkflowControllerError(failure_message)
-    workflow.run_started_at = datetime.now()
-    workflow.status = WorkflowStatus.running
     if parameters:
         workflow.input_parameters = parameters.get('input_parameters')
         workflow.operational_options = parameters.get('operational_options')
+        workflow.restart = parameters.get('restart')
+    if workflow.restart:
+        if workflow.status not in \
+                [WorkflowStatus.failed, WorkflowStatus.finished,
+                 WorkflowStatus.queued]:
+            raise REANAWorkflowControllerError(failure_message)
+        restart_info = workflow.restart_info[:]
+        restart_info.append({
+            'restart_started_at': str(datetime.now()),
+            'restart_finished_at': None,
+            'operational_options': workflow.operational_options or None,
+            'input_parameters': workflow.input_parameters or None})
+        workflow.restart_info = restart_info
+    elif workflow.status not in \
+            [WorkflowStatus.created, WorkflowStatus.queued]:
+        raise REANAWorkflowControllerError(failure_message)
+    if not workflow.restart:
+        workflow.run_started_at = datetime.now()
+    workflow.status = WorkflowStatus.running
     current_db_sessions = Session.object_session(workflow)
     current_db_sessions.add(workflow)
     current_db_sessions.commit()

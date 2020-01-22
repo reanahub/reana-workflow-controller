@@ -12,6 +12,7 @@ from __future__ import absolute_import
 
 import json
 import uuid
+from datetime import datetime
 
 import requests
 from kubernetes.client.rest import ApiException
@@ -82,7 +83,13 @@ def _update_workflow_status(workflow_uuid, status, logs):
     alive_statuses = \
         [WorkflowStatus.created, WorkflowStatus.running, WorkflowStatus.queued]
     if status not in alive_statuses:
-        workflow.run_finished_at = datetime.now()
+        if not workflow.restart:
+            workflow.run_finished_at = datetime.now()
+        else:
+            workflow.restart_info[-1]['restart_finished_at'] = \
+                str(datetime.now())
+            flag_modified(workflow, 'restart_info')
+            Session.add(workflow)
         _delete_workflow_engine_pod(workflow_uuid)
 
 
