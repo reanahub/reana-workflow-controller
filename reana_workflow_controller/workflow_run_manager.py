@@ -179,7 +179,7 @@ class WorkflowRunManager():
         return (WorkflowRunManager.engine_mapping[self.workflow.type_]
                 ['command'].format(
                     id=self.workflow.id_,
-                    workspace=self.workflow.get_workspace(),
+                    workspace=self.workflow.workspace_path,
                     workflow_json=base64.standard_b64encode(json.dumps(
                         self.workflow.get_specification()).encode()),
                     workflow_file=self.workflow.reana_specification.get(
@@ -283,7 +283,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             self.workflow.interactive_session_name = workflow_run_name
             kubernetes_objects = \
                 build_interactive_k8s_objects[interactive_session_type](
-                    workflow_run_name, self.workflow.get_workspace(),
+                    workflow_run_name, self.workflow.workspace_path,
                     access_path,
                     access_token=self.workflow.get_owner_access_token(),
                     **kwargs)
@@ -376,7 +376,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
         workspace_mount, workspace_volume = \
-            get_shared_volume(self.workflow.get_workspace())
+            get_shared_volume(self.workflow.workspace_path)
         db_mount, _ = get_shared_volume('db')
 
         workflow_metadata = client.V1ObjectMeta(
@@ -523,7 +523,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             chown_workspace_cmd = 'chown -R {}:{} {};'.format(
                 WORKFLOW_RUNTIME_USER_UID,
                 WORKFLOW_RUNTIME_USER_GID,
-                SHARED_VOLUME_PATH + '/' + self.workflow.get_workspace()
+                SHARED_VOLUME_PATH + '/' + self.workflow.workspace_path
             )
             run_app_cmd = 'su {} /bin/bash -c "{}"'.format(user, base_cmd)
             full_cmd = add_group_cmd + add_user_cmd + chown_workspace_cmd + \

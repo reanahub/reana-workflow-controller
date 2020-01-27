@@ -16,18 +16,18 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from kubernetes.client.rest import ApiException
+from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.utils import get_workflow_status_change_verb
+from sqlalchemy.exc import SQLAlchemyError
+
 import fs
 from flask import current_app as app
 from flask import jsonify
 from git import Repo
-from reana_commons.config import REANA_WORKFLOW_UMASK
-from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_commons.utils import get_workflow_status_change_verb
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
-from sqlalchemy.exc import SQLAlchemyError
-from kubernetes.client.rest import ApiException
-
 from reana_workflow_controller.config import (REANA_GITLAB_HOST,
                                               WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAExternalCallError,
@@ -163,7 +163,7 @@ def remove_workflow_jobs_from_cache(workflow):
     jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
     for job in jobs:
         job_path = remove_upper_level_references(
-            os.path.join(workflow.get_workspace(),
+            os.path.join(workflow.workspace_path,
                          '..', 'archive',
                          str(job.id_)))
         Session.query(JobCache).filter_by(job_id=job.id_).delete()
@@ -188,11 +188,11 @@ def delete_workflow(workflow,
                        Workflow.status != WorkflowStatus.running).all()
         for workflow in to_be_deleted:
             if hard_delete:
-                remove_workflow_workspace(workflow.get_workspace())
+                remove_workflow_workspace(workflow.workspace_path)
                 _delete_workflow_row_from_db(workflow)
             else:
                 if workspace:
-                    remove_workflow_workspace(workflow.get_workspace())
+                    remove_workflow_workspace(workflow.workspace_path)
                 _mark_workflow_as_deleted_in_db(workflow)
             remove_workflow_jobs_from_cache(workflow)
 
@@ -303,7 +303,7 @@ def mv_files(source, target, workflow):
     """Move files within workspace."""
     absolute_workspace_path = os.path.join(
         app.config['SHARED_VOLUME_PATH'],
-        workflow.get_workspace())
+        workflow.workspace_path)
     absolute_source_path = os.path.join(
         app.config['SHARED_VOLUME_PATH'],
         absolute_workspace_path,
@@ -422,8 +422,8 @@ def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
     :rtype: Dictionary with file paths and their sizes
             unique to each workspace.
     """
-    workspace_a = workflow_a.get_workspace()
-    workspace_b = workflow_b.get_workspace()
+    workspace_a = workflow_a.workspace_path
+    workspace_b = workflow_b.workspace_path
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
     if reana_fs.exists(workspace_a) and reana_fs.exists(workspace_b):
         diff_command = ['diff',

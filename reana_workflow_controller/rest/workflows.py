@@ -26,7 +26,7 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
 from reana_workflow_controller.rest.utils import (
     get_specification_diff, get_workflow_name)
 from reana_workflow_controller.rest.utils import \
-  create_workflow_workspace, get_workspace_diff
+    create_workflow_workspace, get_workspace_diff
 
 
 START = 'start'
@@ -181,9 +181,9 @@ def get_workflows():  # noqa
                         workflow.interactive_session
             if verbose:
                 reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
-                if reana_fs.exists(workflow.get_workspace()):
+                if reana_fs.exists(workflow.workspace_path):
                     absolute_workspace_path = reana_fs.getospath(
-                        workflow.get_workspace())
+                        workflow.workspace_path)
                     disk_usage_info = get_workspace_disk_usage(
                         absolute_workspace_path, block_size=block_size)
                     if disk_usage_info:
@@ -323,13 +323,13 @@ def create_workflow():  # noqa
         Session.add(workflow)
         Session.object_session(workflow).commit()
         if git_ref:
-            create_workflow_workspace(workflow.get_workspace(),
+            create_workflow_workspace(workflow.workspace_path,
                                       user_id=user.id_,
                                       git_url=git_data['git_url'],
                                       git_branch=git_data['git_branch'],
                                       git_ref=git_ref)
         else:
-            create_workflow_workspace(workflow.get_workspace())
+            create_workflow_workspace(workflow.workspace_path)
         return jsonify({'message': 'Workflow workspace created',
                         'workflow_id': workflow.id_,
                         'workflow_name': get_workflow_name(workflow)}), 201

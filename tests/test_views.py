@@ -108,7 +108,7 @@ def test_create_workflow_with_name(app, session, default_user,
 
         # Check that the workflow workspace exists
         absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.get_workspace())
+            tmp_shared_volume_path, workflow.workspace_path)
         assert os.path.exists(absolute_workflow_workspace)
 
 
@@ -146,7 +146,7 @@ def test_create_workflow_without_name(app, session, default_user,
 
         # Check that the workflow workspace exists
         absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.get_workspace())
+            tmp_shared_volume_path, workflow.workspace_path)
         assert os.path.exists(absolute_workflow_workspace)
 
 
@@ -219,7 +219,7 @@ def test_download_file(app, session, default_user,
         # files
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.get_workspace())
+                         workflow.workspace_path)
         file_path = os.path.join(absolute_path_workflow_workspace,
                                  file_name)
         # because outputs directory doesn't exist by default
@@ -260,7 +260,7 @@ def test_download_file_with_path(app, session, default_user,
         # files
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.get_workspace())
+                         workflow.workspace_path)
         file_path = os.path.join(absolute_path_workflow_workspace, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -294,7 +294,7 @@ def test_get_files(app, session, default_user,
         # create file
         absolute_path_workflow_workspace = \
             os.path.join(tmp_shared_volume_path,
-                         workflow.get_workspace())
+                         workflow.workspace_path)
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
         test_files = []
         for i in range(5):
@@ -631,7 +631,7 @@ def test_upload_file(app, session, default_user,
             input_stream=io.BytesIO(file_binary_content))
         assert res.status_code == 200
         # remove workspace directory from path
-        workflow_workspace = workflow.get_workspace()
+        workflow_workspace = workflow.workspace_path
 
         # we use `secure_filename` here because
         # we use it in server side when adding
@@ -666,10 +666,10 @@ def test_delete_file(app, default_user, sample_serial_workflow_in_db):
     """Test delete file."""
     # Move to fixture
     from flask import current_app
-    create_workflow_workspace(sample_serial_workflow_in_db.get_workspace())
+    create_workflow_workspace(sample_serial_workflow_in_db.workspace_path)
     abs_path_workspace = os.path.join(
           current_app.config['SHARED_VOLUME_PATH'],
-          sample_serial_workflow_in_db.get_workspace())
+          sample_serial_workflow_in_db.workspace_path)
     file_name = 'dataset.csv'
     file_binary_content = b'1,2,3,4\n5,6,7,8'
     abs_path_to_file = os.path.join(abs_path_workspace, file_name)
@@ -943,7 +943,7 @@ def test_workspace_deletion(app,
 
         absolute_workflow_workspace = os.path.join(
             tmp_shared_volume_path,
-            workflow.get_workspace())
+            workflow.workspace_path)
 
         # create a job for the workflow
         workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
@@ -997,7 +997,7 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
 
         absolute_workflow_workspace = os.path.join(
             tmp_shared_volume_path,
-            workflow.get_workspace())
+            workflow.workspace_path)
 
         # check that the workflow workspace exists
         assert os.path.exists(absolute_workflow_workspace)
@@ -1064,9 +1064,9 @@ def test_get_workspace_diff(app, default_user,
     """Test get workspace differences."""
     # create the workspaces for the two workflows
     workspace_path_a = next(sample_workflow_workspace(
-        str(sample_serial_workflow_in_db.id_)))
+        str(sample_serial_workflow_in_db.workspace_path)))
     workspace_path_b = next(sample_workflow_workspace(
-        str(sample_yadage_workflow_in_db.id_)))
+        str(sample_yadage_workflow_in_db.workspace_path)))
 
     sample_serial_workflow_in_db.get_workspace = lambda: str(
         sample_serial_workflow_in_db.id_)

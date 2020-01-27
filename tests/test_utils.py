@@ -101,10 +101,10 @@ def test_workspace_deletion(app,
                             hard_delete):
     """Test workspace deletion."""
     workflow = sample_yadage_workflow_in_db
-    create_workflow_workspace(sample_yadage_workflow_in_db.get_workspace())
+    create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
     absolute_workflow_workspace = os.path.join(
         tmp_shared_volume_path,
-        workflow.get_workspace())
+        workflow.workspace_path)
 
     # create a job for the workflow
     workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
@@ -143,10 +143,10 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
         sample_yadage_workflow_in_db,
         tmp_shared_volume_path):
     """Test workspace deletion of an already deleted workflow."""
-    create_workflow_workspace(sample_yadage_workflow_in_db.get_workspace())
+    create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
     absolute_workflow_workspace = os.path.join(
         tmp_shared_volume_path,
-        sample_yadage_workflow_in_db.get_workspace())
+        sample_yadage_workflow_in_db.workspace_path)
 
     # check that the workflow workspace exists
     assert os.path.exists(absolute_workflow_workspace)
@@ -194,11 +194,11 @@ def test_workspace_permissions(app, session, default_user,
                                sample_yadage_workflow_in_db,
                                tmp_shared_volume_path):
     """Test workspace dir permissions."""
-    create_workflow_workspace(sample_yadage_workflow_in_db.get_workspace())
+    create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
     expeted_worspace_permissions = 'drwxrwxr-x'
     absolute_workflow_workspace = os.path.join(
         tmp_shared_volume_path,
-        sample_yadage_workflow_in_db.get_workspace())
+        sample_yadage_workflow_in_db.workspace_path)
     workspace_permissions = \
         stat.filemode(os.stat(absolute_workflow_workspace).st_mode)
     assert os.path.exists(absolute_workflow_workspace)

@@ -123,8 +123,8 @@ def upload_file(workflow_id_or_name):
         elif '..' in full_file_name.split("/"):
             raise REANAUploadPathError('Path cannot contain "..".')
         absolute_workspace_path = os.path.join(
-          current_app.config['SHARED_VOLUME_PATH'],
-          workflow.get_workspace())
+            current_app.config['SHARED_VOLUME_PATH'],
+            workflow.workspace_path)
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
             absolute_workspace_path = os.path.join(absolute_workspace_path,
@@ -219,7 +219,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
 
         absolute_workflow_workspace_path = os.path.join(
             current_app.config['SHARED_VOLUME_PATH'],
-            workflow.get_workspace())
+            workflow.workspace_path)
         return send_from_directory(absolute_workflow_workspace_path,
                                    file_name,
                                    mimetype='multipart/form-data',
@@ -304,7 +304,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    user_uuid)
         abs_path_to_workspace = os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'], workflow.get_workspace())
+            current_app.config['SHARED_VOLUME_PATH'], workflow.workspace_path)
         deleted = remove_files_recursive_wildcard(
           abs_path_to_workspace, file_name)
 
@@ -404,7 +404,7 @@ def get_files(workflow_id_or_name):  # noqa
                                                    user_uuid)
         file_list = list_directory_files(os.path.join(
             current_app.config['SHARED_VOLUME_PATH'],
-            workflow.get_workspace()))
+            workflow.workspace_path))
         return jsonify(file_list), 200
 
     except ValueError:
