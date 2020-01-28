@@ -633,9 +633,8 @@ def test_upload_file(app, session, default_user,
                     workflow_id_or_name=workflow_uuid),
             query_string={"user": default_user.id_,
                           "file_name": file_name},
-            content_type='multipart/form-data',
-            data={'file_content': (io.BytesIO(file_binary_content),
-                                   file_name)})
+            content_type='application/octet-stream',
+            input_stream=io.BytesIO(file_binary_content))
         assert res.status_code == 200
         # remove workspace directory from path
         workflow_workspace = workflow.get_workspace()
@@ -664,9 +663,8 @@ def test_upload_file_unknown_workflow(app, default_user):
                     workflow_id_or_name=random_workflow_uuid),
             query_string={"user": default_user.id_,
                           "file_name": file_name},
-            content_type='multipart/form-data',
-            data={'file_content': (io.BytesIO(file_binary_content),
-                                   file_name)})
+            content_type='application/octet-stream',
+            input_stream=io.BytesIO(file_binary_content))
         assert res.status_code == 404
 
 
@@ -1058,7 +1056,8 @@ def test_create_interactive_session(app, default_user,
         with mock.patch.multiple(
                 'reana_workflow_controller.k8s',
                 current_k8s_corev1_api_client=mock.DEFAULT,
-                current_k8s_extensions_v1beta1=mock.DEFAULT) as mocks:
+                current_k8s_networking_v1beta1=mock.DEFAULT,
+                current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
                 url_for("api.open_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_,
@@ -1090,7 +1089,8 @@ def test_create_interactive_session_custom_image(app, default_user,
         with mock.patch.multiple(
                 "reana_workflow_controller.k8s",
                 current_k8s_corev1_api_client=mock.DEFAULT,
-                current_k8s_extensions_v1beta1=mock.DEFAULT) as mocks:
+                current_k8s_networking_v1beta1=mock.DEFAULT,
+                current_k8s_appsv1_api_client=mock.DEFAULT) as mocks:
             res = client.post(
                 url_for("api.open_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_,
@@ -1098,7 +1098,7 @@ def test_create_interactive_session_custom_image(app, default_user,
                 query_string={"user": default_user.id_},
                 content_type="application/json",
                 data=json.dumps(interactive_session_configuration))
-            fargs, _ = mocks["current_k8s_extensions_v1beta1"]\
+            fargs, _ = mocks["current_k8s_appsv1_api_client"]\
                 .create_namespaced_deployment.call_args
             assert fargs[1].spec.template.spec.containers[0].image ==\
                 custom_image
@@ -1117,7 +1117,7 @@ def test_close_interactive_session(app, session, default_user,
     with app.test_client() as client:
         with mock.patch(
                 "reana_workflow_controller.k8s"
-                ".current_k8s_extensions_v1beta1") as mocks:
+                ".current_k8s_networking_v1beta1") as mocks:
             res = client.post(
                 url_for("api.close_interactive_session",
                         workflow_id_or_name=sample_serial_workflow_in_db.id_),

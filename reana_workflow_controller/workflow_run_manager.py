@@ -16,7 +16,9 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (CVMFS_REPOSITORIES,
                                   INTERACTIVE_SESSION_TYPES,
-                                  REANA_STORAGE_BACKEND,
+                                  K8S_CERN_EOS_AVAILABLE,
+                                  K8S_REANA_SERVICE_ACCOUNT_NAME,
+                                  REANA_STORAGE_BACKEND, SHARED_VOLUME_PATH,
                                   WORKFLOW_RUNTIME_USER_GID,
                                   WORKFLOW_RUNTIME_USER_NAME,
                                   WORKFLOW_RUNTIME_USER_UID)
@@ -42,7 +44,6 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
-    SHARED_VOLUME_PATH,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR,
@@ -197,22 +198,6 @@ class WorkflowRunManager():
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
 
-    k8s_shared_volume = {
-        'cephfs': {
-            'name': 'reana-shared-volume',
-            'persistentVolumeClaim': {
-                'claimName': MANILA_CEPHFS_PVC,
-                'readOnly': False,
-            }
-        },
-        'local': {
-            'name': 'reana-shared-volume',
-            'hostPath': {
-                'path': SHARED_FS_MAPPING['MOUNT_SOURCE_PATH']
-            }
-        }
-    }
-
     default_namespace = 'default'
     """Default Kubernetes namespace."""
 
@@ -332,12 +317,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
-        workspace_mount, _ = get_shared_volume(
-            self.workflow.get_workspace(), SHARED_VOLUME_PATH
-        )
-        db_mount, _ = get_shared_volume(
-            'db', SHARED_VOLUME_PATH
-        )
+        workspace_mount, workspace_volume = \
+            get_shared_volume(self.workflow.get_workspace())
+        db_mount, _ = get_shared_volume('db')
 
         workflow_metadata = client.V1ObjectMeta(name=name)
         job = client.V1Job()
@@ -379,7 +361,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             get_env_secrets_as_k8s_spec()
 
         user = \
-            secrets_store.get_secret_value('HTCONDORCERN_USERNAME') or \
+            secrets_store.get_secret_value('CERN_USER') or \
             WORKFLOW_RUNTIME_USER_NAME
 
         job_controller_container = client.V1Container(
@@ -406,6 +388,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             }, {
                 'name': 'USER',  # Required by HTCondor
                 'value': user
+            },
+            {
+                'name': 'K8S_CERN_EOS_AVAILABLE',
+                'value': K8S_CERN_EOS_AVAILABLE
             }
         ])
         
@@ -454,10 +440,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         containers = [workflow_enginge_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(
             containers=containers)
-
+        spec.template.spec.service_account_name = \
+            K8S_REANA_SERVICE_ACCOUNT_NAME
         spec.template.spec.volumes = [
-            KubernetesWorkflowRunManager.k8s_shared_volume
-            [REANA_STORAGE_BACKEND],
+            workspace_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 
@@ -494,16 +480,21 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """Create job controller startup cmd."""
         base_cmd = 'flask run -h 0.0.0.0;'
         if user:
+            add_group_cmd = 'groupadd -f -g {} {};'.format(
+                WORKFLOW_RUNTIME_USER_GID,
+                WORKFLOW_RUNTIME_USER_GID)
             add_user_cmd = 'useradd -u {} -g {} -M {};'.format(
                 WORKFLOW_RUNTIME_USER_UID,
                 WORKFLOW_RUNTIME_USER_GID,
                 user)
-            chown_workspace_cmd = 'chown -R {} {};'.format(
+            chown_workspace_cmd = 'chown -R {}:{} {};'.format(
                 WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
                 SHARED_VOLUME_PATH + '/' + self.workflow.get_workspace()
             )
             run_app_cmd = 'su {} /bin/bash -c "{}"'.format(user, base_cmd)
-            full_cmd = add_user_cmd + chown_workspace_cmd + run_app_cmd
+            full_cmd = add_group_cmd + add_user_cmd + chown_workspace_cmd + \
+                run_app_cmd
             return [full_cmd]
         else:
             return base_cmd.split()

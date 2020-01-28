@@ -28,15 +28,16 @@ def test_start_interactive_session(sample_serial_workflow_in_db):
     """Test interactive workflow run deployment."""
     with patch.multiple("reana_workflow_controller.k8s",
                         current_k8s_corev1_api_client=DEFAULT,
-                        current_k8s_extensions_v1beta1=DEFAULT) as mocks:
+                        current_k8s_networking_v1beta1=DEFAULT,
+                        current_k8s_appsv1_api_client=DEFAULT) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
         if len(INTERACTIVE_SESSION_TYPES):
             kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
-        mocks['current_k8s_extensions_v1beta1'].\
+        mocks['current_k8s_appsv1_api_client'].\
             create_namespaced_deployment.assert_called_once()
         mocks['current_k8s_corev1_api_client'].\
             create_namespaced_service.assert_called_once()
-        mocks['current_k8s_extensions_v1beta1'].\
+        mocks['current_k8s_networking_v1beta1'].\
             create_namespaced_ingress.assert_called_once()
 
 
@@ -46,8 +47,9 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
     mocked_k8s_client.create_namespaced_deployment =\
         Mock(side_effect=ApiException(reason='some reason'))
     with patch.multiple('reana_workflow_controller.k8s',
-                        current_k8s_extensions_v1beta1=mocked_k8s_client,
-                        current_k8s_corev1_api_client=DEFAULT):
+                        current_k8s_appsv1_api_client=mocked_k8s_client,
+                        current_k8s_corev1_api_client=DEFAULT,
+                        current_k8s_networking_v1beta1=DEFAULT):
         with pytest.raises(REANAInteractiveSessionError,
                            match=r'.*Kubernetes has failed.*'):
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
@@ -70,7 +72,8 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
         Mock(side_effect=ApiException(
              reason='Not Found'))
     with patch.multiple('reana_workflow_controller.k8s',
-                        current_k8s_extensions_v1beta1=mocked_k8s_client,
+                        current_k8s_appsv1_api_client=mocked_k8s_client,
+                        current_k8s_networking_v1beta1=DEFAULT,
                         current_k8s_corev1_api_client=DEFAULT) as mocks:
         try:
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
@@ -79,7 +82,8 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
         except REANAInteractiveSessionError:
             mocks['current_k8s_corev1_api_client']\
                 .delete_namespaced_service.assert_called_once()
-            mocked_k8s_client.delete_namespaced_ingress.assert_called_once()
+            mocks['current_k8s_networking_v1beta1']\
+                .delete_namespaced_ingress.assert_called_once()
             mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
             assert sample_serial_workflow_in_db.interactive_session is None
 

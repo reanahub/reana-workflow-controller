@@ -29,12 +29,17 @@ from reana_workflow_controller.config import (PROGRESS_STATUSES,
                                               REANA_GITLAB_URL, REANA_URL)
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 
+try:
+    from urllib import parse as urlparse
+except ImportError:
+    from urlparse import urlparse
+
 
 class JobStatusConsumer(BaseConsumer):
     """Consumer of jobs-status queue."""
 
     def __init__(self):
-        """Constructor."""
+        """Initialise JobStatusConsumer class."""
         super(JobStatusConsumer, self).__init__(queue='jobs-status')
 
     def get_consumers(self, Consumer, channel):
@@ -91,14 +96,14 @@ def _update_commit_status(workflow, status):
         state = "running"
     secret_store = REANAUserSecretsStore(workflow.owner_id)
     gitlab_access_token = secret_store.get_secret_value('gitlab_access_token')
-    target_url = REANA_URL + "/api/workflows/{0}/logs".format(workflow.id_)
-    commit_status_url = REANA_GITLAB_URL + "/api/v4/projects/{0}/" + \
-        "statuses/{1}?access_token={2}&state={3}&target_url={4}"
-    requests.post(commit_status_url.format(workflow.name,
-                                           workflow.git_ref,
-                                           gitlab_access_token,
-                                           state,
-                                           target_url))
+    target_url = f"https://{REANA_URL}/api/workflows/{workflow.id_}/logs"
+    workflow_name = urlparse.quote_plus(workflow.git_repo)
+    commit_status_url = (
+        f"{REANA_GITLAB_URL}/api/v4/projects/{workflow_name}/statuses/"
+        f"{workflow.git_ref}?access_token={gitlab_access_token}&state={state}&"
+        f"target_url={target_url}"
+    )
+    requests.post(commit_status_url)
 
 
 def _update_run_progress(workflow_uuid, msg):

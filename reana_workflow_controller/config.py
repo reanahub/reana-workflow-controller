@@ -11,6 +11,7 @@
 import os
 
 from packaging.version import parse
+from reana_commons.config import SHARED_VOLUME_PATH
 
 from reana_workflow_controller.version import __version__
 
