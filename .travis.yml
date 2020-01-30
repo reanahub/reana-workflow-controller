@@ -24,7 +24,7 @@ before_install:
   - pip install -r requirements-dev.txt
   - travis_retry pip install --upgrade pip setuptools py
   - travis_retry pip install twine wheel coveralls
-  - travis_retry pip install "mock>=3"
+  - travis_retry pip install "mock>=3,<4"
 
 install:
   - travis_retry pip install -e .[all]
