@@ -39,7 +39,6 @@ from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
                                            instantiate_chained_k8s_objects)
 
 from reana_workflow_controller.config import (  # isort:skip
-    MANILA_CEPHFS_PVC,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
@@ -380,7 +379,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             get_shared_volume(self.workflow.get_workspace())
         db_mount, _ = get_shared_volume('db')
 
-        workflow_metadata = client.V1ObjectMeta(name=name)
+        workflow_metadata = client.V1ObjectMeta(
+            name=name, labels={'reana_workflow_mode': 'batch'})
         job = client.V1Job()
         job.api_version = 'batch/v1'
         job.kind = 'Job'

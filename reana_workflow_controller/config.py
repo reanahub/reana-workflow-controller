@@ -46,10 +46,6 @@ WORKFLOW_QUEUES = {'cwl': 'cwl-default-queue',
                    'yadage': 'yadage-default-queue',
                    'serial': 'serial-default-queue'}
 
-MANILA_CEPHFS_PVC = 'manila-cephfs-pvc'
-"""If CEPH storage backend is used, this represents the name of the
-Kubernetes persistent volume claim."""
-
 SHARED_FS_MAPPING = {
     'MOUNT_SOURCE_PATH': os.getenv("SHARED_VOLUME_PATH_ROOT",
                                    SHARED_VOLUME_PATH),
