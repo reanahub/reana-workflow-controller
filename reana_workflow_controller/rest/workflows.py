@@ -155,7 +155,7 @@ def get_workflows():  # noqa
         user_uuid = request.args['user']
         user = User.query.filter(User.id_ == user_uuid).first()
         type = request.args.get('type', 'batch')
-        verbose = request.args.get('verbose', False)
+        verbose = json.loads(request.args.get('verbose', 'false').lower())
         block_size = request.args.get('block_size')
         if not user:
             return jsonify(
@@ -197,6 +197,9 @@ def get_workflows():  # noqa
         return jsonify({"message": "Malformed request."}), 400
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except json.JSONDecodeError:
+        return jsonify(
+          {"message": "Your request contains not valid JSON."}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
@@ -551,8 +554,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     """
     try:
         user_uuid = request.args['user']
-        brief = request.args.get('brief', False)
-        brief = True if brief == 'true' else False
+        brief = json.loads(request.args.get('brief', 'false').lower())
         context_lines = request.args.get('context_lines', 5)
 
         workflow_a_exists = False
@@ -586,5 +588,8 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify({"message": str(e)}), 400
     except ValueError as e:
         return jsonify({"message": str(e)}), 400
+    except json.JSONDecodeError:
+        return jsonify(
+          {"message": "Your request contains not valid JSON."}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
