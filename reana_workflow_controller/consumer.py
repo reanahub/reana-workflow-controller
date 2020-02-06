@@ -71,7 +71,7 @@ class JobStatusConsumer(BaseConsumer):
                 # Caching: calculate input hash and store in JobCache
                 if 'caching_info' in msg:
                     _update_job_cache(msg)
-                Session.commit()
+            Session.commit()
 
 
 def _update_workflow_status(workflow_uuid, status, logs):
