@@ -22,6 +22,7 @@ from reana_workflow_controller.rest.utils import (build_workflow_logs,
                                                   delete_workflow,
                                                   get_current_job_progress,
                                                   get_workflow_name,
+                                                  get_workflow_progress,
                                                   start_workflow,
                                                   stop_workflow)
 
@@ -238,45 +239,12 @@ def get_workflow_status(workflow_id_or_name):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
-
-        current_job_progress = get_current_job_progress(workflow.id_)
-        cmd_and_step_name = {}
-        try:
-            current_job_id, cmd_and_step_name = current_job_progress.\
-                popitem()
-        except Exception:
-            pass
-        run_started_at = None
-        if workflow.run_started_at:
-            run_started_at = workflow.run_started_at.\
-                strftime(WORKFLOW_TIME_FORMAT)
-        initial_progress_status = {'total': 0, 'job_ids': []}
-        progress = {'total':
-                    workflow.job_progress.get('total') or
-                    initial_progress_status,
-                    'running':
-                    workflow.job_progress.get('running') or
-                    initial_progress_status,
-                    'finished':
-                    workflow.job_progress.get('finished') or
-                    initial_progress_status,
-                    'failed':
-                    workflow.job_progress.get('failed') or
-                    initial_progress_status,
-                    'current_command':
-                    cmd_and_step_name.get('prettified_cmd'),
-                    'current_step_name':
-                    cmd_and_step_name.get('current_job_name'),
-                    'run_started_at':
-                    run_started_at
-                    }
-
         return jsonify({'id': workflow.id_,
                         'name': get_workflow_name(workflow),
                         'created':
                         workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                         'status': workflow.status.name,
-                        'progress': progress,
+                        'progress': get_workflow_progress(workflow),
                         'user': user_uuid,
                         'logs': json.dumps(workflow_logs)}), 200
     except ValueError:

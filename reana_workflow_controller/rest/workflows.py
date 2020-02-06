@@ -25,8 +25,9 @@ from reana_workflow_controller.errors import (REANAWorkflowControllerError,
                                               REANAWorkflowNameError)
 from reana_workflow_controller.rest.utils import (
     get_specification_diff, get_workflow_name)
-from reana_workflow_controller.rest.utils import \
-    create_workflow_workspace, get_workspace_diff
+from reana_workflow_controller.rest.utils import (create_workflow_workspace,
+                                                  get_workspace_diff,
+                                                  get_workflow_progress)
 
 
 START = 'start'
@@ -94,6 +95,8 @@ def get_workflows():  # noqa
                   type: string
                 created:
                   type: string
+                progress:
+                  type: object
           examples:
             application/json:
               [
@@ -168,6 +171,7 @@ def get_workflows():  # noqa
                                  'user': user_uuid,
                                  'created': workflow.created.
                                  strftime(WORKFLOW_TIME_FORMAT),
+                                 'progress': get_workflow_progress(workflow),
                                  'size': '-'}
             if type == 'interactive':
                 if not workflow.interactive_session or \

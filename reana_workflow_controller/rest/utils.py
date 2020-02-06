@@ -459,3 +459,40 @@ def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
         if not reana_fs.exists(workspace_b):
             raise ValueError('Workspace of {} does not exist.'.format(
                 get_workflow_name(workflow_b)))
+
+
+def get_workflow_progress(workflow):
+    """Return workflow progress information.
+
+    :param workflow: The workflow to get progress information from.
+    :type: reana_db.models.Workflow instance.
+
+    :return: Dictionary with workflow progress information.
+    """
+    current_job_progress = get_current_job_progress(workflow.id_)
+    cmd_and_step_name = {}
+    try:
+        _, cmd_and_step_name = current_job_progress.popitem()
+    except Exception:
+        pass
+    run_started_at = (workflow.run_started_at.
+                      strftime(WORKFLOW_TIME_FORMAT)
+                      if workflow.run_started_at else None)
+    run_finished_at = (workflow.run_finished_at.
+                       strftime(WORKFLOW_TIME_FORMAT)
+                       if workflow.run_finished_at else None)
+    initial_progress_status = {'total': 0, 'job_ids': []}
+    return {
+        'total': (workflow.job_progress.get('total') or
+                  initial_progress_status),
+        'running': (workflow.job_progress.get('running') or
+                    initial_progress_status),
+        'finished': (workflow.job_progress.get('finished') or
+                     initial_progress_status),
+        'failed': (workflow.job_progress.get('failed') or
+                   initial_progress_status),
+        'current_command': cmd_and_step_name.get('prettified_cmd'),
+        'current_step_name': cmd_and_step_name.get('current_job_name'),
+        'run_started_at': run_started_at,
+        'run_finished_at': run_finished_at
+    }
