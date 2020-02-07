@@ -46,6 +46,7 @@ setup_requires = [
 install_requires = [
     'Flask-SQLAlchemy>=2.2',
     'Flask>=0.12',
+    'werkzeug>=0.16.1,<0.17',
     'fs>=2.0',
     'gitpython>=2.1',
     'jsonpickle>=0.9.6',
