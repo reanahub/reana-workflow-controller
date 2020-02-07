@@ -16,7 +16,8 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
 from reana_workflow_controller.errors import (REANAExternalCallError,
-                                              REANAWorkflowControllerError)
+                                              REANAWorkflowControllerError,
+                                              REANAWorkflowStatusError)
 from reana_workflow_controller.rest.utils import (build_workflow_logs,
                                                   delete_workflow,
                                                   get_current_job_progress,
@@ -483,6 +484,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                                    format(workflow_id_or_name)}), 404
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
+    except REANAWorkflowStatusError as e:
+        return jsonify({"message": str(e)}), 404
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except NotImplementedError as e:

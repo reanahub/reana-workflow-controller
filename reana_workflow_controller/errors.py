@@ -31,3 +31,7 @@ class REANAInteractiveSessionError(Exception):
 
 class REANAExternalCallError(Exception):
     """Error when connecting to an external service."""
+
+
+class REANAWorkflowStatusError(Exception):
+    """Error when trying to change workflow status."""

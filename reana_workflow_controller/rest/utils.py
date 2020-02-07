@@ -32,7 +32,8 @@ from reana_workflow_controller.config import (REANA_GITLAB_HOST,
                                               WORKFLOW_TIME_FORMAT)
 from reana_workflow_controller.errors import (REANAExternalCallError,
                                               REANAWorkflowControllerError,
-                                              REANAWorkflowDeletionError)
+                                              REANAWorkflowDeletionError,
+                                              REANAWorkflowStatusError)
 from reana_workflow_controller.workflow_run_manager import \
     KubernetesWorkflowRunManager
 
@@ -66,6 +67,8 @@ def start_workflow(workflow, parameters):
                 raise REANAWorkflowControllerError(failure_message)
     elif workflow.status not in \
             [WorkflowStatus.created, WorkflowStatus.queued]:
+        if workflow.status == WorkflowStatus.deleted:
+            raise REANAWorkflowStatusError(failure_message)
         raise REANAWorkflowControllerError(failure_message)
 
     try:
@@ -180,27 +183,32 @@ def delete_workflow(workflow,
                            WorkflowStatus.finished,
                            WorkflowStatus.stopped,
                            WorkflowStatus.deleted,
-                           WorkflowStatus.failed]:
-        to_be_deleted = [workflow]
-        if all_runs:
-            to_be_deleted += Session.query(Workflow).\
-                filter(Workflow.name == workflow.name,
-                       Workflow.status != WorkflowStatus.running).all()
-        for workflow in to_be_deleted:
-            if hard_delete:
-                remove_workflow_workspace(workflow.workspace_path)
-                _delete_workflow_row_from_db(workflow)
-            else:
-                if workspace:
+                           WorkflowStatus.failed,
+                           WorkflowStatus.queued]:
+        try:
+            to_be_deleted = [workflow]
+            if all_runs:
+                to_be_deleted += Session.query(Workflow).\
+                    filter(Workflow.name == workflow.name,
+                           Workflow.status != WorkflowStatus.running).all()
+            for workflow in to_be_deleted:
+                if hard_delete:
                     remove_workflow_workspace(workflow.workspace_path)
-                _mark_workflow_as_deleted_in_db(workflow)
-            remove_workflow_jobs_from_cache(workflow)
+                    _delete_workflow_row_from_db(workflow)
+                else:
+                    if workspace:
+                        remove_workflow_workspace(workflow.workspace_path)
+                    _mark_workflow_as_deleted_in_db(workflow)
+                remove_workflow_jobs_from_cache(workflow)
 
-        return jsonify({'message': 'Workflow successfully deleted',
-                        'workflow_id': workflow.id_,
-                        'workflow_name': get_workflow_name(workflow),
-                        'status': workflow.status.name,
-                        'user': str(workflow.owner_id)}), 200
+            return jsonify({'message': 'Workflow successfully deleted',
+                            'workflow_id': workflow.id_,
+                            'workflow_name': get_workflow_name(workflow),
+                            'status': workflow.status.name,
+                            'user': str(workflow.owner_id)}), 200
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            return jsonify({"message": str(e)}), 500
     elif workflow.status == WorkflowStatus.running:
         raise REANAWorkflowDeletionError(
             'Workflow {0}.{1} cannot be deleted as it'
