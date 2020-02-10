@@ -21,6 +21,7 @@ from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_workflow_status_change_verb
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import and_
 
 import fs
 from flask import current_app as app
@@ -120,10 +121,16 @@ def get_workflow_name(workflow):
     return workflow.name + '.' + str(workflow.run_number)
 
 
-def build_workflow_logs(workflow):
+def build_workflow_logs(workflow, steps=None):
     """Return the logs for all jobs of a workflow."""
-    jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).order_by(
-        Job.created).all()
+    if steps:
+        jobs = Session.query(Job).filter(
+            and_(
+                Job.workflow_uuid == workflow.id_,
+                Job.job_name.in_(steps))).order_by(Job.created).all()
+    else:
+        jobs = Session.query(Job).filter_by(
+            workflow_uuid=workflow.id_).order_by(Job.created).all()
     all_logs = {}
     for job in jobs:
         item = {

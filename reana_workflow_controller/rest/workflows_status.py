@@ -58,6 +58,16 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
+        - name: steps
+          in: body
+          description: Steps of a workflow.
+          required: false
+          schema:
+            type: array
+            description: List of step names to get logs for.
+            items:
+              type: string
+              description: Step name.
       responses:
         200:
           description: >-
@@ -119,9 +129,17 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             return jsonify(
                 {'message': 'User {} is not allowed to access workflow {}'
                  .format(user_uuid, workflow_id_or_name)}), 403
-        workflow_logs = {'workflow_logs': workflow.logs,
-                         'job_logs': build_workflow_logs(workflow),
-                         'engine_specific': workflow.engine_specific}
+        steps = None
+        if request.json:
+            steps = request.json
+        if steps:
+            workflow_logs = {'workflow_logs': None,
+                             'job_logs': build_workflow_logs(workflow, steps),
+                             'engine_specific': None}
+        else:
+            workflow_logs = {'workflow_logs': workflow.logs,
+                             'job_logs': build_workflow_logs(workflow),
+                             'engine_specific': workflow.engine_specific}
         return jsonify({'workflow_id': workflow.id_,
                         'workflow_name': get_workflow_name(workflow),
                         'logs': json.dumps(workflow_logs),

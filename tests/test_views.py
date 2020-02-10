@@ -701,7 +701,8 @@ def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
         res = client.get(url_for('statuses.get_workflow_logs',
                                  workflow_id_or_name=workflow_uuid),
                          query_string={"user": default_user.id_},
-                         content_type='application/json')
+                         content_type='application/json',
+                         data=json.dumps(None))
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
         create_workflow_logs = ""
