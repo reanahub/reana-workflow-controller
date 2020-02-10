@@ -80,7 +80,8 @@ def add_kubernetes_jobs_to_workflow(session):
             backend_job_id = uuid.uuid4()
             job = Job(id_=reana_job_id,
                       backend_job_id=str(backend_job_id),
-                      workflow_uuid=workflow.id_)
+                      workflow_uuid=workflow.id_,
+                      status=JobStatus.running)
             progress_dict[status]['job_ids'].append(str(job.id_))
             progress_dict[status]['total'] += 1
             session.add(job)

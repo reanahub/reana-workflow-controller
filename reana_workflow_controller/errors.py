@@ -35,3 +35,7 @@ class REANAExternalCallError(Exception):
 
 class REANAWorkflowStatusError(Exception):
     """Error when trying to change workflow status."""
+
+
+class REANAWorkflowStopError(Exception):
+    """Error when trying to stop a workflow."""
