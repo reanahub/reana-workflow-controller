@@ -10,11 +10,11 @@ import os
 
 from kubernetes import client
 from kubernetes.client.rest import ApiException
-from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.config import CVMFS_REPOSITORIES, REANA_WORKFLOW_UMASK
 from reana_commons.k8s.api_client import (current_k8s_appsv1_api_client,
                                           current_k8s_corev1_api_client,
                                           current_k8s_networking_v1beta1)
-from reana_commons.k8s.volumes import get_shared_volume
+from reana_commons.k8s.volumes import get_k8s_cvmfs_volume, get_shared_volume
 
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
@@ -31,7 +31,8 @@ class InteractiveDeploymentK8sBuilder(object):
        port exposed by deployment itself, the one which can change
        from one interactive session application to other."""
 
-    def __init__(self, deployment_name, workspace, image, port, path):
+    def __init__(self, deployment_name, workspace, image, port, path,
+                 cvmfs_repos=None):
         """Initialise basic interactive deployment builder for Kubernetes.
 
         :param deployment_name: Name which identifies all deployment objects
@@ -49,6 +50,7 @@ class InteractiveDeploymentK8sBuilder(object):
         self.image = image
         self.port = port
         self.path = path
+        self.cvmfs_repos = cvmfs_repos or []
         metadata = client.V1ObjectMeta(
             name=deployment_name,
         )
@@ -108,9 +110,9 @@ class InteractiveDeploymentK8sBuilder(object):
         :param metadata: Common Kubernetes metadata for the interactive
             deployment.
         """
-        pod_spec = client.V1PodSpec(
-            containers=[client.V1Container(name=self.deployment_name,
-                                           image=self.image)])
+        container = client.V1Container(
+            name=self.deployment_name, image=self.image)
+        pod_spec = client.V1PodSpec(containers=[container])
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self.deployment_name}),
             spec=pod_spec)
@@ -125,6 +127,7 @@ class InteractiveDeploymentK8sBuilder(object):
             metadata=metadata,
             spec=spec,
         )
+
         return deployment
 
     def add_command(self, command):
@@ -144,6 +147,43 @@ class InteractiveDeploymentK8sBuilder(object):
             containers[0].volume_mounts = [volume_mount]
         self.kubernetes_objects["deployment"].spec.template.spec.volumes = \
             [volume]
+
+    def _build_cvmfs_volume_mount(self, cvmfs_repos):
+        """Build the Volume and VolumeMount necessary to enable CVMFS.
+
+        :param cvmfs_mounts: List of CVMFS repos to make available. They
+            should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
+        """
+        cvmfs_map = {}
+        volumes = []
+        volume_mounts = []
+        for repo in cvmfs_repos:
+            if repo in CVMFS_REPOSITORIES:
+                cvmfs_map[CVMFS_REPOSITORIES[repo]] = repo
+
+        for repo_name, path in cvmfs_map.items():
+            volume = get_k8s_cvmfs_volume(repo_name)
+            volumes.append(volume)
+            volume_mounts.append(
+                {'name': volume['name'],
+                 'mountPath': '/cvmfs/{}'.format(path),
+                 'readOnly': volume['readOnly']}
+            )
+
+        return volumes, volume_mounts
+
+    def add_cvmfs_repo_mounts(self, cvmfs_repos):
+        """Add mounts for the provided CVMFS repositories to the deployment.
+
+        :param cvmfs_mounts: List of CVMFS repos to make available. They
+            should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
+        """
+        cvmfs_volumes, cvmfs_volume_mounts = \
+            self._build_cvmfs_volume_mount(cvmfs_repos)
+        self.kubernetes_objects["deployment"].spec.template.spec. \
+            volumes.extend(cvmfs_volumes)
+        self.kubernetes_objects["deployment"].spec.template.spec. \
+            containers[0].volume_mounts.extend(cvmfs_volume_mounts)
 
     def add_environment_variable(self, name, value):
         """Add an environment variable.
@@ -173,7 +213,7 @@ class InteractiveDeploymentK8sBuilder(object):
 
 def build_interactive_jupyter_deployment_k8s_objects(
         deployment_name, workspace, access_path, access_token=None,
-        image=None):
+        cvmfs_repos=None, image=None):
     """Build the Kubernetes specification for a Jupyter NB interactive session.
 
     :param deployment_name: Name used to tag all Kubernetes objects spawned
@@ -188,10 +228,13 @@ def build_interactive_jupyter_deployment_k8s_objects(
         /me Traefik won't send the request to the interactive session
         (``/1234/me``) but to the root path (``/me``) giving most probably
         a ``404``.
+    :param cvmfs_mounts: List of CVMFS repos to make available. They
+        should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
     :param image: Jupyter Notebook image to use, i.e.
         ``jupyter/tensorflow-notebook`` to enable ``tensorflow``.
     """
     image = image or JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE
+    cvmfs_repos = cvmfs_repos or []
     port = JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT
     deployment_builder = InteractiveDeploymentK8sBuilder(deployment_name,
                                                          workspace,
@@ -209,6 +252,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
         ))
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
+    if cvmfs_repos:
+        deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
     deployment_builder.add_environment_variable("NB_GID", 0)
     # Changes umask so all files generated by the Jupyter Notebook can be
     # modified by the root group users.

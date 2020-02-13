@@ -46,7 +46,6 @@ setup_requires = [
 install_requires = [
     'Flask-SQLAlchemy>=2.2',
     'Flask>=0.12',
-    'Flask-Login<0.5.0',  # FIXME waiting for Flask-Security release
     'werkzeug>=0.16.1,<0.17',
     'fs>=2.0',
     'gitpython>=2.1',

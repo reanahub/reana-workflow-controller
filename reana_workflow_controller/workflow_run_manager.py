@@ -194,6 +194,12 @@ class WorkflowRunManager():
                             overwrite=overwrite_operational_options
                         )).encode())))
 
+    def retrieve_required_cvmfs_repos(self):
+        """Build the list of needed CVMFS repos."""
+        required_resources = \
+            self.workflow.reana_specification['workflow'].get('resources', {})
+        return required_resources.get('cvmfs', [])
+
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
         env_vars = list(WorkflowRunManager.engine_mapping[
@@ -202,12 +208,7 @@ class WorkflowRunManager():
             'name': 'REANA_USER_ID',
             'value': str(self.workflow.owner_id)
         }])
-        cvmfs_volumes = 'false'
-        for resource, value in self.workflow.reana_specification['workflow'].\
-                get('resources', {}).items():
-            if 'cvmfs' in resource:
-                cvmfs_volumes = value
-                break
+        cvmfs_volumes = self.retrieve_required_cvmfs_repos() or 'false'
         if type(cvmfs_volumes) == list:
             cvmfs_env_var = {'name': 'REANA_MOUNT_CVMFS',
                              'value': str(cvmfs_volumes)}
@@ -287,6 +288,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     workflow_run_name, self.workflow.workspace_path,
                     access_path,
                     access_token=self.workflow.get_owner_access_token(),
+                    cvmfs_repos=self.retrieve_required_cvmfs_repos(),
                     **kwargs)
 
             instantiate_chained_k8s_objects(
