@@ -8,6 +8,8 @@
 
 """REANA Workflow Controller workspaces REST API."""
 
+import json
+import mimetypes
 import os
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
@@ -181,6 +183,13 @@ def download_file(workflow_id_or_name, file_name):  # noqa
           description: Required. Name (or path) of the file to be downloaded.
           required: true
           type: string
+        - name: preview
+          in: query
+          description: >-
+            Optional flag to return a previewable response of the file
+            (corresponding mime-type).
+          required: false
+          type: boolean
       responses:
         200:
           description: >-
@@ -220,9 +229,16 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         absolute_workflow_workspace_path = os.path.join(
             current_app.config['SHARED_VOLUME_PATH'],
             workflow.workspace_path)
+
+        preview = json.loads(request.args.get('preview', 'false').lower())
+        response_mime_type = 'multipart/form-data'
+        file_mime_type = mimetypes.guess_type(file_name)[0]
+        # Only display image files as preview
+        if preview and file_mime_type and file_mime_type.startswith('image'):
+            response_mime_type = file_mime_type
         return send_from_directory(absolute_workflow_workspace_path,
                                    file_name,
-                                   mimetype='multipart/form-data',
+                                   mimetype=response_mime_type,
                                    as_attachment=True), 200
 
     except ValueError:
