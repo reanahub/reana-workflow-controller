@@ -203,11 +203,13 @@ def _delete_workflow_engine_pod(workflow):
         )
         for job in jobs.items:
             if str(workflow.id_) in job.metadata.name:
-                workflow.logs = \
+                workflow_enginge_logs = \
                     current_k8s_corev1_api_client.read_namespaced_pod_log(
                         namespace=job.metadata.namespace,
                         name=job.metadata.name,
                         container='workflow-engine')
+                workflow.logs =  \
+                    (workflow.logs or '') + workflow_enginge_logs + '\n'
                 current_k8s_batchv1_api_client.delete_namespaced_job(
                     namespace='default',
                     propagation_policy="Background",
