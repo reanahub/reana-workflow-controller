@@ -120,3 +120,6 @@ REANA_GITLAB_URL = 'https://{}'.format(REANA_GITLAB_HOST)
 
 REANA_URL = os.getenv('REANA_URL', 'CHANGE_ME')
 """REANA URL"""
+
+IMAGE_PULL_SECRETS = os.getenv('IMAGE_PULL_SECRETS', '').split(',')
+"""Docker image pull secrets which allow the usage of private images."""

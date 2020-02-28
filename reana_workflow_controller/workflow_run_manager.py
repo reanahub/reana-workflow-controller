@@ -40,6 +40,7 @@ from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
                                            instantiate_chained_k8s_objects)
 
 from reana_workflow_controller.config import (  # isort:skip
+    IMAGE_PULL_SECRETS,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
@@ -461,6 +462,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             {
                 'name': 'K8S_CERN_EOS_AVAILABLE',
                 'value': K8S_CERN_EOS_AVAILABLE
+            },
+            {
+                'name': 'IMAGE_PULL_SECRETS',
+                'value': ','.join(IMAGE_PULL_SECRETS)
             }
         ])
         job_controller_container.env.extend(job_controller_env_vars)
