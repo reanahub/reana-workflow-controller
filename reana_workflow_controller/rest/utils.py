@@ -252,6 +252,16 @@ def get_specification_diff(workflow_a, workflow_b, output_format='unified'):
 
     :rtype: List with lines of differences.
     """
+
+    def _aggregated_inputs(workflow):
+        inputs = workflow.reana_specification.get('inputs', {})
+        input_parameters = inputs.get('parameters', {})
+        if workflow.input_parameters:
+            input_parameters = dict(input_parameters,
+                                    **workflow.input_parameters)
+            inputs['parameters'] = input_parameters
+        return inputs
+
     if output_format not in ['unified', 'context', 'html']:
         raise ValueError('Unknown output format.'
                          'Please select one of unified, context or html.')
@@ -265,12 +275,14 @@ def get_specification_diff(workflow_a, workflow_b, output_format='unified'):
 
     specification_diff = dict.fromkeys(workflow_a.reana_specification.keys())
     for section in specification_diff:
-        section_a = pprint.pformat(
-            workflow_a.reana_specification.get(section, '')).\
-            splitlines()
-        section_b = pprint.pformat(
-            workflow_b.reana_specification.get(section, '')).\
-            splitlines()
+        if section == 'inputs':
+            section_value_a = _aggregated_inputs(workflow_a)
+            section_value_b = _aggregated_inputs(workflow_b)
+        else:
+            section_value_a = workflow_a.reana_specification.get(section, '')
+            section_value_b = workflow_b.reana_specification.get(section, '')
+        section_a = pprint.pformat(section_value_a).splitlines()
+        section_b = pprint.pformat(section_value_b).splitlines()
         # skip first 2 lines of diff relevant if input comes from files
         specification_diff[section] = list(diff_method(section_a,
                                                        section_b))[2:]
