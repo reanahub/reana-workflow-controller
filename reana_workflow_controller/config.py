@@ -15,20 +15,6 @@ from reana_commons.config import SHARED_VOLUME_PATH
 
 from reana_workflow_controller.version import __version__
 
-BROKER_URL = os.getenv('RABBIT_MQ_URL',
-                       'message-broker.default.svc.cluster.local')
-
-BROKER_USER = os.getenv('RABBIT_MQ_USER', 'test')
-
-BROKER_PASS = os.getenv('RABBIT_MQ_PASS', '1234')
-
-BROKER = os.getenv('RABBIT_MQ', 'amqp://{0}:{1}@{2}//'.format(BROKER_USER,
-                                                              BROKER_PASS,
-                                                              BROKER_URL))
-
-BROKER_PORT = os.getenv('RABBIT_MQ_PORT', 5672)
-
-
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
 

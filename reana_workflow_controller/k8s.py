@@ -53,6 +53,7 @@ class InteractiveDeploymentK8sBuilder(object):
         self.cvmfs_repos = cvmfs_repos or []
         metadata = client.V1ObjectMeta(
             name=deployment_name,
+            labels={'reana_workflow_mode': 'session'},
         )
         self.kubernetes_objects = {
             "ingress": self._build_ingress(metadata),

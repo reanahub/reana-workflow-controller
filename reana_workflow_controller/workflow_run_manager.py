@@ -18,6 +18,8 @@ from reana_commons.config import (CVMFS_REPOSITORIES,
                                   INTERACTIVE_SESSION_TYPES,
                                   K8S_CERN_EOS_AVAILABLE,
                                   K8S_REANA_SERVICE_ACCOUNT_NAME,
+                                  REANA_COMPONENT_NAMING_SCHEME,
+                                  REANA_COMPONENT_PREFIX,
                                   REANA_STORAGE_BACKEND, SHARED_VOLUME_PATH,
                                   WORKFLOW_RUNTIME_USER_GID,
                                   WORKFLOW_RUNTIME_USER_NAME,
@@ -25,7 +27,8 @@ from reana_commons.config import (CVMFS_REPOSITORIES,
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.k8s.volumes import get_shared_volume
-from reana_commons.utils import (create_cvmfs_persistent_volume_claim,
+from reana_commons.utils import (build_unique_component_name,
+                                 create_cvmfs_persistent_volume_claim,
                                  create_cvmfs_storage_class, format_cmd)
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
@@ -96,29 +99,13 @@ class WorkflowRunManager():
         """
         self.workflow = workflow
 
-    def _workflow_run_name_generator(self, mode, type=None):
+    def _workflow_run_name_generator(self, mode):
         """Generate the name to be given to a workflow run.
 
-        In the case of Kubernetes, this should allow administrators to be able
-        to easily find workflow runs i.e.:
-        .. code-block:: console
-
-           $ kubectl get pods | grep batch
-           batch-serial-64594f48ff-5mgbz  0/1  Running 0   1m
-           batch-cwl-857bb969bb-john-64f97d955d-jklcw  0/1  Running 0  16h
-
-           $ kubectl get pods | grep interactive
-           interactive-yadage-7fbb558577-xdxn8  0/1  Running  0  30m
-
-        :param mode: Mode in which the workflow runs, like ``batch`` or
-            ``interactive``.
+        :param mode: Mode in which the workflow runs: ``workflow`` or
+            ``session``.
         """
-        type_ = type or self.workflow.type_
-        return 'reana-{mode}-{workflow_type}-{workflow_id}'.format(
-            mode=mode,
-            workflow_id=self.workflow.id_,
-            workflow_type=type_,
-        )
+        return build_unique_component_name(f'run-{mode}', self.workflow.id_)
 
     def _generate_interactive_workflow_path(self):
         """Generate the path to access the interactive workflow."""
@@ -281,8 +268,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             self.workflow.interactive_session_type = interactive_session_type
             self.workflow.interactive_session = access_path
             workflow_run_name = \
-                self._workflow_run_name_generator(
-                    'interactive', type=interactive_session_type)
+                self._workflow_run_name_generator('session')
             self.workflow.interactive_session_name = workflow_run_name
             kubernetes_objects = \
                 build_interactive_k8s_objects[interactive_session_type](
@@ -412,7 +398,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             volume_mounts=[],
             command=['/bin/bash', '-c'],
             args=command)
-        job_controller_address = [
+        workflow_engine_env_vars.extend([
             {
                 'name': 'REANA_JOB_CONTROLLER_SERVICE_PORT_HTTP',
                 'value':
@@ -420,9 +406,17 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             },
             {
                 'name': 'REANA_JOB_CONTROLLER_SERVICE_HOST',
-                'value': 'localhost'}
-        ]
-        workflow_engine_env_vars.extend(job_controller_address)
+                'value': 'localhost'
+            },
+            {
+                'name': 'REANA_COMPONENT_PREFIX',
+                'value': REANA_COMPONENT_PREFIX
+            },
+            {
+                'name': 'REANA_COMPONENT_NAMING_SCHEME',
+                'value': REANA_COMPONENT_NAMING_SCHEME,
+            },
+        ])
         workflow_engine_container.env.extend(workflow_engine_env_vars)
         workflow_engine_container.security_context = \
             client.V1SecurityContext(
@@ -466,11 +460,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             {
                 'name': 'IMAGE_PULL_SECRETS',
                 'value': ','.join(IMAGE_PULL_SECRETS)
-            }
-        ])
-        job_controller_container.env.extend(job_controller_env_vars)
-        job_controller_container.env.extend(job_controller_env_secrets)
-        job_controller_container.env.extend([
+            },
             {
                 'name': 'REANA_SQLALCHEMY_DATABASE_URI',
                 'value': SQLALCHEMY_DATABASE_URI
@@ -478,8 +468,18 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             {
                 'name': 'REANA_STORAGE_BACKEND',
                 'value': REANA_STORAGE_BACKEND
-            }
-            ])
+            },
+            {
+                'name': 'REANA_COMPONENT_PREFIX',
+                'value': REANA_COMPONENT_PREFIX
+            },
+            {
+                'name': 'REANA_COMPONENT_NAMING_SCHEME',
+                'value': REANA_COMPONENT_NAMING_SCHEME,
+            },
+        ])
+        job_controller_container.env.extend(job_controller_env_vars)
+        job_controller_container.env.extend(job_controller_env_secrets)
 
         secrets_volume_mount = \
             secrets_store.get_secrets_volume_mount_as_k8s_spec()
