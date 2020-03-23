@@ -76,9 +76,9 @@ class WorkflowRunManager():
                    'command': ("run-yadage-workflow "
                                "--workflow-uuid {id} "
                                "--workflow-workspace {workspace} "
-                               "--workflow-json '{workflow_json}' "
                                "--workflow-file '{workflow_file}' "
-                               "--workflow-parameters '{parameters}' "),
+                               "--workflow-parameters '{parameters}' "
+                               "--operational-options '{options}' "),
                    'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
         'serial': {'image': '{}'.
                             format(REANA_WORKFLOW_ENGINE_IMAGE_SERIAL),
@@ -123,27 +123,8 @@ class WorkflowRunManager():
 
     def _get_merged_workflow_operational_options(self, overwrite=None):
         """Return workflow input parameters merged with live ones, if given."""
-        merged_operational_options = None
-        if self.workflow.type_ == 'serial':
-            overwrite = overwrite or {}
-            merged_operational_options = \
-                dict(self.workflow.operational_options, **overwrite)
-        elif self.workflow.type_ == 'cwl':
-            overwrite = overwrite or []
-            if isinstance(self.workflow.operational_options, list):
-                merged_operational_options = \
-                    self.workflow.operational_options + overwrite
-            else:
-                merged_operational_options = overwrite
-        elif self.workflow.type_ == 'yadage':
-            merged_operational_options = self.workflow.operational_options
-            logging.error(
-                f'{self.workflow.type_} doesn\'t support operational '
-                f'options.\n'
-                f'skipping operational options expansion.')
-        else:
-            logging.error(f'Unknown workflow type {self.workflow.type_}')
-        return merged_operational_options
+        overwrite = overwrite or {}
+        return dict(self.workflow.operational_options, **overwrite)
 
     def start_batch_workflow_run(self, overwrite_input_params=None,
                                  overwrite_operational_options=None):

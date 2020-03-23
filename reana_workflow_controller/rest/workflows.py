@@ -321,7 +321,7 @@ def create_workflow():  # noqa
                             reana_specification=request.json[
                                 'reana_specification'],
                             operational_options=request.json.get(
-                                'operational_options'),
+                                'operational_options', {}),
                             type_=request.json[
                                 'reana_specification']['workflow']['type'],
                             logs='',
