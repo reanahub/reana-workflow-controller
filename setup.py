@@ -44,6 +44,9 @@ setup_requires = [
 ]
 
 install_requires = [
+    # Workaround for urllib3>1.25 being installed
+    # and conflicting with requests 2.20.0
+    'urllib3<1.25.0',
     'Flask-SQLAlchemy>=2.2',
     'Flask>=0.12',
     'fs>=2.0',
@@ -51,6 +54,7 @@ install_requires = [
     'jsonpickle>=0.9.6',
     'marshmallow>2.13.0,<=2.20.1',
     'packaging>=18.0',
+    'kubernetes==10.0.1',
     'reana-commons[kubernetes]>=0.6.0,<0.7.0',
     'reana-db>=0.6.0,<0.7.0',
     'requests==2.20.0',
