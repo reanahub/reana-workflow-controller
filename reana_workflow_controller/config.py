@@ -11,7 +11,7 @@
 import os
 
 from packaging.version import parse
-from reana_commons.config import SHARED_VOLUME_PATH
+from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
 
 from reana_workflow_controller.version import __version__
 
@@ -67,7 +67,8 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
 """Common to all workflow engines environment variables."""
 
 DEBUG_ENV_VARS = ({'name': 'WDB_SOCKET_SERVER',
-                   'value': 'reana-wdb'},
+                   'value': os.getenv('WDB_SOCKET_SERVER',
+                                      f'{REANA_COMPONENT_PREFIX}-wdb')},
                   {'name': 'WDB_NO_BROWSER_AUTO_OPEN',
                    'value': 'True'},
                   {'name': 'FLASK_ENV',

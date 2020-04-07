@@ -318,7 +318,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 current_k8s_batchv1_api_client.delete_namespaced_job(
                     job,
                     KubernetesWorkflowRunManager.default_namespace,
-                    body=V1DeleteOptions(propagation_policy='Background'))
+                    body=V1DeleteOptions(
+                        grace_period_seconds=0,
+                        propagation_policy='Background'))
             except ApiException:
                 logging.error(f'Error while trying to stop {self.workflow.id_}'
                               f': Kubernetes job {job} could not be deleted.',

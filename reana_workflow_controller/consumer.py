@@ -56,30 +56,35 @@ class JobStatusConsumer(BaseConsumer):
         body_dict = json.loads(body)
         workflow_uuid = body_dict.get('workflow_uuid')
         if workflow_uuid:
-            status = body_dict.get('status')
-            if status:
-                status = WorkflowStatus(status)
+            workflow = Session.query(Workflow).filter_by(id_=workflow_uuid)\
+                .one_or_none()
+            next_status = body_dict.get('status')
+            if next_status:
+                next_status = WorkflowStatus(next_status)
                 print(" [x] Received workflow_uuid: {0} status: {1}".
-                      format(workflow_uuid, status))
+                      format(workflow_uuid, next_status))
             logs = body_dict.get('logs') or ''
-            _update_workflow_status(workflow_uuid, status, logs)
-            if 'message' in body_dict and body_dict.get('message'):
-                msg = body_dict['message']
-                if 'progress' in msg:
-                    _update_run_progress(workflow_uuid, msg)
-                    _update_job_progress(workflow_uuid, msg)
-                # Caching: calculate input hash and store in JobCache
-                if 'caching_info' in msg:
-                    _update_job_cache(msg)
-            Session.commit()
+            if workflow.can_transition_to(next_status):
+                _update_workflow_status(workflow, next_status, logs)
+                if 'message' in body_dict and body_dict.get('message'):
+                    msg = body_dict['message']
+                    if 'progress' in msg:
+                        _update_run_progress(workflow_uuid, msg)
+                        _update_job_progress(workflow_uuid, msg)
+                    # Caching: calculate input hash and store in JobCache
+                    if 'caching_info' in msg:
+                        _update_job_cache(msg)
+                Session.commit()
+            else:
+                logging.error(f'Cannot transition workflow {workflow.id_}'
+                              f' from status {workflow.status} to'
+                              f' {next_status}.')
 
 
-def _update_workflow_status(workflow_uuid, status, logs):
+def _update_workflow_status(workflow, status, logs):
     """Update workflow status in DB."""
-    workflow = Session.query(Workflow).filter_by(id_=workflow_uuid)\
-        .one_or_none()
     if workflow.status != status:
-        Workflow.update_workflow_status(Session, workflow_uuid,
+        Workflow.update_workflow_status(Session, workflow.id_,
                                         status, logs, None)
         if workflow.git_ref:
             _update_commit_status(workflow, status)
