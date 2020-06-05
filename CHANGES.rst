@@ -1,6 +1,25 @@
 Changes
 =======
 
+Version master (UNRELEASED)
+---------------------------
+
+- Enables workflow restarts.
+- Enables deletion of workflows in queued state.
+- Exposes workflow engines logs.
+- Allows passing operational options.
+- Adds progress report on workflow list response.
+- Makes CVMFS available in interactive sessions.
+- Adds preview flag to file download endpoint.
+- Fixes jobs status update.
+- Labels workflow engine pods for better traceability.
+- Enriches logs enpoint information.
+- Decreases clone depth when retrieving GitLab projects.
+- Fixes response on close interactive session action.
+- Installs submodules in editable mode for live code updates.
+- Adds code mount on dev mode in workflow engines and job controller.
+- Adds Black formatter support.
+
 Version 0.6.0 (2019-12-20)
 --------------------------
 
