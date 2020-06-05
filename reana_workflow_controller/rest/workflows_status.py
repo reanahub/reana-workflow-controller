@@ -15,26 +15,30 @@ from flask import Blueprint, jsonify, request
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
-from reana_workflow_controller.errors import (REANAExternalCallError,
-                                              REANAWorkflowControllerError,
-                                              REANAWorkflowStatusError)
-from reana_workflow_controller.rest.utils import (build_workflow_logs,
-                                                  delete_workflow,
-                                                  get_current_job_progress,
-                                                  get_workflow_name,
-                                                  get_workflow_progress,
-                                                  start_workflow,
-                                                  stop_workflow)
+from reana_workflow_controller.errors import (
+    REANAExternalCallError,
+    REANAWorkflowControllerError,
+    REANAWorkflowStatusError,
+)
+from reana_workflow_controller.rest.utils import (
+    build_workflow_logs,
+    delete_workflow,
+    get_current_job_progress,
+    get_workflow_name,
+    get_workflow_progress,
+    start_workflow,
+    stop_workflow,
+)
 
-START = 'start'
-STOP = 'stop'
-DELETED = 'deleted'
+START = "start"
+STOP = "stop"
+DELETED = "deleted"
 STATUSES = {START, STOP, DELETED}
 
-blueprint = Blueprint('statuses', __name__)
+blueprint = Blueprint("statuses", __name__)
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/logs', methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/logs", methods=["GET"])
 def get_workflow_logs(workflow_id_or_name):  # noqa
     r"""Get workflow logs from a workflow engine.
 
@@ -120,44 +124,67 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_uuid = request.args['user']
+        user_uuid = request.args["user"]
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
 
         if not str(workflow.owner_id) == user_uuid:
-            return jsonify(
-                {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id_or_name)}), 403
+            return (
+                jsonify(
+                    {
+                        "message": "User {} is not allowed to access workflow {}".format(
+                            user_uuid, workflow_id_or_name
+                        )
+                    }
+                ),
+                403,
+            )
         steps = None
         if request.json:
             steps = request.json
         if steps:
-            workflow_logs = {'workflow_logs': None,
-                             'job_logs': build_workflow_logs(workflow, steps),
-                             'engine_specific': None}
+            workflow_logs = {
+                "workflow_logs": None,
+                "job_logs": build_workflow_logs(workflow, steps),
+                "engine_specific": None,
+            }
         else:
-            workflow_logs = {'workflow_logs': workflow.logs,
-                             'job_logs': build_workflow_logs(workflow),
-                             'engine_specific': workflow.engine_specific}
-        return jsonify({'workflow_id': workflow.id_,
-                        'workflow_name': get_workflow_name(workflow),
-                        'logs': json.dumps(workflow_logs),
-                        'user': user_uuid}), 200
+            workflow_logs = {
+                "workflow_logs": workflow.logs,
+                "job_logs": build_workflow_logs(workflow),
+                "engine_specific": workflow.engine_specific,
+            }
+        return (
+            jsonify(
+                {
+                    "workflow_id": workflow.id_,
+                    "workflow_name": get_workflow_name(workflow),
+                    "logs": json.dumps(workflow_logs),
+                    "user": user_uuid,
+                }
+            ),
+            200,
+        )
 
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["GET"])
 def get_workflow_status(workflow_id_or_name):  # noqa
     r"""Get workflow status.
 
@@ -249,35 +276,53 @@ def get_workflow_status(workflow_id_or_name):  # noqa
     """
 
     try:
-        user_uuid = request.args['user']
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        user_uuid = request.args["user"]
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         workflow_logs = build_workflow_logs(workflow)
         if not str(workflow.owner_id) == user_uuid:
-            return jsonify(
-                {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id_or_name)}), 403
-        return jsonify({'id': workflow.id_,
-                        'name': get_workflow_name(workflow),
-                        'created':
-                        workflow.created.strftime(WORKFLOW_TIME_FORMAT),
-                        'status': workflow.status.name,
-                        'progress': get_workflow_progress(workflow),
-                        'user': user_uuid,
-                        'logs': json.dumps(workflow_logs)}), 200
+            return (
+                jsonify(
+                    {
+                        "message": "User {} is not allowed to access workflow {}".format(
+                            user_uuid, workflow_id_or_name
+                        )
+                    }
+                ),
+                403,
+            )
+        return (
+            jsonify(
+                {
+                    "id": workflow.id_,
+                    "name": get_workflow_name(workflow),
+                    "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
+                    "status": workflow.status.name,
+                    "progress": get_workflow_progress(workflow),
+                    "user": user_uuid,
+                    "logs": json.dumps(workflow_logs),
+                }
+            ),
+            200,
+        )
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['PUT'])
+@blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["PUT"])
 def set_workflow_status(workflow_id_or_name):  # noqa
     r"""Set workflow status.
 
@@ -424,50 +469,82 @@ def set_workflow_status(workflow_id_or_name):  # noqa
     """
 
     try:
-        user_uuid = request.args['user']
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
-        status = request.args.get('status')
+        user_uuid = request.args["user"]
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        status = request.args.get("status")
         if not (status in STATUSES):
-            return jsonify({'message': 'Status {0} is not one of: {1}'.
-                            format(status, ", ".join(STATUSES))}), 400
+            return (
+                jsonify(
+                    {
+                        "message": "Status {0} is not one of: {1}".format(
+                            status, ", ".join(STATUSES)
+                        )
+                    }
+                ),
+                400,
+            )
 
         if not str(workflow.owner_id) == user_uuid:
-            return jsonify(
-                {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id_or_name)}), 403
+            return (
+                jsonify(
+                    {
+                        "message": "User {} is not allowed to access workflow {}".format(
+                            user_uuid, workflow_id_or_name
+                        )
+                    }
+                ),
+                403,
+            )
         parameters = {}
         if request.json:
             parameters = request.json
         if status == START:
             start_workflow(workflow, parameters)
-            return jsonify({'message': 'Workflow successfully launched',
-                            'workflow_id': str(workflow.id_),
-                            'workflow_name': get_workflow_name(workflow),
-                            'status': workflow.status.name,
-                            'user': str(workflow.owner_id)}), 200
+            return (
+                jsonify(
+                    {
+                        "message": "Workflow successfully launched",
+                        "workflow_id": str(workflow.id_),
+                        "workflow_name": get_workflow_name(workflow),
+                        "status": workflow.status.name,
+                        "user": str(workflow.owner_id),
+                    }
+                ),
+                200,
+            )
         elif status == DELETED:
-            all_runs = True if request.json.get('all_runs') else False
-            hard_delete = True if request.json.get('hard_delete') else False
-            workspace = True if hard_delete or request.json.get('workspace') \
-                else False
+            all_runs = True if request.json.get("all_runs") else False
+            hard_delete = True if request.json.get("hard_delete") else False
+            workspace = True if hard_delete or request.json.get("workspace") else False
             return delete_workflow(workflow, all_runs, hard_delete, workspace)
         if status == STOP:
             stop_workflow(workflow)
-            return jsonify({'message': 'Workflow successfully stopped',
-                            'workflow_id': workflow.id_,
-                            'workflow_name': get_workflow_name(workflow),
-                            'status': workflow.status.name,
-                            'user': str(workflow.owner_id)}), 200
+            return (
+                jsonify(
+                    {
+                        "message": "Workflow successfully stopped",
+                        "workflow_id": workflow.id_,
+                        "workflow_name": get_workflow_name(workflow),
+                        "status": workflow.status.name,
+                        "user": str(workflow.owner_id),
+                    }
+                ),
+                200,
+            )
         else:
-            raise NotImplementedError("Status {} is not supported yet"
-                                      .format(status))
+            raise NotImplementedError("Status {} is not supported yet".format(status))
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
     except REANAWorkflowStatusError as e:

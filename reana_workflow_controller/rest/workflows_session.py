@@ -9,20 +9,20 @@
 """REANA Workflow Controller interactive sessions REST API."""
 
 
-from flask import (Blueprint, jsonify, request)
+from flask import Blueprint, jsonify, request
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
-from reana_workflow_controller.workflow_run_manager import \
-    KubernetesWorkflowRunManager
+from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
 
 
-blueprint = Blueprint('workflows_session', __name__)
+blueprint = Blueprint("workflows_session", __name__)
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/open/'
-                 '<interactive_session_type>',
-                 methods=['POST'])
+@blueprint.route(
+    "/workflows/<workflow_id_or_name>/open/" "<interactive_session_type>",
+    methods=["POST"],
+)
 def open_interactive_session(workflow_id_or_name, interactive_session_type):  # noqa
     r"""Start an interactive session inside the workflow workspace.
 
@@ -109,20 +109,26 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
     """
     try:
         if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
-            return jsonify({
-                "message": "Interactive session type {0} not found, try "
-                           "with one of: {1}".format(
-                               interactive_session_type,
-                               INTERACTIVE_SESSION_TYPES)}), 404
+            return (
+                jsonify(
+                    {
+                        "message": "Interactive session type {0} not found, try "
+                        "with one of: {1}".format(
+                            interactive_session_type, INTERACTIVE_SESSION_TYPES
+                        )
+                    }
+                ),
+                404,
+            )
         interactive_session_configuration = request.json or {}
         user_uuid = request.args["user"]
         workflow = None
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         kwrm = KubernetesWorkflowRunManager(workflow)
         access_path = kwrm.start_interactive_session(
-          interactive_session_type,
-          image=interactive_session_configuration.get("image", None))
+            interactive_session_type,
+            image=interactive_session_configuration.get("image", None),
+        )
         return jsonify({"path": "{}".format(access_path)}), 200
 
     except (KeyError, ValueError) as e:
@@ -132,7 +138,7 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/close', methods=['POST'])
+@blueprint.route("/workflows/<workflow_id_or_name>/close", methods=["POST"])
 def close_interactive_session(workflow_id_or_name):  # noqa
     r"""Close an interactive workflow session.
 
@@ -196,16 +202,21 @@ def close_interactive_session(workflow_id_or_name):  # noqa
     try:
         user_uuid = request.args["user"]
         workflow = None
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         if workflow.interactive_session_name is None:
-            return jsonify(
-                {"message": "Workflow - {} has no open interactive session."
-                            .format(workflow_id_or_name)}), 404
+            return (
+                jsonify(
+                    {
+                        "message": "Workflow - {} has no open interactive session.".format(
+                            workflow_id_or_name
+                        )
+                    }
+                ),
+                404,
+            )
         kwrm = KubernetesWorkflowRunManager(workflow)
         kwrm.stop_interactive_session()
-        return jsonify(
-            {"message": "The interactive session has been closed"}), 200
+        return jsonify({"message": "The interactive session has been closed"}), 200
 
     except (KeyError, ValueError) as e:
         status_code = 400 if workflow else 404

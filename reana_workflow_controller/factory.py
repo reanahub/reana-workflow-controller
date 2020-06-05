@@ -23,7 +23,7 @@ def create_app(config_mapping=None):
     """REANA Workflow Controller application factory."""
     logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT)
     app = Flask(__name__)
-    app.config.from_object('reana_workflow_controller.config')
+    app.config.from_object("reana_workflow_controller.config")
     if config_mapping:
         app.config.from_mapping(config_mapping)
 
@@ -35,9 +35,10 @@ def create_app(config_mapping=None):
         workflows_workspace,
         workflows,
     )  # noqa
-    app.register_blueprint(workflows_session.blueprint, url_prefix='/api')
-    app.register_blueprint(workflows.blueprint, url_prefix='/api')
-    app.register_blueprint(workflows_status.blueprint, url_prefix='/api')
-    app.register_blueprint(workflows_workspace.blueprint, url_prefix='/api')
+
+    app.register_blueprint(workflows_session.blueprint, url_prefix="/api")
+    app.register_blueprint(workflows.blueprint, url_prefix="/api")
+    app.register_blueprint(workflows_status.blueprint, url_prefix="/api")
+    app.register_blueprint(workflows_workspace.blueprint, url_prefix="/api")
     app.session = Session
     return app

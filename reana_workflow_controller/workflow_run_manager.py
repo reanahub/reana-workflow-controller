@@ -14,33 +14,43 @@ from flask import current_app
 from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
-from reana_commons.config import (CVMFS_REPOSITORIES,
-                                  INTERACTIVE_SESSION_TYPES,
-                                  K8S_CERN_EOS_AVAILABLE,
-                                  K8S_REANA_SERVICE_ACCOUNT_NAME,
-                                  REANA_COMPONENT_NAMING_SCHEME,
-                                  REANA_COMPONENT_PREFIX,
-                                  REANA_STORAGE_BACKEND, SHARED_VOLUME_PATH,
-                                  WORKFLOW_RUNTIME_USER_GID,
-                                  WORKFLOW_RUNTIME_USER_NAME,
-                                  WORKFLOW_RUNTIME_USER_UID)
+from reana_commons.config import (
+    CVMFS_REPOSITORIES,
+    INTERACTIVE_SESSION_TYPES,
+    K8S_CERN_EOS_AVAILABLE,
+    K8S_REANA_SERVICE_ACCOUNT_NAME,
+    REANA_COMPONENT_NAMING_SCHEME,
+    REANA_COMPONENT_PREFIX,
+    REANA_STORAGE_BACKEND,
+    SHARED_VOLUME_PATH,
+    WORKFLOW_RUNTIME_USER_GID,
+    WORKFLOW_RUNTIME_USER_NAME,
+    WORKFLOW_RUNTIME_USER_UID,
+)
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.k8s.volumes import get_shared_volume
-from reana_commons.utils import (build_unique_component_name,
-                                 create_cvmfs_persistent_volume_claim,
-                                 create_cvmfs_storage_class, format_cmd)
+from reana_commons.utils import (
+    build_unique_component_name,
+    create_cvmfs_persistent_volume_claim,
+    create_cvmfs_storage_class,
+    format_cmd,
+)
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
 from reana_db.models import Job, JobStatus
 
-from reana_workflow_controller.errors import (REANAInteractiveSessionError,
-                                              REANAWorkflowControllerError,
-                                              REANAWorkflowStopError)
-from reana_workflow_controller.k8s import (build_interactive_k8s_objects,
-                                           delete_k8s_ingress_object,
-                                           delete_k8s_objects_if_exist,
-                                           instantiate_chained_k8s_objects)
+from reana_workflow_controller.errors import (
+    REANAInteractiveSessionError,
+    REANAWorkflowControllerError,
+    REANAWorkflowStopError,
+)
+from reana_workflow_controller.k8s import (
+    build_interactive_k8s_objects,
+    delete_k8s_ingress_object,
+    delete_k8s_objects_if_exist,
+    instantiate_chained_k8s_objects,
+)
 
 from reana_workflow_controller.config import (  # isort:skip
     IMAGE_PULL_SECRETS,
@@ -50,45 +60,54 @@ from reana_workflow_controller.config import (  # isort:skip
     SHARED_FS_MAPPING,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
-    DEBUG_ENV_VARS)
+    DEBUG_ENV_VARS,
+)
 
 
-class WorkflowRunManager():
+class WorkflowRunManager:
     """Interface which specifies how to manage workflow runs."""
 
-    if os.getenv('FLASK_ENV') == 'development':
-        WORKFLOW_ENGINE_COMMON_ENV_VARS.extend(
-            DEBUG_ENV_VARS)
+    if os.getenv("FLASK_ENV") == "development":
+        WORKFLOW_ENGINE_COMMON_ENV_VARS.extend(DEBUG_ENV_VARS)
 
     engine_mapping = {
-        'cwl': {'image': '{}'.
-                         format(REANA_WORKFLOW_ENGINE_IMAGE_CWL),
-                'command': ("run-cwl-workflow "
-                            "--workflow-uuid {id} "
-                            "--workflow-workspace {workspace} "
-                            "--workflow-json '{workflow_json}' "
-                            "--workflow-file '{workflow_file}' "
-                            "--workflow-parameters '{parameters}' "
-                            "--operational-options '{options}' "),
-                'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
-        'yadage': {'image': '{}'.
-                            format(REANA_WORKFLOW_ENGINE_IMAGE_YADAGE),
-                   'command': ("run-yadage-workflow "
-                               "--workflow-uuid {id} "
-                               "--workflow-workspace {workspace} "
-                               "--workflow-file '{workflow_file}' "
-                               "--workflow-parameters '{parameters}' "
-                               "--operational-options '{options}' "),
-                   'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
-        'serial': {'image': '{}'.
-                            format(REANA_WORKFLOW_ENGINE_IMAGE_SERIAL),
-                   'command': ("run-serial-workflow "
-                               "--workflow-uuid {id} "
-                               "--workflow-workspace {workspace} "
-                               "--workflow-json '{workflow_json}' "
-                               "--workflow-parameters '{parameters}' "
-                               "--operational-options '{options}' "),
-                   'environment_variables': WORKFLOW_ENGINE_COMMON_ENV_VARS},
+        "cwl": {
+            "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_CWL),
+            "command": (
+                "run-cwl-workflow "
+                "--workflow-uuid {id} "
+                "--workflow-workspace {workspace} "
+                "--workflow-json '{workflow_json}' "
+                "--workflow-file '{workflow_file}' "
+                "--workflow-parameters '{parameters}' "
+                "--operational-options '{options}' "
+            ),
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+        },
+        "yadage": {
+            "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_YADAGE),
+            "command": (
+                "run-yadage-workflow "
+                "--workflow-uuid {id} "
+                "--workflow-workspace {workspace} "
+                "--workflow-file '{workflow_file}' "
+                "--workflow-parameters '{parameters}' "
+                "--operational-options '{options}' "
+            ),
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+        },
+        "serial": {
+            "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_SERIAL),
+            "command": (
+                "run-serial-workflow "
+                "--workflow-uuid {id} "
+                "--workflow-workspace {workspace} "
+                "--workflow-json '{workflow_json}' "
+                "--workflow-parameters '{parameters}' "
+                "--operational-options '{options}' "
+            ),
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+        },
     }
     """Mapping between engines and their basis configuration."""
 
@@ -105,7 +124,7 @@ class WorkflowRunManager():
         :param mode: Mode in which the workflow runs: ``workflow`` or
             ``session``.
         """
-        return build_unique_component_name(f'run-{mode}', self.workflow.id_)
+        return build_unique_component_name(f"run-{mode}", self.workflow.id_)
 
     def _generate_interactive_workflow_path(self):
         """Generate the path to access the interactive workflow."""
@@ -114,11 +133,9 @@ class WorkflowRunManager():
     def _get_merged_workflow_input_parameters(self, overwrite=None):
         """Return workflow input parameters merged with live ones, if given."""
         overwrite = overwrite or {}
-        input_parameters = dict(self.workflow.get_input_parameters(),
-                                **overwrite)
+        input_parameters = dict(self.workflow.get_input_parameters(), **overwrite)
         if self.workflow.input_parameters:
-            input_parameters = dict(input_parameters,
-                                    **self.workflow.input_parameters)
+            input_parameters = dict(input_parameters, **self.workflow.input_parameters)
         return input_parameters
 
     def _get_merged_workflow_operational_options(self, overwrite=None):
@@ -126,75 +143,85 @@ class WorkflowRunManager():
         overwrite = overwrite or {}
         return dict(self.workflow.operational_options, **overwrite)
 
-    def start_batch_workflow_run(self, overwrite_input_params=None,
-                                 overwrite_operational_options=None):
+    def start_batch_workflow_run(
+        self, overwrite_input_params=None, overwrite_operational_options=None
+    ):
         """Start a batch workflow run."""
-        raise NotImplementedError('')
+        raise NotImplementedError("")
 
     def start_interactive_session(self):
         """Start an interactive workflow run."""
-        raise NotImplementedError('')
+        raise NotImplementedError("")
 
     def stop_batch_workflow_run(self):
         """Stop a batch workflow run."""
-        raise NotImplementedError('')
+        raise NotImplementedError("")
 
     def _workflow_engine_image(self):
         """Return the correct image for the current workflow type."""
-        return WorkflowRunManager.engine_mapping[self.workflow.type_]['image']
+        return WorkflowRunManager.engine_mapping[self.workflow.type_]["image"]
 
-    def _workflow_engine_command(self, overwrite_input_parameters=None,
-                                 overwrite_operational_options=None):
+    def _workflow_engine_command(
+        self, overwrite_input_parameters=None, overwrite_operational_options=None
+    ):
         """Return the command to be run for a given workflow engine."""
-        return (WorkflowRunManager.engine_mapping[self.workflow.type_]
-                ['command'].format(
-                    id=self.workflow.id_,
-                    workspace=self.workflow.workspace_path,
-                    workflow_json=base64.standard_b64encode(json.dumps(
-                        self.workflow.get_specification()).encode()),
-                    workflow_file=self.workflow.reana_specification.get(
-                        'workflow').get('file'),
-                    parameters=base64.standard_b64encode(json.dumps(
-                        self._get_merged_workflow_input_parameters(
-                            overwrite=overwrite_input_parameters
-                        )).encode()),
-                    options=base64.standard_b64encode(json.dumps(
-                        self._get_merged_workflow_operational_options(
-                            overwrite=overwrite_operational_options
-                        )).encode())))
+        return WorkflowRunManager.engine_mapping[self.workflow.type_]["command"].format(
+            id=self.workflow.id_,
+            workspace=self.workflow.workspace_path,
+            workflow_json=base64.standard_b64encode(
+                json.dumps(self.workflow.get_specification()).encode()
+            ),
+            workflow_file=self.workflow.reana_specification.get("workflow").get("file"),
+            parameters=base64.standard_b64encode(
+                json.dumps(
+                    self._get_merged_workflow_input_parameters(
+                        overwrite=overwrite_input_parameters
+                    )
+                ).encode()
+            ),
+            options=base64.standard_b64encode(
+                json.dumps(
+                    self._get_merged_workflow_operational_options(
+                        overwrite=overwrite_operational_options
+                    )
+                ).encode()
+            ),
+        )
 
     def retrieve_required_cvmfs_repos(self):
         """Build the list of needed CVMFS repos."""
-        required_resources = \
-            self.workflow.reana_specification['workflow'].get('resources', {})
-        return required_resources.get('cvmfs', [])
+        required_resources = self.workflow.reana_specification["workflow"].get(
+            "resources", {}
+        )
+        return required_resources.get("cvmfs", [])
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
-        env_vars = list(WorkflowRunManager.engine_mapping[
-            self.workflow.type_]['environment_variables'])
-        env_vars.extend([{
-            'name': 'REANA_USER_ID',
-            'value': str(self.workflow.owner_id)
-        }])
-        cvmfs_volumes = self.retrieve_required_cvmfs_repos() or 'false'
+        env_vars = list(
+            WorkflowRunManager.engine_mapping[self.workflow.type_][
+                "environment_variables"
+            ]
+        )
+        env_vars.extend(
+            [{"name": "REANA_USER_ID", "value": str(self.workflow.owner_id)}]
+        )
+        cvmfs_volumes = self.retrieve_required_cvmfs_repos() or "false"
         if type(cvmfs_volumes) == list:
-            cvmfs_env_var = {'name': 'REANA_MOUNT_CVMFS',
-                             'value': str(cvmfs_volumes)}
+            cvmfs_env_var = {"name": "REANA_MOUNT_CVMFS", "value": str(cvmfs_volumes)}
             env_vars.append(cvmfs_env_var)
             for cvmfs_volume in cvmfs_volumes:
                 if cvmfs_volume in CVMFS_REPOSITORIES:
                     create_cvmfs_storage_class(cvmfs_volume)
                     create_cvmfs_persistent_volume_claim(cvmfs_volume)
 
-        return (env_vars)
+        return env_vars
 
     def get_workflow_running_jobs_as_backend_ids(self):
         """Get all running jobs of a workflow as backend job IDs."""
         session = Session.object_session(self.workflow)
         rows = session.query(Job).filter_by(
-            workflow_uuid=str(self.workflow.id_),
-            status=JobStatus.running)
+            workflow_uuid=str(self.workflow.id_), status=JobStatus.running
+        )
         backend_ids = [j.backend_job_id for j in rows.all()]
         return backend_ids
 
@@ -202,11 +229,12 @@ class WorkflowRunManager():
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
 
-    default_namespace = 'default'
+    default_namespace = "default"
     """Default Kubernetes namespace."""
 
-    def start_batch_workflow_run(self, overwrite_input_params=None,
-                                 overwrite_operational_options=None):
+    def start_batch_workflow_run(
+        self, overwrite_input_params=None, overwrite_operational_options=None
+    ):
         """Start a batch workflow run.
 
         :param overwrite_input_params: Dictionary with parameters to be
@@ -216,18 +244,18 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             options to be overwritten or added to the current workflow run.
         :param type: Dict
         """
-        workflow_run_name = self._workflow_run_name_generator('batch')
+        workflow_run_name = self._workflow_run_name_generator("batch")
         job = self._create_job_spec(
             workflow_run_name,
             overwrite_input_parameters=overwrite_input_params,
-            overwrite_operational_options=overwrite_operational_options)
+            overwrite_operational_options=overwrite_operational_options,
+        )
         try:
             current_k8s_batchv1_api_client.create_namespaced_job(
-                namespace=KubernetesWorkflowRunManager.default_namespace,
-                body=job)
+                namespace=KubernetesWorkflowRunManager.default_namespace, body=job
+            )
         except ApiException as e:
-            msg = 'Workflow engine/job controller pod ' \
-                  'creation failed {}'.format(e)
+            msg = "Workflow engine/job controller pod " "creation failed {}".format(e)
             logging.error(msg, exc_info=True)
             raise e
 
@@ -240,28 +268,31 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """
         action_completed = True
         try:
-            if (interactive_session_type
-                    not in INTERACTIVE_SESSION_TYPES):
+            if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
                 raise REANAInteractiveSessionError(
                     "Interactive type {} does not exist.".format(
-                        interactive_session_type))
+                        interactive_session_type
+                    )
+                )
             access_path = self._generate_interactive_workflow_path()
             self.workflow.interactive_session_type = interactive_session_type
             self.workflow.interactive_session = access_path
-            workflow_run_name = \
-                self._workflow_run_name_generator('session')
+            workflow_run_name = self._workflow_run_name_generator("session")
             self.workflow.interactive_session_name = workflow_run_name
-            kubernetes_objects = \
-                build_interactive_k8s_objects[interactive_session_type](
-                    workflow_run_name, self.workflow.workspace_path,
-                    access_path,
-                    access_token=self.workflow.get_owner_access_token(),
-                    cvmfs_repos=self.retrieve_required_cvmfs_repos(),
-                    **kwargs)
+            kubernetes_objects = build_interactive_k8s_objects[
+                interactive_session_type
+            ](
+                workflow_run_name,
+                self.workflow.workspace_path,
+                access_path,
+                access_token=self.workflow.get_owner_access_token(),
+                cvmfs_repos=self.retrieve_required_cvmfs_repos(),
+                **kwargs,
+            )
 
             instantiate_chained_k8s_objects(
-                kubernetes_objects,
-                KubernetesWorkflowRunManager.default_namespace)
+                kubernetes_objects, KubernetesWorkflowRunManager.default_namespace
+            )
             return access_path
 
         except KeyError:
@@ -269,18 +300,17 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             raise REANAInteractiveSessionError(
                 "Unsupported interactive session type {}.".format(
                     interactive_session_type
-                ))
+                )
+            )
         except ApiException as api_exception:
             action_completed = False
             raise REANAInteractiveSessionError(
-                "Connection to Kubernetes has failed:\n{}".format(
-                    api_exception)
+                "Connection to Kubernetes has failed:\n{}".format(api_exception)
             )
         except Exception as e:
             action_completed = False
             raise REANAInteractiveSessionError(
-                "Unkown error while starting interactive workflow run:\n{}"
-                .format(e)
+                "Unkown error while starting interactive workflow run:\n{}".format(e)
             )
         finally:
             if not action_completed:
@@ -288,7 +318,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 if kubernetes_objects:
                     delete_k8s_objects_if_exist(
                         kubernetes_objects,
-                        KubernetesWorkflowRunManager.default_namespace)
+                        KubernetesWorkflowRunManager.default_namespace,
+                    )
 
             current_db_sessions = Session.object_session(self.workflow)
             current_db_sessions.add(self.workflow)
@@ -298,7 +329,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """Stop an interactive workflow run."""
         delete_k8s_ingress_object(
             ingress_name=self.workflow.interactive_session_name,
-            namespace=KubernetesWorkflowRunManager.default_namespace
+            namespace=KubernetesWorkflowRunManager.default_namespace,
         )
         self.workflow.interactive_session_name = None
         self.workflow.interactive_session = None
@@ -309,9 +340,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def stop_batch_workflow_run(self):
         """Stop a batch workflow run along with all its dependent jobs."""
-        workflow_run_name = self._workflow_run_name_generator('batch')
-        to_delete = self.get_workflow_running_jobs_as_backend_ids() + \
-            [workflow_run_name]
+        workflow_run_name = self._workflow_run_name_generator("batch")
+        to_delete = self.get_workflow_running_jobs_as_backend_ids() + [
+            workflow_run_name
+        ]
         error = False
         for job in to_delete:
             try:
@@ -319,21 +351,31 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     job,
                     KubernetesWorkflowRunManager.default_namespace,
                     body=V1DeleteOptions(
-                        grace_period_seconds=0,
-                        propagation_policy='Background'))
+                        grace_period_seconds=0, propagation_policy="Background"
+                    ),
+                )
             except ApiException:
-                logging.error(f'Error while trying to stop {self.workflow.id_}'
-                              f': Kubernetes job {job} could not be deleted.',
-                              exc_info=True)
+                logging.error(
+                    f"Error while trying to stop {self.workflow.id_}"
+                    f": Kubernetes job {job} could not be deleted.",
+                    exc_info=True,
+                )
                 error = True
                 continue
         if error:
             raise REANAWorkflowStopError(
-                f'Workflow {self.workflow.id_} could not be stopped.')
+                f"Workflow {self.workflow.id_} could not be stopped."
+            )
 
-    def _create_job_spec(self, name, command=None, image=None,
-                         env_vars=None, overwrite_input_parameters=None,
-                         overwrite_operational_options=None):
+    def _create_job_spec(
+        self,
+        name,
+        command=None,
+        image=None,
+        env_vars=None,
+        overwrite_input_parameters=None,
+        overwrite_operational_options=None,
+    ):
         """Instantiate a Kubernetes job.
 
         :param name: Name of the job.
@@ -353,183 +395,152 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         image = image or self._workflow_engine_image()
         command = command or self._workflow_engine_command(
             overwrite_input_parameters=overwrite_input_parameters,
-            overwrite_operational_options=overwrite_operational_options
+            overwrite_operational_options=overwrite_operational_options,
         )
         workflow_engine_env_vars = env_vars or self._workflow_engine_env_vars()
         job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
-        workspace_mount, workspace_volume = \
-            get_shared_volume(self.workflow.workspace_path)
-        db_mount, _ = get_shared_volume('db')
+        workspace_mount, workspace_volume = get_shared_volume(
+            self.workflow.workspace_path
+        )
+        db_mount, _ = get_shared_volume("db")
 
         workflow_metadata = client.V1ObjectMeta(
-            name=name, labels={'reana_workflow_mode': 'batch'})
+            name=name, labels={"reana_workflow_mode": "batch"}
+        )
         job = client.V1Job()
-        job.api_version = 'batch/v1'
-        job.kind = 'Job'
+        job.api_version = "batch/v1"
+        job.kind = "Job"
         job.metadata = workflow_metadata
-        spec = client.V1JobSpec(
-            template=client.V1PodTemplateSpec())
+        spec = client.V1JobSpec(template=client.V1PodTemplateSpec())
         spec.template.metadata = workflow_metadata
 
         workflow_engine_container = client.V1Container(
-            name=current_app.config['WORKFLOW_ENGINE_NAME'],
+            name=current_app.config["WORKFLOW_ENGINE_NAME"],
             image=image,
-            image_pull_policy='IfNotPresent',
+            image_pull_policy="IfNotPresent",
             env=[],
             volume_mounts=[],
-            command=['/bin/bash', '-c'],
-            args=command)
-        workflow_engine_env_vars.extend([
-            {
-                'name': 'REANA_JOB_CONTROLLER_SERVICE_PORT_HTTP',
-                'value':
-                    str(current_app.config['JOB_CONTROLLER_CONTAINER_PORT'])
-            },
-            {
-                'name': 'REANA_JOB_CONTROLLER_SERVICE_HOST',
-                'value': 'localhost'
-            },
-            {
-                'name': 'REANA_COMPONENT_PREFIX',
-                'value': REANA_COMPONENT_PREFIX
-            },
-            {
-                'name': 'REANA_COMPONENT_NAMING_SCHEME',
-                'value': REANA_COMPONENT_NAMING_SCHEME,
-            },
-        ])
+            command=["/bin/bash", "-c"],
+            args=command,
+        )
+        workflow_engine_env_vars.extend(
+            [
+                {
+                    "name": "REANA_JOB_CONTROLLER_SERVICE_PORT_HTTP",
+                    "value": str(current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]),
+                },
+                {"name": "REANA_JOB_CONTROLLER_SERVICE_HOST", "value": "localhost"},
+                {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
+                {
+                    "name": "REANA_COMPONENT_NAMING_SCHEME",
+                    "value": REANA_COMPONENT_NAMING_SCHEME,
+                },
+            ]
+        )
         workflow_engine_container.env.extend(workflow_engine_env_vars)
-        workflow_engine_container.security_context = \
-            client.V1SecurityContext(
-                run_as_group=WORKFLOW_RUNTIME_USER_GID,
-                run_as_user=WORKFLOW_RUNTIME_USER_UID
-            )
+        workflow_engine_container.security_context = client.V1SecurityContext(
+            run_as_group=WORKFLOW_RUNTIME_USER_GID,
+            run_as_user=WORKFLOW_RUNTIME_USER_UID,
+        )
         workflow_engine_container.volume_mounts = [workspace_mount]
         secrets_store = REANAUserSecretsStore(owner_id)
-        job_controller_env_secrets = secrets_store.\
-            get_env_secrets_as_k8s_spec()
+        job_controller_env_secrets = secrets_store.get_env_secrets_as_k8s_spec()
 
-        user = \
-            secrets_store.get_secret_value('CERN_USER') or \
-            WORKFLOW_RUNTIME_USER_NAME
+        user = secrets_store.get_secret_value("CERN_USER") or WORKFLOW_RUNTIME_USER_NAME
 
         job_controller_container = client.V1Container(
-            name=current_app.config['JOB_CONTROLLER_NAME'],
-            image=current_app.config['JOB_CONTROLLER_IMAGE'],
-            image_pull_policy='IfNotPresent',
+            name=current_app.config["JOB_CONTROLLER_NAME"],
+            image=current_app.config["JOB_CONTROLLER_IMAGE"],
+            image_pull_policy="IfNotPresent",
             env=[],
             volume_mounts=[],
-            command=['/bin/bash', '-c'],
+            command=["/bin/bash", "-c"],
             args=self._create_job_controller_startup_cmd(user),
-            ports=[])
+            ports=[],
+        )
 
-        job_controller_env_vars.extend([
-            {
-                'name': 'REANA_USER_ID',
-                'value': owner_id
-            }, {
-                'name': 'CERN_USER',
-                'value': user
-            }, {
-                'name': 'USER',  # Required by HTCondor
-                'value': user
-            },
-            {
-                'name': 'K8S_CERN_EOS_AVAILABLE',
-                'value': K8S_CERN_EOS_AVAILABLE
-            },
-            {
-                'name': 'IMAGE_PULL_SECRETS',
-                'value': ','.join(IMAGE_PULL_SECRETS)
-            },
-            {
-                'name': 'REANA_SQLALCHEMY_DATABASE_URI',
-                'value': SQLALCHEMY_DATABASE_URI
-            },
-            {
-                'name': 'REANA_STORAGE_BACKEND',
-                'value': REANA_STORAGE_BACKEND
-            },
-            {
-                'name': 'REANA_COMPONENT_PREFIX',
-                'value': REANA_COMPONENT_PREFIX
-            },
-            {
-                'name': 'REANA_COMPONENT_NAMING_SCHEME',
-                'value': REANA_COMPONENT_NAMING_SCHEME,
-            },
-        ])
+        job_controller_env_vars.extend(
+            [
+                {"name": "REANA_USER_ID", "value": owner_id},
+                {"name": "CERN_USER", "value": user},
+                {"name": "USER", "value": user},  # Required by HTCondor
+                {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
+                {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
+                {
+                    "name": "REANA_SQLALCHEMY_DATABASE_URI",
+                    "value": SQLALCHEMY_DATABASE_URI,
+                },
+                {"name": "REANA_STORAGE_BACKEND", "value": REANA_STORAGE_BACKEND},
+                {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
+                {
+                    "name": "REANA_COMPONENT_NAMING_SCHEME",
+                    "value": REANA_COMPONENT_NAMING_SCHEME,
+                },
+            ]
+        )
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
 
-        secrets_volume_mount = \
-            secrets_store.get_secrets_volume_mount_as_k8s_spec()
+        secrets_volume_mount = secrets_store.get_secrets_volume_mount_as_k8s_spec()
         job_controller_container.volume_mounts = [workspace_mount, db_mount]
         job_controller_container.volume_mounts.append(secrets_volume_mount)
 
-        job_controller_container.ports = [{
-            "containerPort":
-                current_app.config['JOB_CONTROLLER_CONTAINER_PORT']
-        }]
+        job_controller_container.ports = [
+            {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
+        ]
         containers = [workflow_engine_container, job_controller_container]
-        spec.template.spec = client.V1PodSpec(
-            containers=containers)
-        spec.template.spec.service_account_name = \
-            K8S_REANA_SERVICE_ACCOUNT_NAME
+        spec.template.spec = client.V1PodSpec(containers=containers)
+        spec.template.spec.service_account_name = K8S_REANA_SERVICE_ACCOUNT_NAME
         spec.template.spec.volumes = [
             workspace_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 
-        if os.getenv('FLASK_ENV') == 'development':
-            code_volume_name = 'reana-code'
-            code_mount_path = '/code'
-            k8s_code_volume = client.V1Volume(
-                name=code_volume_name
-            )
-            k8s_code_volume.host_path = client.V1HostPathVolumeSource(
-                code_mount_path
-            )
+        if os.getenv("FLASK_ENV") == "development":
+            code_volume_name = "reana-code"
+            code_mount_path = "/code"
+            k8s_code_volume = client.V1Volume(name=code_volume_name)
+            k8s_code_volume.host_path = client.V1HostPathVolumeSource(code_mount_path)
             spec.template.spec.volumes.append(k8s_code_volume)
 
             for container in spec.template.spec.containers:
-                container.env.extend(current_app.config['DEBUG_ENV_VARS'])
-                sub_path = f'reana-{container.name}'
-                if container.name == 'workflow-engine':
-                    sub_path += f'-{self.workflow.type_}'
-                container.volume_mounts.append({
-                    'name': code_volume_name,
-                    'mountPath': code_mount_path,
-                    'subPath': sub_path
-                })
+                container.env.extend(current_app.config["DEBUG_ENV_VARS"])
+                sub_path = f"reana-{container.name}"
+                if container.name == "workflow-engine":
+                    sub_path += f"-{self.workflow.type_}"
+                container.volume_mounts.append(
+                    {
+                        "name": code_volume_name,
+                        "mountPath": code_mount_path,
+                        "subPath": sub_path,
+                    }
+                )
 
         job.spec = spec
-        job.spec.template.spec.restart_policy = 'Never'
+        job.spec.template.spec.restart_policy = "Never"
         job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
         job.spec.backoff_limit = 0
         return job
 
     def _create_job_controller_startup_cmd(self, user=None):
         """Create job controller startup cmd."""
-        base_cmd = 'flask run -h 0.0.0.0;'
+        base_cmd = "flask run -h 0.0.0.0;"
         if user:
-            add_group_cmd = 'groupadd -f -g {} {};'.format(
-                WORKFLOW_RUNTIME_USER_GID,
-                WORKFLOW_RUNTIME_USER_GID)
-            add_user_cmd = 'useradd -u {} -g {} -M {};'.format(
+            add_group_cmd = "groupadd -f -g {} {};".format(
+                WORKFLOW_RUNTIME_USER_GID, WORKFLOW_RUNTIME_USER_GID
+            )
+            add_user_cmd = "useradd -u {} -g {} -M {};".format(
+                WORKFLOW_RUNTIME_USER_UID, WORKFLOW_RUNTIME_USER_GID, user
+            )
+            chown_workspace_cmd = "chown -R {}:{} {};".format(
                 WORKFLOW_RUNTIME_USER_UID,
                 WORKFLOW_RUNTIME_USER_GID,
-                user)
-            chown_workspace_cmd = 'chown -R {}:{} {};'.format(
-                WORKFLOW_RUNTIME_USER_UID,
-                WORKFLOW_RUNTIME_USER_GID,
-                SHARED_VOLUME_PATH + '/' + self.workflow.workspace_path
+                SHARED_VOLUME_PATH + "/" + self.workflow.workspace_path,
             )
             run_app_cmd = 'su {} /bin/bash -c "{}"'.format(user, base_cmd)
-            full_cmd = add_group_cmd + add_user_cmd + chown_workspace_cmd + \
-                run_app_cmd
+            full_cmd = add_group_cmd + add_user_cmd + chown_workspace_cmd + run_app_cmd
             return [full_cmd]
         else:
             return base_cmd.split()

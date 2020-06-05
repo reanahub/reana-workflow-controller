@@ -19,18 +19,21 @@ from werkzeug.exceptions import NotFound
 
 from reana_db.models import User
 from reana_db.utils import _get_workflow_with_uuid_or_name
-from reana_workflow_controller.errors import (REANAUploadPathError,
-                                              REANAWorkflowControllerError)
+from reana_workflow_controller.errors import (
+    REANAUploadPathError,
+    REANAWorkflowControllerError,
+)
 from reana_workflow_controller.rest.utils import (
-    get_workflow_name, list_directory_files,
-    remove_files_recursive_wildcard)
+    get_workflow_name,
+    list_directory_files,
+    remove_files_recursive_wildcard,
+)
 from reana_workflow_controller.rest.utils import mv_files
 
-blueprint = Blueprint('workspaces', __name__)
+blueprint = Blueprint("workspaces", __name__)
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace',
-                 methods=['POST'])
+@blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["POST"])
 def upload_file(workflow_id_or_name):
     r"""Upload file to workspace.
 
@@ -103,49 +106,63 @@ def upload_file(workflow_id_or_name):
             Request failed. Internal controller error.
     """
     try:
-        if not ('application/octet-stream' in
-                request.headers.get('Content-Type')):
-            return jsonify(
-                {"message": f'Wrong Content-Type '
-                            f'{request.headers.get("Content-Type")} '
-                            f'use application/octet-stream'}), 400
-        user_uuid = request.args['user']
-        full_file_name = request.args['file_name']
+        if not ("application/octet-stream" in request.headers.get("Content-Type")):
+            return (
+                jsonify(
+                    {
+                        "message": f"Wrong Content-Type "
+                        f'{request.headers.get("Content-Type")} '
+                        f"use application/octet-stream"
+                    }
+                ),
+                400,
+            )
+        user_uuid = request.args["user"]
+        full_file_name = request.args["file_name"]
         if not full_file_name:
-            raise ValueError('The file transferred needs to have name.')
+            raise ValueError("The file transferred needs to have name.")
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
 
         filename = full_file_name.split("/")[-1]
 
         # Remove starting '/' in path
-        if full_file_name[0] == '/':
+        if full_file_name[0] == "/":
             full_file_name = full_file_name[1:]
-        elif '..' in full_file_name.split("/"):
+        elif ".." in full_file_name.split("/"):
             raise REANAUploadPathError('Path cannot contain "..".')
         absolute_workspace_path = os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'],
-            workflow.workspace_path)
+            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
+        )
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
-            absolute_workspace_path = os.path.join(absolute_workspace_path,
-                                                   "/".join(dirs))
+            absolute_workspace_path = os.path.join(
+                absolute_workspace_path, "/".join(dirs)
+            )
             if not os.path.exists(absolute_workspace_path):
                 os.makedirs(absolute_workspace_path)
         absolute_file_path = os.path.join(absolute_workspace_path, filename)
 
         FileStorage(request.stream).save(absolute_file_path, buffer_size=32768)
-        return jsonify(
-          {'message': '{} has been successfully uploaded.'.format(
-            full_file_name)}), 200
+        return (
+            jsonify(
+                {"message": "{} has been successfully uploaded.".format(full_file_name)}
+            ),
+            200,
+        )
 
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment'
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment"
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -153,8 +170,8 @@ def upload_file(workflow_id_or_name):
 
 
 @blueprint.route(
-    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
-    methods=['GET'])
+    "/workflows/<workflow_id_or_name>/workspace/<path:file_name>", methods=["GET"]
+)
 def download_file(workflow_id_or_name, file_name):  # noqa
     r"""Download a file from the workspace.
 
@@ -217,48 +234,56 @@ def download_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user_uuid = request.args['user']
+        user_uuid = request.args["user"]
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify(
-                {'message': 'User {} does not exist'.format(user)}), 404
+            return jsonify({"message": "User {} does not exist".format(user)}), 404
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
 
         absolute_workflow_workspace_path = os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'],
-            workflow.workspace_path)
+            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
+        )
 
-        preview = json.loads(request.args.get('preview', 'false').lower())
-        response_mime_type = 'multipart/form-data'
+        preview = json.loads(request.args.get("preview", "false").lower())
+        response_mime_type = "multipart/form-data"
         file_mime_type = mimetypes.guess_type(file_name)[0]
         # Only display image files as preview
-        if preview and file_mime_type and file_mime_type.startswith('image'):
+        if preview and file_mime_type and file_mime_type.startswith("image"):
             response_mime_type = file_mime_type
-        return send_from_directory(absolute_workflow_workspace_path,
-                                   file_name,
-                                   mimetype=response_mime_type,
-                                   as_attachment=True), 200
+        return (
+            send_from_directory(
+                absolute_workflow_workspace_path,
+                file_name,
+                mimetype=response_mime_type,
+                as_attachment=True,
+            ),
+            200,
+        )
 
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except NotFound as e:
-        return jsonify(
-            {"message": "{0} does not exist.".format(file_name)}), 404
+        return jsonify({"message": "{0} does not exist.".format(file_name)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
 @blueprint.route(
-    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
-    methods=['DELETE'])
+    "/workflows/<workflow_id_or_name>/workspace/<path:file_name>", methods=["DELETE"]
+)
 def delete_file(workflow_id_or_name, file_name):  # noqa
     r"""Delete a file from the workspace.
 
@@ -311,41 +336,42 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user_uuid = request.args['user']
+        user_uuid = request.args["user"]
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify(
-                {'message': 'User {} does not exist'.format(user)}), 404
+            return jsonify({"message": "User {} does not exist".format(user)}), 404
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         abs_path_to_workspace = os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'], workflow.workspace_path)
-        deleted = remove_files_recursive_wildcard(
-          abs_path_to_workspace, file_name)
+            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
+        )
+        deleted = remove_files_recursive_wildcard(abs_path_to_workspace, file_name)
 
         return jsonify(deleted), 200
 
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except NotFound as e:
-        return jsonify(
-            {"message": "{0} does not exist.".format(file_name)}), 404
+        return jsonify({"message": "{0} does not exist.".format(file_name)}), 404
     except OSError as e:
-        return jsonify(
-            {"message": "Error while deleting {}.".format(file_name)}), 500
+        return jsonify({"message": "Error while deleting {}.".format(file_name)}), 500
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace',
-                 methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["GET"])
 def get_files(workflow_id_or_name):  # noqa
     r"""List all files contained in a workspace.
 
@@ -407,28 +433,35 @@ def get_files(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_uuid = request.args['user']
+        user_uuid = request.args["user"]
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify(
-                {'message': 'User {} does not exist'.format(user)}), 404
+            return jsonify({"message": "User {} does not exist".format(user)}), 404
 
-        file_type = request.args.get('file_type') \
-            if request.args.get('file_type') else 'input'
+        file_type = (
+            request.args.get("file_type") if request.args.get("file_type") else "input"
+        )
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
-        file_list = list_directory_files(os.path.join(
-            current_app.config['SHARED_VOLUME_PATH'],
-            workflow.workspace_path))
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        file_list = list_directory_files(
+            os.path.join(
+                current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
+            )
+        )
         return jsonify(file_list), 200
 
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
     except CreateFailed:
@@ -437,8 +470,7 @@ def get_files(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/move_files/<workflow_id_or_name>',
-                 methods=['PUT'])
+@blueprint.route("/workflows/move_files/<workflow_id_or_name>", methods=["PUT"])
 def move_files(workflow_id_or_name):  # noqa
     r"""Move files within workspace.
     ---
@@ -526,34 +558,54 @@ def move_files(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_uuid = request.args['user']
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_uuid)
-        source = request.args['source']
-        target = request.args['target']
-        if workflow.status == 'running':
-            return jsonify({'message': 'Workflow is running, files can not be '
-                            'moved'}), 400
+        user_uuid = request.args["user"]
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        source = request.args["source"]
+        target = request.args["target"]
+        if workflow.status == "running":
+            return (
+                jsonify({"message": "Workflow is running, files can not be " "moved"}),
+                400,
+            )
 
         if not str(workflow.owner_id) == user_uuid:
-            return jsonify(
-                {'message': 'User {} is not allowed to access workflow {}'
-                 .format(user_uuid, workflow_id_or_name)}), 403
+            return (
+                jsonify(
+                    {
+                        "message": "User {} is not allowed to access workflow {}".format(
+                            user_uuid, workflow_id_or_name
+                        )
+                    }
+                ),
+                403,
+            )
 
         mv_files(source, target, workflow)
-        message = 'File(s) {} were successfully moved'.format(source)
+        message = "File(s) {} were successfully moved".format(source)
 
-        return jsonify({
-            'message': message,
-            'workflow_id': workflow.id_,
-            'workflow_name': get_workflow_name(workflow)}), 200
+        return (
+            jsonify(
+                {
+                    "message": message,
+                    "workflow_id": workflow.id_,
+                    "workflow_name": get_workflow_name(workflow),
+                }
+            ),
+            200,
+        )
 
     except ValueError:
-        return jsonify({'message': 'REANA_WORKON is set to {0}, but '
-                                   'that workflow does not exist. '
-                                   'Please set your REANA_WORKON environment '
-                                   'variable appropriately.'.
-                                   format(workflow_id_or_name)}), 404
+        return (
+            jsonify(
+                {
+                    "message": "REANA_WORKON is set to {0}, but "
+                    "that workflow does not exist. "
+                    "Please set your REANA_WORKON environment "
+                    "variable appropriately.".format(workflow_id_or_name)
+                }
+            ),
+            404,
+        )
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
     except KeyError as e:
