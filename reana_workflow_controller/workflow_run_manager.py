@@ -18,9 +18,11 @@ from reana_commons.config import (
     CVMFS_REPOSITORIES,
     INTERACTIVE_SESSION_TYPES,
     K8S_CERN_EOS_AVAILABLE,
-    K8S_REANA_SERVICE_ACCOUNT_NAME,
+    REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_COMPONENT_NAMING_SCHEME,
     REANA_COMPONENT_PREFIX,
+    REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_STORAGE_BACKEND,
     SHARED_VOLUME_PATH,
     WORKFLOW_RUNTIME_USER_GID,
@@ -229,9 +231,6 @@ class WorkflowRunManager:
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
 
-    default_namespace = "default"
-    """Default Kubernetes namespace."""
-
     def start_batch_workflow_run(
         self, overwrite_input_params=None, overwrite_operational_options=None
     ):
@@ -252,7 +251,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         try:
             current_k8s_batchv1_api_client.create_namespaced_job(
-                namespace=KubernetesWorkflowRunManager.default_namespace, body=job
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
             )
         except ApiException as e:
             msg = "Workflow engine/job controller pod " "creation failed {}".format(e)
@@ -291,7 +290,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
 
             instantiate_chained_k8s_objects(
-                kubernetes_objects, KubernetesWorkflowRunManager.default_namespace
+                kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
             )
             return access_path
 
@@ -317,8 +316,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 self.workflow.interactive_session = None
                 if kubernetes_objects:
                     delete_k8s_objects_if_exist(
-                        kubernetes_objects,
-                        KubernetesWorkflowRunManager.default_namespace,
+                        kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
                     )
 
             current_db_sessions = Session.object_session(self.workflow)
@@ -329,7 +327,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """Stop an interactive workflow run."""
         delete_k8s_ingress_object(
             ingress_name=self.workflow.interactive_session_name,
-            namespace=KubernetesWorkflowRunManager.default_namespace,
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
         self.workflow.interactive_session_name = None
         self.workflow.interactive_session = None
@@ -349,7 +347,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             try:
                 current_k8s_batchv1_api_client.delete_namespaced_job(
                     job,
-                    KubernetesWorkflowRunManager.default_namespace,
+                    REANA_RUNTIME_KUBERNETES_NAMESPACE,
                     body=V1DeleteOptions(
                         grace_period_seconds=0, propagation_policy="Background"
                     ),
@@ -407,7 +405,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         db_mount, _ = get_shared_volume("db")
 
         workflow_metadata = client.V1ObjectMeta(
-            name=name, labels={"reana_workflow_mode": "batch"}
+            name=name,
+            labels={"reana_workflow_mode": "batch"},
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
         job = client.V1Job()
         job.api_version = "batch/v1"
@@ -436,6 +436,14 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_COMPONENT_NAMING_SCHEME",
                     "value": REANA_COMPONENT_NAMING_SCHEME,
+                },
+                {
+                    "name": "REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE",
+                    "value": REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+                },
+                {
+                    "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
+                    "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
                 },
             ]
         )
@@ -478,6 +486,14 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "name": "REANA_COMPONENT_NAMING_SCHEME",
                     "value": REANA_COMPONENT_NAMING_SCHEME,
                 },
+                {
+                    "name": "REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE",
+                    "value": REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+                },
+                {
+                    "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
+                    "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                },
             ]
         )
         job_controller_container.env.extend(job_controller_env_vars)
@@ -492,7 +508,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         ]
         containers = [workflow_engine_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(containers=containers)
-        spec.template.spec.service_account_name = K8S_REANA_SERVICE_ACCOUNT_NAME
+        spec.template.spec.service_account_name = (
+            REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
+        )
         spec.template.spec.volumes = [
             workspace_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),

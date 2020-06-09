@@ -11,6 +11,7 @@ Version master (UNRELEASED)
 - Adds progress report on workflow list response.
 - Makes CVMFS available in interactive sessions.
 - Adds preview flag to file download endpoint.
+- Creates REANA runtime components in the centrally configured (REANA-Commons) runtime namespace.
 - Fixes jobs status update.
 - Labels workflow engine pods for better traceability.
 - Enriches logs enpoint information.

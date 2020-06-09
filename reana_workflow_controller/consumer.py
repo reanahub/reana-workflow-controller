@@ -17,6 +17,7 @@ from datetime import datetime
 
 import requests
 from kubernetes.client.rest import ApiException
+from reana_commons.config import REANA_RUNTIME_KUBERNETES_NAMESPACE
 from reana_commons.consumer import BaseConsumer
 from reana_commons.k8s.api_client import (
     current_k8s_batchv1_api_client,
@@ -228,7 +229,9 @@ def _update_job_cache(msg):
 def _delete_workflow_engine_pod(workflow):
     """Delete workflow engine pod."""
     try:
-        jobs = current_k8s_corev1_api_client.list_namespaced_pod(namespace="default",)
+        jobs = current_k8s_corev1_api_client.list_namespaced_pod(
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        )
         for job in jobs.items:
             if str(workflow.id_) in job.metadata.name:
                 workflow_enginge_logs = current_k8s_corev1_api_client.read_namespaced_pod_log(
@@ -238,7 +241,7 @@ def _delete_workflow_engine_pod(workflow):
                 )
                 workflow.logs = (workflow.logs or "") + workflow_enginge_logs + "\n"
                 current_k8s_batchv1_api_client.delete_namespaced_job(
-                    namespace="default",
+                    namespace=job.metadata.namespace,
                     propagation_policy="Background",
                     name=job.metadata.labels["job-name"],
                 )
