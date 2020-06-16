@@ -46,6 +46,8 @@ from reana_workflow_controller.config import (  # isort:skip
     SHARED_FS_MAPPING,
     TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
+    REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR,
+    REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR,
     DEBUG_ENV_VARS)
 
 
@@ -350,8 +352,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workflow_enginge_container.env.extend(workflow_engine_env_vars)
         workflow_enginge_container.security_context = \
             client.V1SecurityContext(
-                run_as_group=WORKFLOW_RUNTIME_USER_GID,
-                run_as_user=WORKFLOW_RUNTIME_USER_UID
+                run_as_group=int(WORKFLOW_RUNTIME_USER_GID),
+                run_as_user=int(WORKFLOW_RUNTIME_USER_UID)
             )
         workflow_enginge_container.volume_mounts = [workspace_mount]
         secrets_store = REANAUserSecretsStore(owner_id)
@@ -392,6 +394,21 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'value': K8S_CERN_EOS_AVAILABLE
             }
         ])
+        
+        job_controller_env_vars.extend([
+            {
+                'name': 'SHARED_VOLUME_PATH',
+                'value': SHARED_VOLUME_PATH
+            }
+        ])
+        if REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR:
+            job_controller_env_vars.extend([
+                {
+                    'name': 'REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR',
+                    'value': REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR
+                }
+            ])
+
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
         job_controller_container.env.extend([
@@ -403,12 +420,18 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 'name': 'REANA_STORAGE_BACKEND',
                 'value': REANA_STORAGE_BACKEND
             }
-            ])
+        ])
 
         secrets_volume_mount = \
             secrets_store.get_secrets_volume_mount_as_k8s_spec()
+
         job_controller_container.volume_mounts = [workspace_mount, db_mount]
         job_controller_container.volume_mounts.append(secrets_volume_mount)
+
+        tmp_mount, tmp_volume = self._share_tmpdir_with_job_controller()
+
+        if tmp_mount and tmp_volume:
+            job_controller_container.volume_mounts.append(tmp_mount)
 
         job_controller_container.ports = [{
             "containerPort":
@@ -424,11 +447,34 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 
+        if tmp_volume and tmp_mount:
+            spec.template.spec.volumes.append(tmp_volume)
+
         job.spec = spec
         job.spec.template.spec.restart_policy = 'Never'
         job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
         job.spec.backoff_limit = 0
         return job
+
+    # TODO: Move this to reana-commons
+    def _share_tmpdir_with_job_controller(self):
+        rjc_hostPath = {}
+        rjc_mountPath = {}
+        vol_name = "rjc-temp"
+        if REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR:
+            rjc_hostPath = {
+                "name": vol_name,
+                "hostPath":{
+                    "path": "/tmp"
+                }
+            }
+
+            rjc_mountPath = {
+                "name": vol_name,
+                "mountPath": "/tmp"
+            }
+                    
+        return rjc_mountPath, rjc_hostPath
 
     def _create_job_controller_startup_cmd(self, user=None):
         """Create job controller startup cmd."""

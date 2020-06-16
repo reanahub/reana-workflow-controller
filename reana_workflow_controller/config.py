@@ -28,6 +28,14 @@ BROKER = os.getenv('RABBIT_MQ', 'amqp://{0}:{1}@{2}//'.format(BROKER_USER,
 
 BROKER_PORT = os.getenv('RABBIT_MQ_PORT', 5672)
 
+SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/var/reana')
+
+REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR = os.getenv('REANA_JOB_CONTROLLER_VC3_HTCONDOR_ADDR', '')
+
+if os.getenv('REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR', '').lower() == 'true':
+    REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR = True
+else:
+    REANA_JOB_CONTROLLER_HOST_SHARE_TMPDIR = False
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
