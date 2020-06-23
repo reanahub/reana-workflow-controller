@@ -21,6 +21,11 @@ Version master (UNRELEASED)
 - Adds code mount on dev mode in workflow engines and job controller.
 - Adds Black formatter support.
 
+Version 0.6.1 (2020-05-25)
+--------------------------
+
+- Upgrades REANA-Commons package using latest Kubernetes client version.
+
 Version 0.6.0 (2019-12-20)
 --------------------------
 
