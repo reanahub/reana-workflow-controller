@@ -22,6 +22,7 @@ from reana_commons.config import (
     REANA_COMPONENT_NAMING_SCHEME,
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+    REANA_JOB_HOSTPATH_MOUNTS,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_STORAGE_BACKEND,
     SHARED_VOLUME_PATH,
@@ -493,6 +494,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
                     "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                },
+                {
+                    "name": "REANA_JOB_HOSTPATH_MOUNTS",
+                    "value": json.dumps(REANA_JOB_HOSTPATH_MOUNTS),
                 },
             ]
         )
