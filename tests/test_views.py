@@ -1097,6 +1097,7 @@ def test_workspace_deletion(
         workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
         job_cache_entry = JobCache(job_id=workflow_job.id_)
         session.add(workflow_job)
+        session.commit()
         session.add(job_cache_entry)
         session.commit()
 

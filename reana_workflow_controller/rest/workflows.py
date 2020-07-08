@@ -169,7 +169,7 @@ def get_workflows():  # noqa
         verbose = json.loads(request.args.get("verbose", "false").lower())
         block_size = request.args.get("block_size")
         if not user:
-            return jsonify({"message": "User {} does not exist".format(user)}), 404
+            return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
         for workflow in user.workflows:
             workflow_response = {
