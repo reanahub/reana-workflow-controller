@@ -4,6 +4,7 @@ Changes
 Version master (UNRELEASED)
 ---------------------------
 
+- Pins all Python dependencies allowing to easily rebuild component images at later times.
 - Enables workflow restarts.
 - Enables deletion of workflows in queued state.
 - Exposes workflow engines logs.
