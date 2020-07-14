@@ -45,7 +45,6 @@ setup_requires = [
 ]
 
 install_requires = [
-    "Flask-SQLAlchemy>=2.2",
     "Flask>=0.12",
     "werkzeug>=0.16.1,<0.17",
     "fs>=2.0",
@@ -60,6 +59,7 @@ install_requires = [
     "uwsgi-tools>=1.1.1",
     "uWSGI>=2.0.17",
     "uwsgitop>=0.10",
+    "webargs>=6.1.0,<7.0.0",
 ]
 
 packages = find_packages()

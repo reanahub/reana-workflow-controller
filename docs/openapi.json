@@ -39,6 +39,20 @@
             "name": "block_size",
             "required": false,
             "type": "string"
+          },
+          {
+            "description": "Results page number (pagination).",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Number of results per page (pagination).",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "type": "string"
           }
         ],
         "produces": [

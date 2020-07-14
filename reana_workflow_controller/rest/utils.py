@@ -14,6 +14,7 @@ import os
 import pprint
 import subprocess
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 
 from kubernetes.client.rest import ApiException
@@ -22,6 +23,9 @@ from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_workflow_status_change_verb
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import and_
+from webargs import fields, validate
+from webargs.flaskparser import parser
+from werkzeug.exceptions import BadRequest
 
 import fs
 from flask import current_app as app
@@ -538,3 +542,56 @@ def get_workflow_progress(workflow):
         "run_started_at": run_started_at,
         "run_finished_at": run_finished_at,
     }
+
+
+def use_paginate_args():
+    """Get and validate pagination arguments."""
+
+    def decorator(f):
+        @wraps(f)
+        def inner(*args, **kwargs):
+            try:
+                req = parser.parse(
+                    {
+                        "page": fields.Int(validate=validate.Range(min=1)),
+                        "size": fields.Int(validate=validate.Range(min=1)),
+                    },
+                    location="querystring",
+                    error_status_code=400,
+                )
+            # For validation errors, webargs raises an enhanced BadRequest
+            except BadRequest as err:
+                return jsonify({"message": err.data.get("messages")}), err.code
+
+            # Default if page is not specified
+            if not req.get("page"):
+                req["page"] = 1
+
+            if req.get("size"):
+                req.update(
+                    dict(
+                        from_idx=(req["page"] - 1) * req["size"],
+                        to_idx=req["page"] * req["size"],
+                        links=dict(
+                            prev={"page": req["page"] - 1},
+                            self={"page": req["page"]},
+                            next={"page": req["page"] + 1},
+                        ),
+                    )
+                )
+
+            def paginate(query):
+                items = query
+                has_prev, has_next = False, False
+                if req.get("size"):
+                    items = query.slice(req["from_idx"], req["to_idx"])
+                    has_prev = req["from_idx"] > 0
+                    has_next = req["to_idx"] < query.count()
+                req.update(dict(items=items, has_prev=has_prev, has_next=has_next))
+                return req
+
+            return f(paginate=paginate)
+
+        return inner
+
+    return decorator

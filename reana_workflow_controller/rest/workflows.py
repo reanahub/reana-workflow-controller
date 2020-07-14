@@ -28,13 +28,12 @@ from reana_workflow_controller.errors import (
     REANAWorkflowNameError,
 )
 from reana_workflow_controller.rest.utils import (
+    create_workflow_workspace,
     get_specification_diff,
     get_workflow_name,
-)
-from reana_workflow_controller.rest.utils import (
-    create_workflow_workspace,
-    get_workspace_diff,
     get_workflow_progress,
+    get_workspace_diff,
+    use_paginate_args,
 )
 
 
@@ -47,7 +46,8 @@ blueprint = Blueprint("workflows", __name__)
 
 
 @blueprint.route("/workflows", methods=["GET"])
-def get_workflows():  # noqa
+@use_paginate_args()
+def get_workflows(paginate=None):  # noqa
     r"""Get all workflows.
 
     ---
@@ -79,6 +79,16 @@ def get_workflows():  # noqa
         - name: block_size
           in: query
           description: Size format, either 'b' (bytes) or 'k' (kilobytes).
+          required: false
+          type: string
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: string
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
           required: false
           type: string
       responses:
@@ -165,13 +175,14 @@ def get_workflows():  # noqa
     try:
         user_uuid = request.args["user"]
         user = User.query.filter(User.id_ == user_uuid).first()
-        type = request.args.get("type", "batch")
+        type_ = request.args.get("type", "batch")
         verbose = json.loads(request.args.get("verbose", "false").lower())
         block_size = request.args.get("block_size")
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
-        for workflow in user.workflows:
+        pagination_dict = paginate(user.workflows)
+        for workflow in pagination_dict["items"]:
             workflow_response = {
                 "id": workflow.id_,
                 "name": get_workflow_name(workflow),
@@ -181,18 +192,15 @@ def get_workflows():  # noqa
                 "progress": get_workflow_progress(workflow),
                 "size": "-",
             }
-            if type == "interactive":
+            if type_ == "interactive":
                 if (
                     not workflow.interactive_session
                     or not workflow.interactive_session_name
                     or not workflow.interactive_session_type
                 ):
                     continue
-                else:
-                    workflow_response[
-                        "session_type"
-                    ] = workflow.interactive_session_type
-                    workflow_response["session_uri"] = workflow.interactive_session
+                workflow_response["session_type"] = workflow.interactive_session_type
+                workflow_response["session_uri"] = workflow.interactive_session
             if verbose:
                 reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
                 if reana_fs.exists(workflow.workspace_path):
