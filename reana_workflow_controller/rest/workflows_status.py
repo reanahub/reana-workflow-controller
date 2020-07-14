@@ -28,6 +28,7 @@ from reana_workflow_controller.rest.utils import (
     get_workflow_progress,
     start_workflow,
     stop_workflow,
+    use_paginate_args,
 )
 
 START = "start"
@@ -39,7 +40,8 @@ blueprint = Blueprint("statuses", __name__)
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/logs", methods=["GET"])
-def get_workflow_logs(workflow_id_or_name):  # noqa
+@use_paginate_args()
+def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
     r"""Get workflow logs from a workflow engine.
 
     ---
@@ -72,6 +74,16 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             items:
               type: string
               description: Step name.
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: integer
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
+          required: false
+          type: integer
       responses:
         200:
           description: >-
@@ -145,13 +157,13 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         if steps:
             workflow_logs = {
                 "workflow_logs": None,
-                "job_logs": build_workflow_logs(workflow, steps),
+                "job_logs": build_workflow_logs(workflow, steps, paginate=paginate),
                 "engine_specific": None,
             }
         else:
             workflow_logs = {
                 "workflow_logs": workflow.logs,
-                "job_logs": build_workflow_logs(workflow),
+                "job_logs": build_workflow_logs(workflow, paginate=paginate),
                 "engine_specific": workflow.engine_specific,
             }
         return (

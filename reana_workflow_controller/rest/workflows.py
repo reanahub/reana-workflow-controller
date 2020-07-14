@@ -85,12 +85,12 @@ def get_workflows(paginate=None):  # noqa
           in: query
           description: Results page number (pagination).
           required: false
-          type: string
+          type: integer
         - name: size
           in: query
           description: Number of results per page (pagination).
           required: false
-          type: string
+          type: integer
       responses:
         200:
           description: >-

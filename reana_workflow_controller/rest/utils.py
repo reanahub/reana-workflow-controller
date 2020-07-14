@@ -13,6 +13,7 @@ import logging
 import os
 import pprint
 import subprocess
+from collections import OrderedDict
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -22,7 +23,6 @@ from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_workflow_status_change_verb
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import and_
 from webargs import fields, validate
 from webargs.flaskparser import parser
 from werkzeug.exceptions import BadRequest
@@ -127,23 +127,15 @@ def get_workflow_name(workflow):
     return workflow.name + "." + str(workflow.run_number)
 
 
-def build_workflow_logs(workflow, steps=None):
+def build_workflow_logs(workflow, steps=None, paginate=None):
     """Return the logs for all jobs of a workflow."""
+
+    query = Session.query(Job).filter_by(workflow_uuid=workflow.id_)
     if steps:
-        jobs = (
-            Session.query(Job)
-            .filter(and_(Job.workflow_uuid == workflow.id_, Job.job_name.in_(steps)))
-            .order_by(Job.created)
-            .all()
-        )
-    else:
-        jobs = (
-            Session.query(Job)
-            .filter_by(workflow_uuid=workflow.id_)
-            .order_by(Job.created)
-            .all()
-        )
-    all_logs = {}
+        query = query.filter(Job.job_name.in_(steps))
+    query = query.order_by(Job.created)
+    jobs = paginate(query).get("items")
+    all_logs = OrderedDict()
     for job in jobs:
         item = {
             "workflow_uuid": str(job.workflow_uuid) or "",
@@ -590,7 +582,7 @@ def use_paginate_args():
                 req.update(dict(items=items, has_prev=has_prev, has_next=has_next))
                 return req
 
-            return f(paginate=paginate)
+            return f(paginate=paginate, *args, **kwargs)
 
         return inner
 
