@@ -129,12 +129,11 @@ def get_workflow_name(workflow):
 
 def build_workflow_logs(workflow, steps=None, paginate=None):
     """Return the logs for all jobs of a workflow."""
-
     query = Session.query(Job).filter_by(workflow_uuid=workflow.id_)
     if steps:
         query = query.filter(Job.job_name.in_(steps))
     query = query.order_by(Job.created)
-    jobs = paginate(query).get("items")
+    jobs = paginate(query).get("items") if paginate else query
     all_logs = OrderedDict()
     for job in jobs:
         item = {
@@ -572,13 +571,17 @@ def use_paginate_args():
                     )
                 )
 
-            def paginate(query):
-                items = query
+            def paginate(query_or_list):
+                items = query_or_list
                 has_prev, has_next = False, False
                 if req.get("size"):
-                    items = query.slice(req["from_idx"], req["to_idx"])
+                    if isinstance(query_or_list, list):
+                        items = query_or_list[req["from_idx"] : req["to_idx"]]
+                        has_next = req["to_idx"] < len(query_or_list)
+                    else:
+                        items = query_or_list.slice(req["from_idx"], req["to_idx"])
+                        has_next = req["to_idx"] < query_or_list.count()
                     has_prev = req["from_idx"] > 0
-                    has_next = req["to_idx"] < query.count()
                 req.update(dict(items=items, has_prev=has_prev, has_next=has_next))
                 return req
 

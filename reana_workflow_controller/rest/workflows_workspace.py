@@ -27,6 +27,7 @@ from reana_workflow_controller.rest.utils import (
     get_workflow_name,
     list_directory_files,
     remove_files_recursive_wildcard,
+    use_paginate_args,
 )
 from reana_workflow_controller.rest.utils import mv_files
 
@@ -372,7 +373,8 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["GET"])
-def get_files(workflow_id_or_name):  # noqa
+@use_paginate_args()
+def get_files(workflow_id_or_name, paginate=None):  # noqa
     r"""List all files contained in a workspace.
 
     ---
@@ -395,6 +397,16 @@ def get_files(workflow_id_or_name):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: integer
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
+          required: false
+          type: integer
       responses:
         200:
           description: >-
@@ -448,6 +460,7 @@ def get_files(workflow_id_or_name):  # noqa
                 current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
             )
         )
+        file_list = paginate(file_list)["items"]
         return jsonify(file_list), 200
 
     except ValueError:
