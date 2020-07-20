@@ -52,7 +52,7 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
             url_for("workflows.get_workflows"), query_string={"user": default_user.id_}
         )
         assert res.status_code == 200
-        response_data = json.loads(res.get_data(as_text=True))
+        response_data = json.loads(res.get_data(as_text=True))["items"]
         expected_data = [
             {
                 "id": str(workflow.id_),
@@ -341,7 +341,7 @@ def test_get_files(
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
-        for file_ in json.loads(res.data.decode()):
+        for file_ in json.loads(res.data.decode())["items"]:
             assert file_.get("name") in test_files
 
 

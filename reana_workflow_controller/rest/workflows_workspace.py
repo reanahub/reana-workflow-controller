@@ -413,16 +413,21 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
             Requests succeeded. The list of code|input|output files has been
             retrieved.
           schema:
-            type: array
-            items:
-              type: object
-              properties:
-                name:
-                  type: string
-                last-modified:
-                  type: string
-                size:
-                  type: integer
+            type: object
+            properties:
+              total:
+                type: integer
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    last-modified:
+                      type: string
+                    size:
+                      type: integer
         400:
           description: >-
             Request failed. The incoming data specification seems malformed.
@@ -450,18 +455,14 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
-        file_type = (
-            request.args.get("file_type") if request.args.get("file_type") else "input"
-        )
-
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         file_list = list_directory_files(
             os.path.join(
                 current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
             )
         )
-        file_list = paginate(file_list)["items"]
-        return jsonify(file_list), 200
+        pagination_dict = paginate(file_list)
+        return jsonify(pagination_dict), 200
 
     except ValueError:
         return (

@@ -536,7 +536,10 @@ def get_workflow_progress(workflow):
 
 
 def use_paginate_args():
-    """Get and validate pagination arguments."""
+    """Get and validate pagination arguments.
+
+    :return: `paginate` function to use in decorated rest endpoint.
+    """
 
     def decorator(f):
         @wraps(f)
@@ -572,17 +575,33 @@ def use_paginate_args():
                 )
 
             def paginate(query_or_list):
+                """Paginate based on received page and size args.
+
+                :param query_or_list: Query or list to paginate.
+                :type: sqlalchemy.orm.query.Query | list.
+
+                :return: Dictionary with paginated items and some useful information.
+                """
                 items = query_or_list
                 has_prev, has_next = False, False
+                total = (
+                    len(query_or_list)
+                    if isinstance(query_or_list, list)
+                    else query_or_list.count()
+                )
                 if req.get("size"):
                     if isinstance(query_or_list, list):
                         items = query_or_list[req["from_idx"] : req["to_idx"]]
-                        has_next = req["to_idx"] < len(query_or_list)
+                        total = len(query_or_list)
+                        has_next = req["to_idx"] < total
                     else:
                         items = query_or_list.slice(req["from_idx"], req["to_idx"])
-                        has_next = req["to_idx"] < query_or_list.count()
+                        total = query_or_list.count()
+                        has_next = req["to_idx"] < total
                     has_prev = req["from_idx"] > 0
-                req.update(dict(items=items, has_prev=has_prev, has_next=has_next))
+                req.update(
+                    dict(items=items, has_prev=has_prev, has_next=has_next, total=total)
+                )
                 return req
 
             return f(paginate=paginate, *args, **kwargs)

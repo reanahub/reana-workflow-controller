@@ -97,24 +97,29 @@ def get_workflows(paginate=None):  # noqa
             Requests succeeded. The response contains the current workflows
             for a given user.
           schema:
-            type: array
-            items:
-              type: object
-              properties:
-                id:
-                  type: string
-                name:
-                  type: string
-                status:
-                  type: string
-                size:
-                  type: string
-                user:
-                  type: string
-                created:
-                  type: string
-                progress:
+            type: object
+            properties:
+              total:
+                type: integer
+              items:
+                type: array
+                items:
                   type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    status:
+                      type: string
+                    size:
+                      type: string
+                    user:
+                      type: string
+                    created:
+                      type: string
+                    progress:
+                      type: object
           examples:
             application/json:
               [
@@ -181,7 +186,7 @@ def get_workflows(paginate=None):  # noqa
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
-        pagination_dict = paginate(user.workflows)
+        pagination_dict = paginate(user.workflows.order_by(Workflow.created.desc()))
         for workflow in pagination_dict["items"]:
             workflow_response = {
                 "id": workflow.id_,
@@ -215,8 +220,8 @@ def get_workflows(paginate=None):  # noqa
                     else:
                         workflow_response["size"] = "0K"
             workflows.append(workflow_response)
-
-        return jsonify(workflows), 200
+        pagination_dict["items"] = workflows
+        return jsonify(pagination_dict), 200
     except ValueError:
         return jsonify({"message": "Malformed request."}), 400
     except KeyError:
