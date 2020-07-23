@@ -4,6 +4,7 @@ Changes
 Version master (UNRELEASED)
 ---------------------------
 
+- Uses python3.8
 - Pins all Python dependencies allowing to easily rebuild component images at later times.
 - Enables workflow restarts.
 - Enables deletion of workflows in queued state.
