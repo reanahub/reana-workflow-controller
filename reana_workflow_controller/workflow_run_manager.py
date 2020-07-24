@@ -18,12 +18,13 @@ from reana_commons.config import (
     CVMFS_REPOSITORIES,
     INTERACTIVE_SESSION_TYPES,
     K8S_CERN_EOS_AVAILABLE,
-    REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_COMPONENT_NAMING_SCHEME,
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_JOB_HOSTPATH_MOUNTS,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    REANA_RUNTIME_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_STORAGE_BACKEND,
     SHARED_VOLUME_PATH,
     WORKFLOW_RUNTIME_USER_GID,
@@ -502,7 +503,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             ]
         )
         job_controller_container.env.extend(job_controller_env_vars)
-        job_controller_container.env.extend(job_controller_env_secrets)
+        if REANA_RUNTIME_KUBERNETES_NODE_LABEL:
+            job_controller_container.env.append(
+                {
+                    "name": "REANA_RUNTIME_KUBERNETES_NODE_LABEL",
+                    "value": os.getenv("REANA_RUNTIME_KUBERNETES_NODE_LABEL"),
+                },
+            )
 
         secrets_volume_mount = secrets_store.get_secrets_volume_mount_as_k8s_spec()
         job_controller_container.volume_mounts = [workspace_mount, db_mount]
@@ -512,7 +519,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
         ]
         containers = [workflow_engine_container, job_controller_container]
-        spec.template.spec = client.V1PodSpec(containers=containers)
+        spec.template.spec = client.V1PodSpec(
+            containers=containers, node_selector=REANA_RUNTIME_KUBERNETES_NODE_LABEL
+        )
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
