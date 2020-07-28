@@ -503,6 +503,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             ]
         )
         job_controller_container.env.extend(job_controller_env_vars)
+        job_controller_container.env.extend(job_controller_env_secrets)
         if REANA_RUNTIME_KUBERNETES_NODE_LABEL:
             job_controller_container.env.append(
                 {
