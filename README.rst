@@ -1,6 +1,6 @@
-===========================
- REANA-Workflow-Controller
-===========================
+#########################
+REANA-Workflow-Controller
+#########################
 
 .. image:: https://img.shields.io/travis/reanahub/reana-workflow-controller.svg
       :target: https://travis-ci.org/reanahub/reana-workflow-controller
@@ -21,27 +21,34 @@
    :target: https://github.com/psf/black
 
 About
------
+=====
 
 REANA-Workflow-Controller is a component of the `REANA <http://www.reana.io/>`_
 reusable and reproducible research data analysis platform. It takes care of
 instantiating and managing computational workflows.
 
 Features
---------
+========
 
 - start workflow execution
 - control workflow steps
 - support for several workflow specifications (CWL, Yadage, Serial)
 
+Usage
+=====
+
+The detailed information on how to install and use REANA can be found in
+`docs.reana.io <https://docs.reana.io>`_.
+
 Useful links
-------------
+============
 
-- `documentation <https://reana-workflow-controller.readthedocs.io/>`_
-- `releases <https://github.com/reanahub/reana-workflow-controller/releases>`_
-- `known issues <https://github.com/reanahub/reana-workflow-controller/issues>`_
-- `source code <https://github.com/reanahub/reana-workflow-controller>`_
+- `REANA project home page <http://www.reana.io/>`_
+- `REANA user documentation <https://docs.reana.io>`_
+- `REANA user support forum <https://forum.reana.io>`_
 
-For more information about the REANA reusable analysis platform, please see the
-`REANA project <http://www.reana.io>`_ home page and the general `REANA
-documentation <http://reana.readthedocs.io/>`_ pages.
+- `REANA-Workflow-Controller releases <https://reana-workflow-controller.readthedocs.io/en/latest#changes>`_
+- `REANA-Workflow-Controller docker images <https://hub.docker.com/r/reanahub/reana-workflow-controller>`_
+- `REANA-Workflow-Controller developer documentation <https://reana-workflow-controller.readthedocs.io/>`_
+- `REANA-Workflow-Controller known issues <https://github.com/reanahub/reana-workflow-controller/issues>`_
+- `REANA-Workflow-Controller source code <https://github.com/reanahub/reana-workflow-controller>`_
