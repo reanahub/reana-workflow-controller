@@ -102,7 +102,7 @@ REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", "CHANGE_ME")
 REANA_GITLAB_URL = "https://{}".format(REANA_GITLAB_HOST)
 """GitLab API URL"""
 
-REANA_URL = os.getenv("REANA_URL", "CHANGE_ME")
+REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "CHANGE_ME")
 """REANA URL"""
 
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")

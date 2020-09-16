@@ -36,7 +36,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from reana_workflow_controller.config import (
     PROGRESS_STATUSES,
     REANA_GITLAB_URL,
-    REANA_URL,
+    REANA_HOSTNAME,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 
@@ -127,7 +127,7 @@ def _update_commit_status(workflow, status):
         state = "running"
     secret_store = REANAUserSecretsStore(workflow.owner_id)
     gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
-    target_url = f"https://{REANA_URL}/api/workflows/{workflow.id_}/logs"
+    target_url = f"https://{REANA_HOSTNAME}/api/workflows/{workflow.id_}/logs"
     workflow_name = urlparse.quote_plus(workflow.git_repo)
     commit_status_url = (
         f"{REANA_GITLAB_URL}/api/v4/projects/{workflow_name}/statuses/"
