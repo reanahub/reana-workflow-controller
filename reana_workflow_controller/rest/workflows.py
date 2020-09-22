@@ -11,16 +11,13 @@
 import json
 from uuid import uuid4
 
-import fs
 from flask import Blueprint, jsonify, request
-from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import User, Workflow
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import (
     DEFAULT_NAME_FOR_WORKFLOWS,
-    SHARED_VOLUME_PATH,
     WORKFLOW_TIME_FORMAT,
 )
 from reana_workflow_controller.errors import (
@@ -207,18 +204,13 @@ def get_workflows(paginate=None):  # noqa
                 workflow_response["session_type"] = workflow.interactive_session_type
                 workflow_response["session_uri"] = workflow.interactive_session
             if verbose:
-                reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
-                if reana_fs.exists(workflow.workspace_path):
-                    absolute_workspace_path = reana_fs.getospath(
-                        workflow.workspace_path
-                    )
-                    disk_usage_info = get_workspace_disk_usage(
-                        absolute_workspace_path, block_size=block_size
-                    )
-                    if disk_usage_info:
-                        workflow_response["size"] = disk_usage_info[-1]["size"]
-                    else:
-                        workflow_response["size"] = "0K"
+                disk_usage_info = workflow.get_workspace_disk_usage(
+                    summarize=True, block_size=block_size
+                )
+                if disk_usage_info:
+                    workflow_response["size"] = disk_usage_info[0]["size"]
+                else:
+                    workflow_response["size"] = "0K"
             workflows.append(workflow_response)
         pagination_dict["items"] = workflows
         return jsonify(pagination_dict), 200
