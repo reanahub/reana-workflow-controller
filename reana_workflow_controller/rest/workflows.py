@@ -235,20 +235,21 @@ def get_workflows(paginate=None):  # noqa
                 workflow_response["session_type"] = workflow.interactive_session_type
                 workflow_response["session_uri"] = workflow.interactive_session
             if verbose:
-                disk_usage_info = workflow.get_workspace_disk_usage(
-                    summarize=True, block_size=block_size
-                )
-                if disk_usage_info:
-                    workflow_response["size"] = disk_usage_info[0]["size"]
-                else:
+                try:
+                    disk_usage_info = workflow.get_workspace_disk_usage(
+                        summarize=True, block_size=block_size
+                    )
+                    if disk_usage_info:
+                        workflow_response["size"] = disk_usage_info[0]["size"]
+                    else:
+                        workflow_response["size"] = "0K"
+                except ValueError:
                     workflow_response["size"] = "0K"
             workflows.append(workflow_response)
         pagination_dict["items"] = workflows
         pagination_dict["user_has_workflows"] = user.workflows.first() is not None
         return jsonify(pagination_dict), 200
-    except ValueError:
-        return jsonify({"message": "Malformed request."}), 400
-    except KeyError:
+    except (ValueError, KeyError):
         return jsonify({"message": "Malformed request."}), 400
     except json.JSONDecodeError:
         return jsonify({"message": "Your request contains not valid JSON."}), 400
