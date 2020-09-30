@@ -47,7 +47,6 @@ def start_workflow(workflow, parameters):
     """Start a workflow."""
 
     def _start_workflow_db(workflow, parameters):
-        workflow.run_started_at = datetime.now()
         workflow.status = WorkflowStatus.running
         if parameters:
             workflow.input_parameters = parameters.get("input_parameters")
@@ -107,12 +106,10 @@ def stop_workflow(workflow):
     """Stop a given workflow."""
     if workflow.status == WorkflowStatus.running:
         kwrm = KubernetesWorkflowRunManager(workflow)
-        workflow.run_stopped_at = datetime.now()
         kwrm.stop_batch_workflow_run()
         workflow.status = WorkflowStatus.stopped
-        current_db_sessions = Session.object_session(workflow)
-        current_db_sessions.add(workflow)
-        current_db_sessions.commit()
+        Session.add(workflow)
+        Session.commit()
     else:
         message = ("Workflow {id_} is not running.").format(id_=workflow.id_)
         raise REANAWorkflowControllerError(message)

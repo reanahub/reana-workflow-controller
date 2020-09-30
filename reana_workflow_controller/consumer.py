@@ -112,7 +112,6 @@ def _update_workflow_status(workflow, status, logs):
             WorkflowStatus.queued,
         ]
         if status not in alive_statuses:
-            workflow.run_finished_at = datetime.now()
             _delete_workflow_engine_pod(workflow)
 
 
