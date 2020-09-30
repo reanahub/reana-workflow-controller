@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 from reana_db.database import Session
-from reana_db.models import User, Workflow
+from reana_db.models import User, Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import (
@@ -73,6 +73,23 @@ def get_workflows(paginate=None):  # noqa
           description: Optional flag to show more information.
           required: false
           type: boolean
+        - name: search
+          in: query
+          description: Filter workflows by name.
+          required: false
+          type: string
+        - name: sort
+          in: query
+          description: Sort workflows by creation date (asc, desc).
+          required: false
+          type: string
+        - name: status
+          in: query
+          description: Filter workflows by list of statuses.
+          required: false
+          type: array
+          items:
+            type: string
         - name: block_size
           in: query
           description: Size format, either 'b' (bytes) or 'k' (kilobytes).
@@ -180,10 +197,24 @@ def get_workflows(paginate=None):  # noqa
         type_ = request.args.get("type", "batch")
         verbose = json.loads(request.args.get("verbose", "false").lower())
         block_size = request.args.get("block_size")
+        sort = request.args.get("sort", "desc")
+        search = request.args.get("search", "")
+        status_list = request.args.get("status", "")
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
-        pagination_dict = paginate(user.workflows.order_by(Workflow.created.desc()))
+        query = user.workflows
+        if search:
+            query = query.filter(Workflow.name.ilike("%{}%".format(search)))
+        if status_list:
+            workflow_status = [
+                WorkflowStatus[status] for status in status_list.split(",")
+            ]
+            query = query.filter(Workflow.status.in_(workflow_status))
+        if sort not in ["asc", "desc"]:
+            sort = "desc"
+        column_sorted = getattr(Workflow.created, sort)()
+        pagination_dict = paginate(query.order_by(column_sorted))
         for workflow in pagination_dict["items"]:
             workflow_response = {
                 "id": workflow.id_,
@@ -213,6 +244,7 @@ def get_workflows(paginate=None):  # noqa
                     workflow_response["size"] = "0K"
             workflows.append(workflow_response)
         pagination_dict["items"] = workflows
+        pagination_dict["user_has_workflows"] = user.workflows.first() is not None
         return jsonify(pagination_dict), 200
     except ValueError:
         return jsonify({"message": "Malformed request."}), 400
