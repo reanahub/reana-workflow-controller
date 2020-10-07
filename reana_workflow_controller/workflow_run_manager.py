@@ -42,7 +42,18 @@ from reana_commons.utils import (
 )
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
-from reana_db.models import Job, JobStatus
+from reana_db.models import (
+    Job,
+    JobStatus,
+    InteractiveSession,
+<<<<<<< HEAD
+    UserWorkflowSession,
+    WorkflowStatus,
+=======
+    WorkflowSession,
+    RunStatus,
+>>>>>>> 518e94d... models: refacor on recent interactive session model changes
+)
 
 from reana_workflow_controller.errors import (
     REANAInteractiveSessionError,
@@ -276,10 +287,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     )
                 )
             access_path = self._generate_interactive_workflow_path()
-            self.workflow.interactive_session_type = interactive_session_type
-            self.workflow.interactive_session = access_path
             workflow_run_name = self._workflow_run_name_generator("session")
-            self.workflow.interactive_session_name = workflow_run_name
             kubernetes_objects = build_interactive_k8s_objects[
                 interactive_session_type
             ](
@@ -314,29 +322,50 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 "Unkown error while starting interactive workflow run:\n{}".format(e)
             )
         finally:
-            if not action_completed:
-                self.workflow.interactive_session = None
-                if kubernetes_objects:
-                    delete_k8s_objects_if_exist(
-                        kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
-                    )
-
+            if not action_completed and kubernetes_objects:
+                return delete_k8s_objects_if_exist(
+                    kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
+                )
+            int_session = InteractiveSession(
+                name=workflow_run_name,
+                path=access_path,
+                type_=interactive_session_type,
+                owner_id=self.workflow.owner_id,
+            )
+            self.workflow.sessions.append(int_session)
             current_db_sessions = Session.object_session(self.workflow)
             current_db_sessions.add(self.workflow)
             current_db_sessions.commit()
 
-    def stop_interactive_session(self):
+    def stop_interactive_session(self, interactive_session_id):
         """Stop an interactive workflow run."""
-        delete_k8s_ingress_object(
-            ingress_name=self.workflow.interactive_session_name,
-            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        )
-        self.workflow.interactive_session_name = None
-        self.workflow.interactive_session = None
-        self.workflow.interactive_session_type = None
-        current_db_sessions = Session.object_session(self.workflow)
-        current_db_sessions.add(self.workflow)
-        current_db_sessions.commit()
+        int_session = InteractiveSession.query.filter_by(
+            id_=interactive_session_id
+        ).first()
+
+        if not int_session:
+            raise REANAInteractiveSessionError(
+                "Interactive session for workflow {} does not exist.".format(
+                    self.workflow.name
+                )
+            )
+        action_completed = True
+        try:
+            delete_k8s_ingress_object(
+                ingress_name=int_session.name,
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            )
+        except Exception as e:
+            action_completed = False
+            raise REANAInteractiveSessionError(
+                "Unkown error while stopping interactive session:\n{}".format(e)
+            )
+        finally:
+            if action_completed:
+                int_session.status = WorkflowStatus.stopped
+                current_db_sessions = Session.object_session(self.workflow)
+                current_db_sessions.add(int_session)
+                current_db_sessions.commit()
 
     def stop_batch_workflow_run(self):
         """Stop a batch workflow run along with all its dependent jobs."""

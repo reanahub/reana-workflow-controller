@@ -12,6 +12,7 @@
 from flask import Blueprint, jsonify, request
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_db.utils import _get_workflow_with_uuid_or_name
+from reana_db.models import WorkflowSession
 
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
 
@@ -203,7 +204,8 @@ def close_interactive_session(workflow_id_or_name):  # noqa
         user_uuid = request.args["user"]
         workflow = None
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        if workflow.interactive_session_name is None:
+        int_session = workflow.sessions.first()
+        if not int_session:
             return (
                 jsonify(
                     {
@@ -215,7 +217,7 @@ def close_interactive_session(workflow_id_or_name):  # noqa
                 404,
             )
         kwrm = KubernetesWorkflowRunManager(workflow)
-        kwrm.stop_interactive_session()
+        kwrm.stop_interactive_session(int_session.id_)
         return jsonify({"message": "The interactive session has been closed"}), 200
 
     except (KeyError, ValueError) as e:

@@ -14,7 +14,7 @@ import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
-from reana_db.models import WorkflowStatus
+from reana_db.models import WorkflowStatus, InteractiveSession
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
@@ -118,7 +118,7 @@ def test_stop_workflow_backend_only_kubernetes(
         assert not backend_job_ids
 
 
-def test_interactive_session_closure(sample_serial_workflow_in_db):
+def test_interactive_session_closure(sample_serial_workflow_in_db, session):
     """Test closure of an interactive sessions."""
     mocked_k8s_client = Mock()
     workflow = sample_serial_workflow_in_db
@@ -131,10 +131,13 @@ def test_interactive_session_closure(sample_serial_workflow_in_db):
         kwrm = KubernetesWorkflowRunManager(workflow)
         if len(INTERACTIVE_SESSION_TYPES):
             kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
-            assert workflow.interactive_session_name
-            assert workflow.interactive_session
-            assert workflow.interactive_session_type
-            kwrm.stop_interactive_session()
-            assert workflow.interactive_session_name is None
-            assert workflow.interactive_session is None
-            assert workflow.interactive_session_type is None
+
+            int_session = InteractiveSession.query.filter_by(
+                owner_id=workflow.owner_id, type_=INTERACTIVE_SESSION_TYPES[0],
+            ).first()
+            assert int_session.status == WorkflowStatus.created
+            kwrm.stop_interactive_session(int_session.id_)
+            int_session = InteractiveSession.query.filter_by(
+                owner_id=workflow.owner_id, type_=INTERACTIVE_SESSION_TYPES[0],
+            ).first()
+            assert int_session.status == WorkflowStatus.stopped

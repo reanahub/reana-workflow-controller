@@ -16,7 +16,13 @@ import fs
 import mock
 import pytest
 from flask import url_for
-from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
+from reana_db.models import (
+    Job,
+    JobCache,
+    Workflow,
+    WorkflowStatus,
+    InteractiveSession,
+)
 from werkzeug.utils import secure_filename
 
 from reana_workflow_controller.rest.utils import (
@@ -1338,12 +1344,12 @@ def test_close_interactive_session(
 ):
     """Test close an interactive session."""
     expected_data = {"message": "The interactive session has been closed"}
-    sample_serial_workflow_in_db.interactive_session = (
-        "/5d9b30fd-f225-4615-9107-b1373afec070"
+    path = "/5d9b30fd-f225-4615-9107-b1373afec070"
+    name = "interactive-jupyter-5d9b30fd-f225-4615-9107-b1373afec070-5lswkp"
+    int_session = InteractiveSession(
+        name=name, path=path, owner_id=sample_serial_workflow_in_db.owner_id,
     )
-    sample_serial_workflow_in_db.interactive_session_name = (
-        "interactive-jupyter-5d9b30fd-f225-4615-9107-b1373afec070-5lswkp"
-    )
+    sample_serial_workflow_in_db.sessions.append(int_session)
     session.add(sample_serial_workflow_in_db)
     session.commit()
     with app.test_client() as client:
@@ -1371,8 +1377,7 @@ def test_close_interactive_session_not_opened(
         )
     }
     with app.test_client() as client:
-        sample_serial_workflow_in_db.interactive_session = None
-        sample_serial_workflow_in_db.interactive_session_name = None
+        sample_serial_workflow_in_db.sessions = []
         session.add(sample_serial_workflow_in_db)
         session.commit()
         res = client.post(

@@ -13,7 +13,13 @@ from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 from reana_db.database import Session
-from reana_db.models import User, Workflow, WorkflowStatus
+from reana_db.models import (
+    User,
+    Workflow,
+    WorkflowStatus,
+    InteractiveSession,
+    WorkflowSession,
+)
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import (
@@ -207,9 +213,13 @@ def get_workflows(paginate=None):  # noqa
         if search:
             query = query.filter(Workflow.name.ilike("%{}%".format(search)))
         if status_list:
+<<<<<<< HEAD
             workflow_status = [
                 WorkflowStatus[status] for status in status_list.split(",")
             ]
+=======
+            workflow_status = [RunStatus[status] for status in status_list.split(",")]
+>>>>>>> 518e94d... models: refacor on recent interactive session model changes
             query = query.filter(Workflow.status.in_(workflow_status))
         if sort not in ["asc", "desc"]:
             sort = "desc"
@@ -226,14 +236,12 @@ def get_workflows(paginate=None):  # noqa
                 "size": "-",
             }
             if type_ == "interactive":
-                if (
-                    not workflow.interactive_session
-                    or not workflow.interactive_session_name
-                    or not workflow.interactive_session_type
-                ):
+                int_session = workflow.sessions.first()
+                if not int_session:
                     continue
-                workflow_response["session_type"] = workflow.interactive_session_type
-                workflow_response["session_uri"] = workflow.interactive_session
+                workflow_response["session_type"] = int_session.type_.name
+                workflow_response["session_uri"] = int_session.path
+                workflow_response["session_status"] = int_session.status.name
             if verbose:
                 try:
                     disk_usage_info = workflow.get_workspace_disk_usage(
