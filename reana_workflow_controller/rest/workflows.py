@@ -16,7 +16,7 @@ from reana_db.database import Session
 from reana_db.models import (
     User,
     Workflow,
-    WorkflowStatus,
+    RunStatus,
     InteractiveSession,
     WorkflowSession,
 )
@@ -213,13 +213,7 @@ def get_workflows(paginate=None):  # noqa
         if search:
             query = query.filter(Workflow.name.ilike("%{}%".format(search)))
         if status_list:
-<<<<<<< HEAD
-            workflow_status = [
-                WorkflowStatus[status] for status in status_list.split(",")
-            ]
-=======
             workflow_status = [RunStatus[status] for status in status_list.split(",")]
->>>>>>> 518e94d... models: refacor on recent interactive session model changes
             query = query.filter(Workflow.status.in_(workflow_status))
         if sort not in ["asc", "desc"]:
             sort = "desc"

@@ -13,8 +13,7 @@ from __future__ import absolute_import, print_function
 import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
-from reana_commons.config import INTERACTIVE_SESSION_TYPES
-from reana_db.models import WorkflowStatus, InteractiveSession
+from reana_db.models import RunStatus, InteractiveSession, InteractiveSessionType
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
@@ -29,8 +28,8 @@ def test_start_interactive_session(sample_serial_workflow_in_db):
         current_k8s_appsv1_api_client=DEFAULT,
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
-        if len(INTERACTIVE_SESSION_TYPES):
-            kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+        if len(InteractiveSessionType):
+            kwrm.start_interactive_session(InteractiveSessionType(0).name)
         mocks[
             "current_k8s_appsv1_api_client"
         ].create_namespaced_deployment.assert_called_once()
@@ -58,8 +57,8 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
             REANAInteractiveSessionError, match=r".*Kubernetes has failed.*"
         ):
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
-            if len(INTERACTIVE_SESSION_TYPES):
-                kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+            if len(InteractiveSessionType):
+                kwrm.start_interactive_session(InteractiveSessionType(0).name)
 
 
 def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
@@ -84,8 +83,8 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
     ) as mocks:
         try:
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
-            if len(INTERACTIVE_SESSION_TYPES):
-                kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+            if len(InteractiveSessionType):
+                kwrm.start_interactive_session(InteractiveSessionType(0).name)
         except REANAInteractiveSessionError:
             mocks[
                 "current_k8s_corev1_api_client"
@@ -94,7 +93,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
                 "current_k8s_networking_v1beta1"
             ].delete_namespaced_ingress.assert_called_once()
             mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
-            assert sample_serial_workflow_in_db.interactive_session is None
+            assert not sample_serial_workflow_in_db.sessions.all()
 
 
 def test_stop_workflow_backend_only_kubernetes(
@@ -102,7 +101,7 @@ def test_stop_workflow_backend_only_kubernetes(
 ):
     """Test deletion of workflows with only Kubernetes based jobs."""
     workflow = sample_serial_workflow_in_db
-    workflow.status = WorkflowStatus.running
+    workflow.status = RunStatus.running
     workflow_jobs = add_kubernetes_jobs_to_workflow(workflow)
     backend_job_ids = [job.backend_job_id for job in workflow_jobs]
     with patch(
@@ -129,15 +128,15 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
         current_k8s_corev1_api_client=DEFAULT,
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(workflow)
-        if len(INTERACTIVE_SESSION_TYPES):
-            kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])
+        if len(InteractiveSessionType):
+            kwrm.start_interactive_session(InteractiveSessionType(0).name)
 
             int_session = InteractiveSession.query.filter_by(
-                owner_id=workflow.owner_id, type_=INTERACTIVE_SESSION_TYPES[0],
+                owner_id=workflow.owner_id, type_=InteractiveSessionType(0).name,
             ).first()
-            assert int_session.status == WorkflowStatus.created
+            assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
             int_session = InteractiveSession.query.filter_by(
-                owner_id=workflow.owner_id, type_=INTERACTIVE_SESSION_TYPES[0],
+                owner_id=workflow.owner_id, type_=InteractiveSessionType(0).name,
             ).first()
-            assert int_session.status == WorkflowStatus.stopped
+            assert int_session.status == RunStatus.stopped

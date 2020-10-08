@@ -20,7 +20,7 @@ from reana_db.models import (
     Job,
     JobCache,
     Workflow,
-    WorkflowStatus,
+    RunStatus,
     InteractiveSession,
 )
 from werkzeug.utils import secure_filename
@@ -33,8 +33,8 @@ from reana_workflow_controller.rest.workflows_status import START, STOP
 from reana_workflow_controller.workflow_run_manager import WorkflowRunManager
 
 status_dict = {
-    START: WorkflowStatus.running,
-    STOP: WorkflowStatus.finished,
+    START: RunStatus.running,
+    STOP: RunStatus.finished,
 }
 
 
@@ -46,7 +46,7 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
         workflow = Workflow(
             id_=workflow_uuid,
             name=workflow_name,
-            status=WorkflowStatus.finished,
+            status=RunStatus.finished,
             owner_id=default_user.id_,
             reana_specification=cwl_workflow_with_name["reana_specification"],
             type_=cwl_workflow_with_name["reana_specification"]["type"],
@@ -398,7 +398,7 @@ def test_get_workflow_status_with_uuid(
         )
         json_response = json.loads(res.data.decode())
         assert json_response.get("status") == workflow.status.name
-        workflow.status = WorkflowStatus.finished
+        workflow.status = RunStatus.finished
         session.commit()
 
         res = client.get(
@@ -422,7 +422,7 @@ def test_get_workflow_status_with_name(
         workflow = Workflow(
             id_=workflow_uuid,
             name=workflow_name,
-            status=WorkflowStatus.finished,
+            status=RunStatus.finished,
             owner_id=default_user.id_,
             reana_specification=cwl_workflow_with_name["reana_specification"],
             type_=cwl_workflow_with_name["reana_specification"]["type"],
@@ -444,7 +444,7 @@ def test_get_workflow_status_with_name(
         json_response = json.loads(res.data.decode())
 
         assert json_response.get("status") == workflow.status.name
-        workflow.status = WorkflowStatus.finished
+        workflow.status = RunStatus.finished
         session.commit()
 
         res = client.get(
@@ -530,7 +530,7 @@ def test_set_workflow_status(
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get("workflow_id")
         workflow = Workflow.query.filter(Workflow.id_ == workflow_created_uuid).first()
-        assert workflow.status == WorkflowStatus.created
+        assert workflow.status == RunStatus.created
         payload = START
         with mock.patch(
             "reana_workflow_controller.workflow_run_manager."
@@ -576,7 +576,7 @@ def test_start_already_started_workflow(
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get("workflow_id")
         workflow = Workflow.query.filter(Workflow.id_ == workflow_created_uuid).first()
-        assert workflow.status == WorkflowStatus.created
+        assert workflow.status == RunStatus.created
         payload = START
         with mock.patch(
             "reana_workflow_controller.workflow_run_manager."
@@ -617,10 +617,10 @@ def test_start_already_started_workflow(
     "current_status, expected_status, expected_http_status_code, "
     "k8s_stop_call_count",
     [
-        (WorkflowStatus.created, WorkflowStatus.created, 409, 0),
-        (WorkflowStatus.running, WorkflowStatus.stopped, 200, 1),
-        (WorkflowStatus.failed, WorkflowStatus.failed, 409, 0),
-        (WorkflowStatus.finished, WorkflowStatus.finished, 409, 0),
+        (RunStatus.created, RunStatus.created, 409, 0),
+        (RunStatus.running, RunStatus.stopped, 200, 1),
+        (RunStatus.failed, RunStatus.failed, 409, 0),
+        (RunStatus.finished, RunStatus.finished, 409, 0),
     ],
 )
 def test_stop_workflow(
@@ -880,12 +880,12 @@ def test_start_input_parameters(
     """Test start workflow with inupt parameters."""
     with app.test_client() as client:
         # create workflow
-        sample_serial_workflow_in_db.status = WorkflowStatus.created
+        sample_serial_workflow_in_db.status = RunStatus.created
         workflow_created_uuid = sample_serial_workflow_in_db.id_
         session.add(sample_serial_workflow_in_db)
         session.commit()
         workflow = Workflow.query.filter(Workflow.id_ == workflow_created_uuid).first()
-        assert workflow.status == WorkflowStatus.created
+        assert workflow.status == RunStatus.created
         payload = START
         parameters = {"input_parameters": {"first": "test"}, "operational_options": {}}
         with mock.patch(
@@ -990,11 +990,11 @@ def test_start_workflow_kubernetes_failure(
 @pytest.mark.parametrize(
     "status",
     [
-        WorkflowStatus.created,
-        WorkflowStatus.failed,
-        WorkflowStatus.finished,
-        pytest.param(WorkflowStatus.deleted, marks=pytest.mark.xfail),
-        pytest.param(WorkflowStatus.running, marks=pytest.mark.xfail),
+        RunStatus.created,
+        RunStatus.failed,
+        RunStatus.finished,
+        pytest.param(RunStatus.deleted, marks=pytest.mark.xfail),
+        pytest.param(RunStatus.running, marks=pytest.mark.xfail),
     ],
 )
 @pytest.mark.parametrize("hard_delete", [True, False])
@@ -1016,7 +1016,7 @@ def test_delete_workflow(
             data=json.dumps({"hard_delete": hard_delete}),
         )
         if not hard_delete:
-            assert sample_yadage_workflow_in_db.status == WorkflowStatus.deleted
+            assert sample_yadage_workflow_in_db.status == RunStatus.deleted
         else:
             assert (
                 session.query(Workflow)
@@ -1063,7 +1063,7 @@ def test_delete_all_workflow_runs(
         for workflow in (
             session.query(Workflow).filter_by(name=first_workflow.name).all()
         ):
-            assert workflow.status == WorkflowStatus.deleted
+            assert workflow.status == RunStatus.deleted
     else:
         assert session.query(Workflow).filter_by(name=first_workflow.name).all() == []
 

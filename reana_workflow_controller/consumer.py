@@ -30,7 +30,7 @@ from reana_commons.utils import (
     calculate_job_input_hash,
 )
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
+from reana_db.models import Job, JobCache, Workflow, RunStatus
 from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import (
@@ -74,7 +74,7 @@ class JobStatusConsumer(BaseConsumer):
             )
             next_status = body_dict.get("status")
             if next_status:
-                next_status = WorkflowStatus(next_status)
+                next_status = RunStatus(next_status)
                 print(
                     " [x] Received workflow_uuid: {0} status: {1}".format(
                         workflow_uuid, next_status
@@ -107,20 +107,20 @@ def _update_workflow_status(workflow, status, logs):
         if workflow.git_ref:
             _update_commit_status(workflow, status)
         alive_statuses = [
-            WorkflowStatus.created,
-            WorkflowStatus.running,
-            WorkflowStatus.queued,
+            RunStatus.created,
+            RunStatus.running,
+            RunStatus.queued,
         ]
         if status not in alive_statuses:
             _delete_workflow_engine_pod(workflow)
 
 
 def _update_commit_status(workflow, status):
-    if status == WorkflowStatus.finished:
+    if status == RunStatus.finished:
         state = "success"
-    elif status == WorkflowStatus.failed:
+    elif status == RunStatus.failed:
         state = "failed"
-    elif status == WorkflowStatus.stopped or status == WorkflowStatus.deleted:
+    elif status == RunStatus.stopped or status == RunStatus.deleted:
         state = "canceled"
     else:
         state = "running"

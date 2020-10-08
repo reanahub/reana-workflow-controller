@@ -16,7 +16,6 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     CVMFS_REPOSITORIES,
-    INTERACTIVE_SESSION_TYPES,
     K8S_CERN_EOS_AVAILABLE,
     REANA_COMPONENT_NAMING_SCHEME,
     REANA_COMPONENT_PREFIX,
@@ -46,13 +45,8 @@ from reana_db.models import (
     Job,
     JobStatus,
     InteractiveSession,
-<<<<<<< HEAD
-    UserWorkflowSession,
-    WorkflowStatus,
-=======
-    WorkflowSession,
+    InteractiveSessionType,
     RunStatus,
->>>>>>> 518e94d... models: refacor on recent interactive session model changes
 )
 
 from reana_workflow_controller.errors import (
@@ -280,7 +274,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """
         action_completed = True
         try:
-            if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
+            if interactive_session_type not in InteractiveSessionType.__members__:
                 raise REANAInteractiveSessionError(
                     "Interactive type {} does not exist.".format(
                         interactive_session_type
@@ -302,6 +296,19 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             instantiate_chained_k8s_objects(
                 kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
             )
+
+            # Save interactive session to the database
+            int_session = InteractiveSession(
+                name=workflow_run_name,
+                path=access_path,
+                type_=interactive_session_type,
+                owner_id=self.workflow.owner_id,
+            )
+            self.workflow.sessions.append(int_session)
+            current_db_sessions = Session.object_session(self.workflow)
+            current_db_sessions.add(self.workflow)
+            current_db_sessions.commit()
+
             return access_path
 
         except KeyError:
@@ -323,19 +330,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
         finally:
             if not action_completed and kubernetes_objects:
-                return delete_k8s_objects_if_exist(
+                delete_k8s_objects_if_exist(
                     kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
                 )
-            int_session = InteractiveSession(
-                name=workflow_run_name,
-                path=access_path,
-                type_=interactive_session_type,
-                owner_id=self.workflow.owner_id,
-            )
-            self.workflow.sessions.append(int_session)
-            current_db_sessions = Session.object_session(self.workflow)
-            current_db_sessions.add(self.workflow)
-            current_db_sessions.commit()
 
     def stop_interactive_session(self, interactive_session_id):
         """Stop an interactive workflow run."""
@@ -362,7 +359,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
         finally:
             if action_completed:
-                int_session.status = WorkflowStatus.stopped
+                int_session.status = RunStatus.stopped
                 current_db_sessions = Session.object_session(self.workflow)
                 current_db_sessions.add(int_session)
                 current_db_sessions.commit()

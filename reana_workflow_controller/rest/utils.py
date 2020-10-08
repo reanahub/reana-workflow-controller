@@ -32,7 +32,7 @@ from flask import current_app as app
 from flask import jsonify
 from git import Repo
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
+from reana_db.models import Job, JobCache, Workflow, RunStatus
 from reana_workflow_controller.config import REANA_GITLAB_HOST, WORKFLOW_TIME_FORMAT
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
@@ -47,7 +47,7 @@ def start_workflow(workflow, parameters):
     """Start a workflow."""
 
     def _start_workflow_db(workflow, parameters):
-        workflow.status = WorkflowStatus.running
+        workflow.status = RunStatus.running
         if parameters:
             workflow.input_parameters = parameters.get("input_parameters")
             workflow.operational_options = parameters.get("operational_options")
@@ -67,13 +67,13 @@ def start_workflow(workflow, parameters):
     if "restart" in parameters.keys():
         if parameters["restart"]:
             if workflow.status not in [
-                WorkflowStatus.failed,
-                WorkflowStatus.finished,
-                WorkflowStatus.queued,
+                RunStatus.failed,
+                RunStatus.finished,
+                RunStatus.queued,
             ]:
                 raise REANAWorkflowControllerError(failure_message)
-    elif workflow.status not in [WorkflowStatus.created, WorkflowStatus.queued]:
-        if workflow.status == WorkflowStatus.deleted:
+    elif workflow.status not in [RunStatus.created, RunStatus.queued]:
+        if workflow.status == RunStatus.deleted:
             raise REANAWorkflowStatusError(failure_message)
         raise REANAWorkflowControllerError(failure_message)
 
@@ -104,10 +104,10 @@ def start_workflow(workflow, parameters):
 
 def stop_workflow(workflow):
     """Stop a given workflow."""
-    if workflow.status == WorkflowStatus.running:
+    if workflow.status == RunStatus.running:
         kwrm = KubernetesWorkflowRunManager(workflow)
         kwrm.stop_batch_workflow_run()
-        workflow.status = WorkflowStatus.stopped
+        workflow.status = RunStatus.stopped
         Session.add(workflow)
         Session.commit()
     else:
@@ -186,12 +186,12 @@ def remove_workflow_jobs_from_cache(workflow):
 def delete_workflow(workflow, all_runs=False, hard_delete=False, workspace=False):
     """Delete workflow."""
     if workflow.status in [
-        WorkflowStatus.created,
-        WorkflowStatus.finished,
-        WorkflowStatus.stopped,
-        WorkflowStatus.deleted,
-        WorkflowStatus.failed,
-        WorkflowStatus.queued,
+        RunStatus.created,
+        RunStatus.finished,
+        RunStatus.stopped,
+        RunStatus.deleted,
+        RunStatus.failed,
+        RunStatus.queued,
     ]:
         try:
             to_be_deleted = [workflow]
@@ -200,7 +200,7 @@ def delete_workflow(workflow, all_runs=False, hard_delete=False, workspace=False
                     Session.query(Workflow)
                     .filter(
                         Workflow.name == workflow.name,
-                        Workflow.status != WorkflowStatus.running,
+                        Workflow.status != RunStatus.running,
                     )
                     .all()
                 )
@@ -229,7 +229,7 @@ def delete_workflow(workflow, all_runs=False, hard_delete=False, workspace=False
         except Exception as e:
             logging.error(traceback.format_exc())
             return jsonify({"message": str(e)}), 500
-    elif workflow.status == WorkflowStatus.running:
+    elif workflow.status == RunStatus.running:
         raise REANAWorkflowDeletionError(
             "Workflow {0}.{1} cannot be deleted as it"
             " is currently running.".format(workflow.name, workflow.run_number)
@@ -244,7 +244,7 @@ def _delete_workflow_row_from_db(workflow):
 
 def _mark_workflow_as_deleted_in_db(workflow):
     """Mark workflow as deleted."""
-    workflow.status = WorkflowStatus.deleted
+    workflow.status = RunStatus.deleted
     current_db_sessions = Session.object_session(workflow)
     current_db_sessions.add(workflow)
     current_db_sessions.commit()

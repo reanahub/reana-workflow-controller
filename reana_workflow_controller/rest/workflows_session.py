@@ -10,9 +10,8 @@
 
 
 from flask import Blueprint, jsonify, request
-from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_db.utils import _get_workflow_with_uuid_or_name
-from reana_db.models import WorkflowSession
+from reana_db.models import WorkflowSession, InteractiveSessionType
 
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
 
@@ -109,13 +108,14 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
             Request failed. Internal controller error.
     """
     try:
-        if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
+        if interactive_session_type not in InteractiveSessionType.__members__:
             return (
                 jsonify(
                     {
                         "message": "Interactive session type {0} not found, try "
                         "with one of: {1}".format(
-                            interactive_session_type, INTERACTIVE_SESSION_TYPES
+                            interactive_session_type,
+                            [e.name for e in InteractiveSessionType],
                         )
                     }
                 ),

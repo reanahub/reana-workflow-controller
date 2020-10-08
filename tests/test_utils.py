@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
+from reana_db.models import Job, JobCache, Workflow, RunStatus
 
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
@@ -25,12 +25,12 @@ from reana_workflow_controller.rest.utils import (
 @pytest.mark.parametrize(
     "status",
     [
-        WorkflowStatus.created,
-        WorkflowStatus.failed,
-        WorkflowStatus.finished,
-        WorkflowStatus.stopped,
-        pytest.param(WorkflowStatus.deleted, marks=pytest.mark.xfail),
-        pytest.param(WorkflowStatus.running, marks=pytest.mark.xfail),
+        RunStatus.created,
+        RunStatus.failed,
+        RunStatus.finished,
+        RunStatus.stopped,
+        pytest.param(RunStatus.deleted, marks=pytest.mark.xfail),
+        pytest.param(RunStatus.running, marks=pytest.mark.xfail),
     ],
 )
 @pytest.mark.parametrize("hard_delete", [True, False])
@@ -44,7 +44,7 @@ def test_delete_workflow(
 
     delete_workflow(sample_yadage_workflow_in_db, hard_delete=hard_delete)
     if not hard_delete:
-        assert sample_yadage_workflow_in_db.status == WorkflowStatus.deleted
+        assert sample_yadage_workflow_in_db.status == RunStatus.deleted
     else:
         assert (
             session.query(Workflow)
@@ -72,7 +72,7 @@ def test_delete_all_workflow_runs(
         )
         session.add(workflow)
         if i == 4:
-            workflow.status = WorkflowStatus.running
+            workflow.status = RunStatus.running
             not_deleted_one = workflow.id_
         session.commit()
 
@@ -87,9 +87,9 @@ def test_delete_all_workflow_runs(
             session.query(Workflow).filter_by(name=first_workflow.name).all()
         ):
             if not_deleted_one == workflow.id_:
-                assert workflow.status == WorkflowStatus.running
+                assert workflow.status == RunStatus.running
             else:
-                assert workflow.status == WorkflowStatus.deleted
+                assert workflow.status == RunStatus.deleted
     else:
         # the one running should not be deleted
         assert (
