@@ -30,7 +30,8 @@ install:
   - travis_retry pip install -e .[all]
 
 script:
-  - ./run-tests.sh
+  - mkdir /tmp/reana
+  - SHARED_VOLUME_PATH=/tmp/reana ./run-tests.sh
 
 after_success:
   - coveralls

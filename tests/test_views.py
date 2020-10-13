@@ -1175,7 +1175,6 @@ def test_get_workflow_diff(
     sample_yadage_workflow_in_db,
     sample_serial_workflow_in_db,
     tmp_shared_volume_path,
-    sample_workflow_workspace,
 ):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
@@ -1226,34 +1225,24 @@ def test_get_workspace_diff(
     sample_yadage_workflow_in_db,
     sample_serial_workflow_in_db,
     tmp_shared_volume_path,
-    sample_workflow_workspace,
 ):
     """Test get workspace differences."""
     # create the workspaces for the two workflows
-    workspace_path_a = next(
-        sample_workflow_workspace(str(sample_serial_workflow_in_db.workspace_path))
+    workspace_path_a = os.path.join(
+        tmp_shared_volume_path, sample_serial_workflow_in_db.workspace_path
     )
-    workspace_path_b = next(
-        sample_workflow_workspace(str(sample_yadage_workflow_in_db.workspace_path))
+    workspace_path_b = os.path.join(
+        tmp_shared_volume_path, sample_yadage_workflow_in_db.workspace_path
     )
-
-    sample_serial_workflow_in_db.get_workspace = lambda: str(
-        sample_serial_workflow_in_db.id_
-    )
-    sample_yadage_workflow_in_db.get_workspace = lambda: str(
-        sample_yadage_workflow_in_db.id_
-    )
-    # modify the contents in one file
-    with open(
-        os.path.join(
-            workspace_path_a,
-            "data",
-            "World_historical_and_predicted_populations_in_percentage.csv",
-        ),
-        "a",
-    ) as f:
-        f.write("An extra line")
-        f.flush()
+    # Create files that differ in one line
+    csv_line = "1,2,3,4"
+    file_name = "test.csv"
+    for index, workspace in enumerate([workspace_path_a, workspace_path_b]):
+        with open(os.path.join(workspace, file_name), "w",) as f:
+            f.write("# File {}".format(index))
+            f.write(os.linesep)
+            f.write(csv_line)
+            f.flush()
     with app.test_client() as client:
         res = client.get(
             url_for(
@@ -1266,7 +1255,7 @@ def test_get_workspace_diff(
         )
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
-        assert "An extra line" in response_data["workspace_listing"]
+        assert "# File" in response_data["workspace_listing"]
 
 
 def test_create_interactive_session(app, default_user, sample_serial_workflow_in_db):
