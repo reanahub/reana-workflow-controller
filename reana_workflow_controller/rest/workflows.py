@@ -229,13 +229,15 @@ def get_workflows(paginate=None):  # noqa
                 "progress": get_workflow_progress(workflow),
                 "size": "-",
             }
-            if type_ == "interactive":
+            if type_ == "interactive" or verbose:
                 int_session = workflow.sessions.first()
-                if not int_session:
+                if int_session:
+                    workflow_response["session_type"] = int_session.type_.name
+                    workflow_response["session_uri"] = int_session.path
+                    workflow_response["session_status"] = int_session.status.name
+                # Skip workflow if type is interactive and there is no session
+                elif type_ == "interactive":
                     continue
-                workflow_response["session_type"] = int_session.type_.name
-                workflow_response["session_uri"] = int_session.path
-                workflow_response["session_status"] = int_session.status.name
             if verbose:
                 try:
                     disk_usage_info = workflow.get_workspace_disk_usage(

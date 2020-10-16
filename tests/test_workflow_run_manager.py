@@ -136,7 +136,4 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
             ).first()
             assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
-            int_session = InteractiveSession.query.filter_by(
-                owner_id=workflow.owner_id, type_=InteractiveSessionType(0).name,
-            ).first()
-            assert int_session.status == RunStatus.stopped
+            assert not workflow.sessions.first()

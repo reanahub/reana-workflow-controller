@@ -359,9 +359,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
         finally:
             if action_completed:
-                int_session.status = RunStatus.stopped
+                # TODO: once multiple sessions will be supported instead of
+                # deleting a session, its status should be changed to "stopped"
+                # int_session.status = RunStatus.stopped
                 current_db_sessions = Session.object_session(self.workflow)
-                current_db_sessions.add(int_session)
+                current_db_sessions.delete(int_session)
                 current_db_sessions.commit()
 
     def stop_batch_workflow_run(self):
