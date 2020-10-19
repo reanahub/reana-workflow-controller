@@ -96,11 +96,6 @@ def get_workflows(paginate=None):  # noqa
           type: array
           items:
             type: string
-        - name: block_size
-          in: query
-          description: Size format, either 'b' (bytes) or 'k' (kilobytes).
-          required: false
-          type: string
         - name: page
           in: query
           description: Results page number (pagination).
@@ -133,7 +128,12 @@ def get_workflows(paginate=None):  # noqa
                     status:
                       type: string
                     size:
-                      type: string
+                      type: object
+                      properties:
+                        raw:
+                          type: number
+                        human_readable:
+                          type: string
                     user:
                       type: string
                     created:
@@ -147,7 +147,10 @@ def get_workflows(paginate=None):  # noqa
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "name": "mytest.1",
                   "status": "running",
-                  "size": "10M",
+                  "size":{
+                    "raw": 10490000,
+                    "human_readable": "10 MB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -155,7 +158,10 @@ def get_workflows(paginate=None):  # noqa
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest.2",
                   "status": "finished",
-                  "size": "12M",
+                  "size":{
+                    "raw": 12580000,
+                    "human_readable": "12 MB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -163,7 +169,10 @@ def get_workflows(paginate=None):  # noqa
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest.3",
                   "status": "created",
-                  "size": "180K",
+                  "size":{
+                    "raw": 184320,
+                    "human_readable": "180 KB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -171,7 +180,10 @@ def get_workflows(paginate=None):  # noqa
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest.4",
                   "status": "created",
-                  "size": "1G",
+                  "size": {
+                    "raw": 1074000000,
+                    "human_readable": "1 GB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 }
@@ -202,7 +214,6 @@ def get_workflows(paginate=None):  # noqa
         user = User.query.filter(User.id_ == user_uuid).first()
         type_ = request.args.get("type", "batch")
         verbose = json.loads(request.args.get("verbose", "false").lower())
-        block_size = request.args.get("block_size")
         sort = request.args.get("sort", "desc")
         search = request.args.get("search", "")
         status_list = request.args.get("status", "")
@@ -227,7 +238,6 @@ def get_workflows(paginate=None):  # noqa
                 "user": user_uuid,
                 "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                 "progress": get_workflow_progress(workflow),
-                "size": "-",
             }
             if type_ == "interactive" or verbose:
                 int_session = workflow.sessions.first()
@@ -238,17 +248,18 @@ def get_workflows(paginate=None):  # noqa
                 # Skip workflow if type is interactive and there is no session
                 elif type_ == "interactive":
                     continue
+            empty_disk_usage = {
+                "human_readable": "",
+                "raw": -1,
+            }
             if verbose:
-                try:
-                    disk_usage_info = workflow.get_workspace_disk_usage(
-                        summarize=True, block_size=block_size
-                    )
-                    if disk_usage_info:
-                        workflow_response["size"] = disk_usage_info[0]["size"]
-                    else:
-                        workflow_response["size"] = "0K"
-                except ValueError:
-                    workflow_response["size"] = "0K"
+                workflow_response["size"] = (
+                    workflow.get_quota_usage()
+                    .get("disk", {})
+                    .get("usage", empty_disk_usage)
+                )
+            else:
+                workflow_response["size"] = empty_disk_usage
             workflows.append(workflow_response)
         pagination_dict["items"] = workflows
         pagination_dict["user_has_workflows"] = user.workflows.first() is not None

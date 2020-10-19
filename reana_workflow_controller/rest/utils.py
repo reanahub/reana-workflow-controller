@@ -19,21 +19,21 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
+import fs
+from flask import current_app as app
+from flask import jsonify
+from git import Repo
 from kubernetes.client.rest import ApiException
 from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_workflow_status_change_verb
+from reana_db.database import Session
+from reana_db.models import Job, JobCache, ResourceUnit, RunStatus, Workflow
 from sqlalchemy.exc import SQLAlchemyError
 from webargs import fields, validate
 from webargs.flaskparser import parser
 from werkzeug.exceptions import BadRequest
 
-import fs
-from flask import current_app as app
-from flask import jsonify
-from git import Repo
-from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, RunStatus
 from reana_workflow_controller.config import REANA_GITLAB_HOST, WORKFLOW_TIME_FORMAT
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
@@ -378,7 +378,12 @@ def list_directory_files(directory):
                     "last-modified": file_details.modified.strftime(
                         WORKFLOW_TIME_FORMAT
                     ),
-                    "size": file_details.size,
+                    "size": dict(
+                        raw=file_details.size,
+                        human_readable=ResourceUnit.human_readable_unit(
+                            ResourceUnit.bytes_, file_details.size
+                        ),
+                    ),
                 }
             )
         except fs.errors.ResourceNotFound as e:

@@ -427,7 +427,12 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
                     last-modified:
                       type: string
                     size:
-                      type: integer
+                      type: object
+                      properties:
+                        raw:
+                          type: number
+                        human_readable:
+                          type: string
         400:
           description: >-
             Request failed. The incoming data specification seems malformed.
