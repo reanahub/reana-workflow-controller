@@ -1,27 +1,27 @@
 Changes
 =======
 
-Version master (UNRELEASED)
----------------------------
+Version 0.7.0 (2020-10-20)
+--------------------------
 
-- Uses python3.8
-- Pins all Python dependencies allowing to easily rebuild component images at later times.
-- Enables workflow restarts.
-- Enables deletion of workflows in queued state.
-- Exposes workflow engines logs.
-- Allows passing operational options.
-- Adds progress report on workflow list response.
-- Makes CVMFS available in interactive sessions.
-- Adds preview flag to file download endpoint.
-- Creates REANA runtime components in the centrally configured (REANA-Commons) runtime namespace.
-- Fixes jobs status update.
-- Labels workflow engine pods for better traceability.
-- Enriches logs enpoint information.
-- Decreases clone depth when retrieving GitLab projects.
-- Fixes response on close interactive session action.
-- Installs submodules in editable mode for live code updates.
+- Adds possibility to restart workflows.
+- Adds exposure of workflow engines logs.
+- Adds possibility to pass workflow operational options.
+- Adds progress report information on workflow list response.
 - Adds code mount on dev mode in workflow engines and job controller.
-- Adds Black formatter support.
+- Adds preview flag to file download endpoint.
+- Fixes deletion of workflows in queued state.
+- Fixes CVMFS availability for interactive sessions.
+- Fixes jobs status update.
+- Fixes response on close interactive session action.
+- Changes runtime component creation to use centrally configured namespace from REANA-Commons.
+- Changes workflow engine pod labelling for better traceability.
+- Changes logs endpoint to provide richer information.
+- Changes git clone depth when retrieving GitLab projects.
+- Changes REANA submodule installation in editable mode for live code updates for developers.
+- Changes base image to use Python 3.8.
+- Changes code formatting to respect ``black`` coding style.
+- Changes documentation to single-page layout.
 
 Version 0.6.1 (2020-05-25)
 --------------------------
