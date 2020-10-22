@@ -11,7 +11,7 @@
 
 from flask import Blueprint, jsonify, request
 from reana_db.utils import _get_workflow_with_uuid_or_name
-from reana_db.models import WorkflowSession, InteractiveSessionType
+from reana_db.models import WorkflowSession, InteractiveSessionType, RunStatus
 
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
 
@@ -125,6 +125,23 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
         user_uuid = request.args["user"]
         workflow = None
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+
+        if workflow.sessions.first() is not None:
+            return (
+                jsonify({"message": "Interactive session is already open"}),
+                404,
+            )
+
+        if workflow.status == RunStatus.deleted:
+            return (
+                jsonify(
+                    {
+                        "message": "Interactive session can't be opened from a deleted workflow"
+                    }
+                ),
+                404,
+            )
+
         kwrm = KubernetesWorkflowRunManager(workflow)
         access_path = kwrm.start_interactive_session(
             interactive_session_type,
