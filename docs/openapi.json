@@ -934,7 +934,7 @@
             "type": "string"
           },
           {
-            "description": "Optional. Additional input parameters and operational options for workflow execution. Possible parameters are `CACHE=on/off`, passed to disable caching of results in serial workflows, `all_runs=True/False` deletes all runs of a given workflow if status is set to deleted, `workspace=True/False` which deletes the workspace of a workflow and finally `hard_delete=True` which removes completely the workflow data from the database and the workspace from the shared filesystem.",
+            "description": "Optional. Additional input parameters and operational options for workflow execution. Possible parameters are `CACHE=on/off`, passed to disable caching of results in serial workflows, `all_runs=True/False` deletes all runs of a given workflow if status is set to deleted and `workspace=True/False` which deletes the workspace of a workflow.",
             "in": "body",
             "name": "parameters",
             "required": false,
@@ -944,9 +944,6 @@
                   "type": "string"
                 },
                 "all_runs": {
-                  "type": "boolean"
-                },
-                "hard_delete": {
                   "type": "boolean"
                 },
                 "workspace": {

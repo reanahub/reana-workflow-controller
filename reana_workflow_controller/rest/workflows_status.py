@@ -373,10 +373,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             workflow execution. Possible parameters are `CACHE=on/off`, passed
             to disable caching of results in serial workflows,
             `all_runs=True/False` deletes all runs of a given workflow
-            if status is set to deleted, `workspace=True/False` which deletes
-            the workspace of a workflow and finally `hard_delete=True` which
-            removes completely the workflow data from the database and the
-            workspace from the shared filesystem.
+            if status is set to deleted and `workspace=True/False` which deletes
+            the workspace of a workflow.
           required: false
           schema:
             type: object
@@ -386,8 +384,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               all_runs:
                 type: boolean
               workspace:
-                type: boolean
-              hard_delete:
                 type: boolean
       responses:
         200:
@@ -526,9 +522,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             )
         elif status == DELETED:
             all_runs = True if request.json.get("all_runs") else False
-            hard_delete = True if request.json.get("hard_delete") else False
-            workspace = True if hard_delete or request.json.get("workspace") else False
-            return delete_workflow(workflow, all_runs, hard_delete, workspace)
+            workspace = True if request.json.get("workspace") else False
+            return delete_workflow(workflow, all_runs, workspace)
         if status == STOP:
             stop_workflow(workflow)
             return (

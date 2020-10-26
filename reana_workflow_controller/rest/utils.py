@@ -184,7 +184,7 @@ def remove_workflow_jobs_from_cache(workflow):
     Session.commit()
 
 
-def delete_workflow(workflow, all_runs=False, hard_delete=False, workspace=False):
+def delete_workflow(workflow, all_runs=False, workspace=False):
     """Delete workflow."""
     if workflow.status in [
         RunStatus.created,
@@ -206,13 +206,9 @@ def delete_workflow(workflow, all_runs=False, hard_delete=False, workspace=False
                     .all()
                 )
             for workflow in to_be_deleted:
-                if hard_delete:
+                if workspace:
                     remove_workflow_workspace(workflow.workspace_path)
-                    _delete_workflow_row_from_db(workflow)
-                else:
-                    if workspace:
-                        remove_workflow_workspace(workflow.workspace_path)
-                    _mark_workflow_as_deleted_in_db(workflow)
+                _mark_workflow_as_deleted_in_db(workflow)
                 remove_workflow_jobs_from_cache(workflow)
 
             return (
@@ -235,12 +231,6 @@ def delete_workflow(workflow, all_runs=False, hard_delete=False, workspace=False
             "Workflow {0}.{1} cannot be deleted as it"
             " is currently running.".format(workflow.name, workflow.run_number)
         )
-
-
-def _delete_workflow_row_from_db(workflow):
-    """Remove workflow row from database."""
-    Session.query(Workflow).filter_by(id_=workflow.id_).delete()
-    Session.commit()
 
 
 def _mark_workflow_as_deleted_in_db(workflow):

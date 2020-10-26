@@ -33,30 +33,20 @@ from reana_workflow_controller.rest.utils import (
         pytest.param(RunStatus.running, marks=pytest.mark.xfail),
     ],
 )
-@pytest.mark.parametrize("hard_delete", [True, False])
 def test_delete_workflow(
-    app, session, default_user, sample_yadage_workflow_in_db, status, hard_delete
+    app, session, default_user, sample_yadage_workflow_in_db, status
 ):
     """Test deletion of a workflow in all possible statuses."""
     sample_yadage_workflow_in_db.status = status
     session.add(sample_yadage_workflow_in_db)
     session.commit()
 
-    delete_workflow(sample_yadage_workflow_in_db, hard_delete=hard_delete)
-    if not hard_delete:
-        assert sample_yadage_workflow_in_db.status == RunStatus.deleted
-    else:
-        assert (
-            session.query(Workflow)
-            .filter_by(id_=sample_yadage_workflow_in_db.id_)
-            .all()
-            == []
-        )
+    delete_workflow(sample_yadage_workflow_in_db)
+    assert sample_yadage_workflow_in_db.status == RunStatus.deleted
 
 
-@pytest.mark.parametrize("hard_delete", [True, False])
 def test_delete_all_workflow_runs(
-    app, session, default_user, yadage_workflow_with_name, hard_delete
+    app, session, default_user, yadage_workflow_with_name
 ):
     """Test deletion of all runs of a given workflow."""
     # add 5 workflows in the database with the same name
@@ -81,23 +71,14 @@ def test_delete_all_workflow_runs(
         .filter_by(name=yadage_workflow_with_name["name"])
         .first()
     )
-    delete_workflow(first_workflow, all_runs=True, hard_delete=hard_delete)
-    if not hard_delete:
-        for workflow in (
-            session.query(Workflow).filter_by(name=first_workflow.name).all()
-        ):
-            if not_deleted_one == workflow.id_:
-                assert workflow.status == RunStatus.running
-            else:
-                assert workflow.status == RunStatus.deleted
-    else:
-        # the one running should not be deleted
-        assert (
-            len(session.query(Workflow).filter_by(name=first_workflow.name).all()) == 1
-        )
+    delete_workflow(first_workflow, all_runs=True)
+    for workflow in session.query(Workflow).filter_by(name=first_workflow.name).all():
+        if not_deleted_one == workflow.id_:
+            assert workflow.status == RunStatus.running
+        else:
+            assert workflow.status == RunStatus.deleted
 
 
-@pytest.mark.parametrize("hard_delete", [True, False])
 @pytest.mark.parametrize("workspace", [True, False])
 def test_workspace_deletion(
     app,
@@ -106,7 +87,6 @@ def test_workspace_deletion(
     sample_yadage_workflow_in_db,
     tmp_shared_volume_path,
     workspace,
-    hard_delete,
 ):
     """Test workspace deletion."""
     workflow = sample_yadage_workflow_in_db
@@ -134,8 +114,8 @@ def test_workspace_deletion(
     # check that the workflow workspace exists
     assert os.path.exists(absolute_workflow_workspace)
     assert os.path.exists(cache_dir_path)
-    delete_workflow(workflow, hard_delete=hard_delete, workspace=workspace)
-    if hard_delete or workspace:
+    delete_workflow(workflow, workspace=workspace)
+    if workspace:
         assert not os.path.exists(absolute_workflow_workspace)
 
     # check that all cache entries for jobs
@@ -156,13 +136,11 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
 
     # check that the workflow workspace exists
     assert os.path.exists(absolute_workflow_workspace)
-    delete_workflow(sample_yadage_workflow_in_db, hard_delete=False, workspace=False)
+    delete_workflow(sample_yadage_workflow_in_db, workspace=False)
     assert os.path.exists(absolute_workflow_workspace)
 
-    delete_workflow(sample_yadage_workflow_in_db, hard_delete=False, workspace=True)
+    delete_workflow(sample_yadage_workflow_in_db, workspace=True)
     assert not os.path.exists(absolute_workflow_workspace)
-
-    delete_workflow(sample_yadage_workflow_in_db, hard_delete=True, workspace=True)
 
 
 def test_delete_recursive_wildcard(tmp_shared_volume_path):
@@ -195,11 +173,11 @@ def test_workspace_permissions(
 ):
     """Test workspace dir permissions."""
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
-    expeted_worspace_permissions = "drwxrwxr-x"
+    expected_worspace_permissions = "drwxrwxr-x"
     absolute_workflow_workspace = os.path.join(
         tmp_shared_volume_path, sample_yadage_workflow_in_db.workspace_path
     )
     workspace_permissions = stat.filemode(os.stat(absolute_workflow_workspace).st_mode)
     assert os.path.exists(absolute_workflow_workspace)
-    assert workspace_permissions == expeted_worspace_permissions
-    delete_workflow(sample_yadage_workflow_in_db, hard_delete=True, workspace=True)
+    assert workspace_permissions == expected_worspace_permissions
+    delete_workflow(sample_yadage_workflow_in_db, workspace=True)
