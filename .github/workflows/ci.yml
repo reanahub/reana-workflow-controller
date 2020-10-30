@@ -121,7 +121,9 @@ jobs:
         run: ./run-tests.sh --check-openapi-spec
 
       - name: Run pytest
-        run: ./run-tests.sh --check-pytest
+        run: |
+            mkdir /tmp/reana
+            SHARED_VOLUME_PATH=/tmp/reana ./run-tests.sh --check-pytest
 
       - name: Codecov Coverage
         if: matrix.python-version == 3.8
