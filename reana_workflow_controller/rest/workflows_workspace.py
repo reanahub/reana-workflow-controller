@@ -18,7 +18,11 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import NotFound
 
 from reana_db.models import User
-from reana_db.utils import _get_workflow_with_uuid_or_name
+from reana_db.utils import (
+    _get_workflow_with_uuid_or_name,
+    store_workflow_disk_quota,
+    update_users_disk_quota,
+)
 from reana_workflow_controller.errors import (
     REANAUploadPathError,
     REANAWorkflowControllerError,
@@ -145,6 +149,9 @@ def upload_file(workflow_id_or_name):
         absolute_file_path = os.path.join(absolute_workspace_path, filename)
 
         FileStorage(request.stream).save(absolute_file_path, buffer_size=32768)
+        # update user and workflow resource disk quota
+        store_workflow_disk_quota(workflow, bytes_to_sum=request.content_length)
+        update_users_disk_quota(workflow.owner, bytes_to_sum=request.content_length)
         return (
             jsonify(
                 {"message": "{} has been successfully uploaded.".format(full_file_name)}
@@ -347,7 +354,12 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
             current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
         deleted = remove_files_recursive_wildcard(abs_path_to_workspace, file_name)
-
+        # update user and workflow resource disk quota
+        freed_up_bytes = sum(
+            size.get("size", 0) for size in deleted["deleted"].values()
+        )
+        store_workflow_disk_quota(workflow, bytes_to_sum=-freed_up_bytes)
+        update_users_disk_quota(user, bytes_to_sum=-freed_up_bytes)
         return jsonify(deleted), 200
 
     except ValueError:

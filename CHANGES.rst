@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version master (UNRELEASED)
+---------------------------
+
+- Adds users quota accounting.
+
 Version 0.7.0 (2020-10-20)
 --------------------------
 
