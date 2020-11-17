@@ -638,7 +638,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify(response)
     except REANAWorkflowControllerError as e:
         return jsonify({"message": str(e)}), 409
-    except ValueError as e:
+    except ValueError:
         wrong_workflow = (
             workflow_id_or_name_b if workflow_a_exists else workflow_id_or_name_a
         )

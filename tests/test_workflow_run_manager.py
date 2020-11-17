@@ -127,7 +127,7 @@ def test_interactive_session_closure(sample_serial_workflow_in_db):
         current_k8s_appsv1_api_client=mocked_k8s_client,
         current_k8s_networking_v1beta1=DEFAULT,
         current_k8s_corev1_api_client=DEFAULT,
-    ) as mocks:
+    ):
         kwrm = KubernetesWorkflowRunManager(workflow)
         if len(INTERACTIVE_SESSION_TYPES):
             kwrm.start_interactive_session(INTERACTIVE_SESSION_TYPES[0])

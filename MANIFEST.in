@@ -10,6 +10,7 @@ include LICENSE
 include *.rst
 include *.sh
 include *.txt
+include .flake8
 include pytest.ini
 include docs/openapi.json
 prune docs/_build

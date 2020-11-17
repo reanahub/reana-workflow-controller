@@ -811,7 +811,6 @@ def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
         )
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
-        create_workflow_logs = ""
         expected_data = {
             "workflow_id": workflow_uuid,
             "workflow_name": workflow_name,
@@ -1000,7 +999,7 @@ def test_delete_workflow(
     session.add(sample_yadage_workflow_in_db)
     session.commit()
     with app.test_client() as client:
-        res = client.put(
+        client.put(
             url_for(
                 "statuses.set_workflow_status",
                 workflow_id_or_name=sample_yadage_workflow_in_db.id_,
@@ -1045,7 +1044,7 @@ def test_delete_all_workflow_runs(
         .first()
     )
     with app.test_client() as client:
-        res = client.put(
+        client.put(
             url_for(
                 "statuses.set_workflow_status", workflow_id_or_name=first_workflow.id_
             ),
@@ -1227,9 +1226,7 @@ def test_get_workspace_diff(
     workspace_path_a = next(
         sample_workflow_workspace(str(sample_serial_workflow_in_db.workspace_path))
     )
-    workspace_path_b = next(
-        sample_workflow_workspace(str(sample_yadage_workflow_in_db.workspace_path))
-    )
+    next(sample_workflow_workspace(str(sample_yadage_workflow_in_db.workspace_path)))
 
     sample_serial_workflow_in_db.get_workspace = lambda: str(
         sample_serial_workflow_in_db.id_
@@ -1274,7 +1271,7 @@ def test_create_interactive_session(app, default_user, sample_serial_workflow_in
             current_k8s_corev1_api_client=mock.DEFAULT,
             current_k8s_networking_v1beta1=mock.DEFAULT,
             current_k8s_appsv1_api_client=mock.DEFAULT,
-        ) as mocks:
+        ):
             res = client.post(
                 url_for(
                     "workflows_session.open_interactive_session",
@@ -1317,7 +1314,7 @@ def test_create_interactive_session_custom_image(
             current_k8s_networking_v1beta1=mock.DEFAULT,
             current_k8s_appsv1_api_client=mock.DEFAULT,
         ) as mocks:
-            res = client.post(
+            client.post(
                 url_for(
                     "workflows_session.open_interactive_session",
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
@@ -1349,7 +1346,7 @@ def test_close_interactive_session(
     with app.test_client() as client:
         with mock.patch(
             "reana_workflow_controller.k8s" ".current_k8s_networking_v1beta1"
-        ) as mocks:
+        ):
             res = client.post(
                 url_for(
                     "workflows_session.close_interactive_session",
