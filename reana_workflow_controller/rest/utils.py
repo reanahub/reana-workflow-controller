@@ -338,9 +338,6 @@ def mv_files(source, target, workflow):
     absolute_source_path = os.path.join(
         app.config["SHARED_VOLUME_PATH"], absolute_workspace_path, source
     )
-    absolute_target_path = os.path.join(
-        app.config["SHARED_VOLUME_PATH"], absolute_workspace_path, target
-    )
 
     if not os.path.exists(absolute_source_path):
         message = "Path {} does not exist".format(source)

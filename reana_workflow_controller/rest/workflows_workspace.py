@@ -283,7 +283,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
-    except NotFound as e:
+    except NotFound:
         return jsonify({"message": "{0} does not exist.".format(file_name)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
@@ -376,9 +376,9 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
-    except NotFound as e:
+    except NotFound:
         return jsonify({"message": "{0} does not exist.".format(file_name)}), 404
-    except OSError as e:
+    except OSError:
         return jsonify({"message": "Error while deleting {}.".format(file_name)}), 500
     except Exception as e:
         return jsonify({"message": str(e)}), 500

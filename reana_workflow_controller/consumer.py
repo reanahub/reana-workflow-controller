@@ -143,7 +143,7 @@ def _update_run_progress(workflow_uuid, msg):
     cached_jobs = None
     job_progress = workflow.job_progress
     if "cached" in msg["progress"]:
-        cached_jobs = msg["progress"]["cached"]
+        cached_jobs = msg["progress"]["cached"]  # noqa: F841
     for status in PROGRESS_STATUSES:
         if status in msg["progress"]:
             previous_status = workflow.job_progress.get(status)
