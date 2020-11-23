@@ -49,8 +49,9 @@ ENV FLASK_APP=reana_workflow_controller/app.py \
 EXPOSE 5000
 
 # Run server
-CMD ["uwsgi", "--module reana_workflow_controller.app:app", \
-    "--http-socket 0.0.0.0:5000 --master", \
-    "--processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS}", \
-    "--stats /tmp/stats.socket", \
-    "--wsgi-disable-file-wrapper"]
+# hadolint ignore=DL3025
+CMD uwsgi --module reana_workflow_controller.app:app \
+    --http-socket 0.0.0.0:5000 --master \
+    --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
+    --stats /tmp/stats.socket \
+    --wsgi-disable-file-wrapper
