@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.7.1 (2021-02-03)
+--------------------------
+
+- Fixes minor code warnings.
+- Changes CI system to include Python flake8 and Dockerfile hadolint checkers.
+
 Version 0.7.0 (2020-10-20)
 --------------------------
 
