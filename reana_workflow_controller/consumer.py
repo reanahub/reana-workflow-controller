@@ -12,7 +12,6 @@ from __future__ import absolute_import
 
 import json
 import logging
-import traceback
 import uuid
 from datetime import datetime
 
@@ -32,6 +31,7 @@ from reana_commons.utils import (
 )
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import (
@@ -50,9 +50,11 @@ except ImportError:
 class JobStatusConsumer(BaseConsumer):
     """Consumer of jobs-status queue."""
 
-    def __init__(self):
+    def __init__(self, connection=None, queue=None):
         """Initialise JobStatusConsumer class."""
-        super(JobStatusConsumer, self).__init__(queue="jobs-status")
+        super(JobStatusConsumer, self).__init__(
+            connection=connection, queue="jobs-status"
+        )
 
     def get_consumers(self, Consumer, channel):
         """Implement providing kombu.Consumers with queues/callbacks."""
@@ -70,34 +72,47 @@ class JobStatusConsumer(BaseConsumer):
         body_dict = json.loads(body)
         workflow_uuid = body_dict.get("workflow_uuid")
         if workflow_uuid:
-            workflow = (
-                Session.query(Workflow).filter_by(id_=workflow_uuid).one_or_none()
-            )
-            next_status = body_dict.get("status")
-            if next_status:
-                next_status = WorkflowStatus(next_status)
-                print(
-                    " [x] Received workflow_uuid: {0} status: {1}".format(
-                        workflow_uuid, next_status
-                    )
+            try:
+                workflow = (
+                    Session.query(Workflow).filter_by(id_=workflow_uuid).one_or_none()
                 )
-            logs = body_dict.get("logs") or ""
-            if workflow.can_transition_to(next_status):
-                _update_workflow_status(workflow, next_status, logs)
-                if "message" in body_dict and body_dict.get("message"):
-                    msg = body_dict["message"]
-                    if "progress" in msg:
-                        _update_run_progress(workflow_uuid, msg)
-                        _update_job_progress(workflow_uuid, msg)
-                    # Caching: calculate input hash and store in JobCache
-                    if "caching_info" in msg:
-                        _update_job_cache(msg)
-                Session.commit()
-            else:
+                next_status = body_dict.get("status")
+                if next_status:
+                    next_status = WorkflowStatus(next_status)
+                    logging.info(
+                        " [x] Received workflow_uuid: {0} status: {1}".format(
+                            workflow_uuid, next_status
+                        )
+                    )
+
+                logs = body_dict.get("logs") or ""
+                if workflow.can_transition_to(next_status):
+                    _update_workflow_status(workflow, next_status, logs)
+                    if "message" in body_dict and body_dict.get("message"):
+                        msg = body_dict["message"]
+                        if "progress" in msg:
+                            _update_run_progress(workflow_uuid, msg)
+                            _update_job_progress(workflow_uuid, msg)
+                        # Caching: calculate input hash and store in JobCache
+                        if "caching_info" in msg:
+                            _update_job_cache(msg)
+                    Session.commit()
+                else:
+                    logging.error(
+                        f"Cannot transition workflow {workflow.id_}"
+                        f" from status {workflow.status} to"
+                        f" {next_status}."
+                    )
+            except REANAWorkflowControllerError as rwce:
+                logging.error(rwce, exc_info=True)
+            except SQLAlchemyError as sae:
                 logging.error(
-                    f"Cannot transition workflow {workflow.id_}"
-                    f" from status {workflow.status} to"
-                    f" {next_status}."
+                    f"Something went wrong while querying the database for workflow: {workflow.id_}"
+                )
+                logging.error(sae, exc_info=True)
+            except Exception as e:
+                logging.error(
+                    f"Unexpected error while processing workflow: {e}", exc_info=True
                 )
 
 
@@ -113,8 +128,14 @@ def _update_workflow_status(workflow, status, logs):
             WorkflowStatus.queued,
         ]
         if status not in alive_statuses:
-            workflow.run_finished_at = datetime.now()
-            _delete_workflow_engine_pod(workflow)
+            try:
+                workflow.run_finished_at = datetime.now()
+                _delete_workflow_engine_pod(workflow)
+            except REANAWorkflowControllerError:
+                logging.error(
+                    f"Could not clean up workflow engine for workflow {workflow.id_}"
+                )
+                workflow.logs += "Workflow engine logs could not be retrieved.\n"
 
 
 def _update_commit_status(workflow, status):
@@ -251,6 +272,3 @@ def _delete_workflow_engine_pod(workflow):
         raise REANAWorkflowControllerError(
             "Workflow engine pod cound not be deleted {}.".format(e)
         )
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        logging.error("Unexpected error: {}".format(e))
