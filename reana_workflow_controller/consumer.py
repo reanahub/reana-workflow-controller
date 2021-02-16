@@ -35,6 +35,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import (
+    ALIVE_STATUSES,
     PROGRESS_STATUSES,
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
@@ -67,15 +68,24 @@ class JobStatusConsumer(BaseConsumer):
         ]
 
     def on_message(self, body, message):
-        """On new message event handler."""
-        message.ack()
-        body_dict = json.loads(body)
-        workflow_uuid = body_dict.get("workflow_uuid")
-        if workflow_uuid:
-            try:
-                workflow = (
-                    Session.query(Workflow).filter_by(id_=workflow_uuid).one_or_none()
+        """Process messages on ``jobs-status`` queue for alive workflows.
+
+        This function will ingore events about workflows that have been already
+        terminated since a graceful finalisation of the workflow cannot be
+        guaranteed if the workflow engine (orchestrator) is not alive.
+        """
+        try:
+            message.ack()
+            body_dict = json.loads(body)
+            workflow_uuid = body_dict.get("workflow_uuid")
+            workflow = (
+                Session.query(Workflow)
+                .filter(
+                    Workflow.id_ == workflow_uuid, Workflow.status.in_(ALIVE_STATUSES),
                 )
+                .one_or_none()
+            )
+            if workflow:
                 next_status = body_dict.get("status")
                 if next_status:
                     next_status = WorkflowStatus(next_status)
@@ -103,17 +113,23 @@ class JobStatusConsumer(BaseConsumer):
                         f" from status {workflow.status} to"
                         f" {next_status}."
                     )
-            except REANAWorkflowControllerError as rwce:
-                logging.error(rwce, exc_info=True)
-            except SQLAlchemyError as sae:
-                logging.error(
-                    f"Something went wrong while querying the database for workflow: {workflow.id_}"
+            elif workflow_uuid:
+                logging.warning(
+                    "Event for not alive workflow {workflow_uuid} received:\n"
+                    "{body}\n"
+                    "Ignoring ...".format(workflow_uuid=workflow_uuid, body=body)
                 )
-                logging.error(sae, exc_info=True)
-            except Exception as e:
-                logging.error(
-                    f"Unexpected error while processing workflow: {e}", exc_info=True
-                )
+        except REANAWorkflowControllerError as rwce:
+            logging.error(rwce, exc_info=True)
+        except SQLAlchemyError as sae:
+            logging.error(
+                f"Something went wrong while querying the database for workflow: {workflow.id_}"
+            )
+            logging.error(sae, exc_info=True)
+        except Exception as e:
+            logging.error(
+                f"Unexpected error while processing workflow: {e}", exc_info=True
+            )
 
 
 def _update_workflow_status(workflow, status, logs):
@@ -122,12 +138,8 @@ def _update_workflow_status(workflow, status, logs):
         Workflow.update_workflow_status(Session, workflow.id_, status, logs, None)
         if workflow.git_ref:
             _update_commit_status(workflow, status)
-        alive_statuses = [
-            WorkflowStatus.created,
-            WorkflowStatus.running,
-            WorkflowStatus.queued,
-        ]
-        if status not in alive_statuses:
+
+        if status not in ALIVE_STATUSES:
             try:
                 workflow.run_finished_at = datetime.now()
                 _delete_workflow_engine_pod(workflow)

@@ -11,6 +11,8 @@
 import os
 
 from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
+from reana_db.models import WorkflowStatus
+
 
 from reana_workflow_controller.version import __version__
 
@@ -107,3 +109,11 @@ REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "CHANGE_ME")
 
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
+
+
+ALIVE_STATUSES = [
+    WorkflowStatus.created,
+    WorkflowStatus.running,
+    WorkflowStatus.queued,
+]
+"""Alive workflow statuses."""
