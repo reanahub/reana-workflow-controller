@@ -22,6 +22,7 @@ from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_JOB_HOSTPATH_MOUNTS,
+    REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
@@ -62,7 +63,6 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
-    TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS,
 )
@@ -500,6 +500,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "name": "REANA_JOB_HOSTPATH_MOUNTS",
                     "value": json.dumps(REANA_JOB_HOSTPATH_MOUNTS),
                 },
+                {
+                    "name": "REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES",
+                    "value": ",".join(
+                        REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES
+                    ),
+                },
             ]
         )
         job_controller_container.env.extend(job_controller_env_vars)
@@ -553,7 +559,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         job.spec = spec
         job.spec.template.spec.restart_policy = "Never"
-        job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
+
         job.spec.backoff_limit = 0
         return job
 

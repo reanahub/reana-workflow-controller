@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.7.2 (UNRELEASED)
+--------------------------
+
+- Adds new configuration to toggle Kubernetes user jobs clean up.
+- Fixes ``job-status-consumer`` exception detection for better resilience.
+
 Version 0.7.1 (2021-02-03)
 --------------------------
 

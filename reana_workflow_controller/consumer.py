@@ -142,7 +142,8 @@ def _update_workflow_status(workflow, status, logs):
         if status not in ALIVE_STATUSES:
             try:
                 workflow.run_finished_at = datetime.now()
-                _delete_workflow_engine_pod(workflow)
+                if WorkflowStatus.should_cleanup_job(status):
+                    _delete_workflow_engine_pod(workflow)
             except REANAWorkflowControllerError:
                 logging.error(
                     f"Could not clean up workflow engine for workflow {workflow.id_}"

@@ -74,10 +74,6 @@ DEBUG_ENV_VARS = (
 )
 """Common to all workflow engines environment variables for debug mode."""
 
-TTL_SECONDS_AFTER_FINISHED = 60
-"""Threshold in seconds to clean up terminated (either Complete or Failed)
-jobs."""
-
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook"
 """Default image for Jupyter based interactive session deployments."""
 

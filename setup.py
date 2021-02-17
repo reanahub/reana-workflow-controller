@@ -53,7 +53,7 @@ install_requires = [
     "marshmallow>2.13.0,<=2.20.1",
     "packaging>=18.0",
     "reana-commons[kubernetes]>=0.7.3,<0.8.0",
-    "reana-db>=0.7.1,<0.8.0",
+    "reana-db>=0.7.2,<0.8.0",
     "requests==2.20.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
