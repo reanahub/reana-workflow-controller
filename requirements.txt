@@ -25,7 +25,7 @@ google-auth==1.23.0       # via kubernetes
 idna==2.7                 # via jsonschema, requests
 importlib-metadata==3.1.0  # via jsonpickle
 itsdangerous==1.1.0       # via flask
-jinja2==2.11.2            # via flask
+jinja2==2.11.3            # via flask
 jsonpickle==1.4.1         # via reana-workflow-controller (setup.py)
 jsonpointer==2.0          # via jsonschema
 jsonref==0.2              # via bravado-core
