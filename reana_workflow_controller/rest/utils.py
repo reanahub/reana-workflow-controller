@@ -403,6 +403,25 @@ def list_directory_files(directory):
     return file_list
 
 
+def get_files_recursive_wildcard(directory_path, path):
+    """Get file(s) fitting the wildcard from the workspace.
+
+    :param directory_path: Directory to get files from.
+    :param path: Wildcard pattern to use for the extraction.
+    :return: Tuple cotaining the list of paths sorted by length
+        and the posix directoru prefix.
+    """
+    secure_path = remove_upper_level_references(path)
+    # if `secure_path` is a directory, append `/*` to get all the files inside
+    if Path(directory_path, secure_path).is_dir():
+        secure_path = f"{secure_path.rstrip('/')}/*"
+    posix_dir_prefix = Path(directory_path)
+    paths = list(posix_dir_prefix.glob(secure_path))
+    # sort paths by length to start with the leaves of the directory tree
+    paths.sort(key=lambda path: len(str(path)), reverse=True)
+    return paths, posix_dir_prefix
+
+
 def remove_files_recursive_wildcard(directory_path, path):
     """Remove file(s) fitting the wildcard from the workspace.
 
@@ -414,11 +433,7 @@ def remove_files_recursive_wildcard(directory_path, path):
        error messages.
     """
     deleted = {"deleted": {}, "failed": {}}
-    secure_path = remove_upper_level_references(path)
-    posix_dir_prefix = Path(directory_path)
-    paths = list(posix_dir_prefix.glob(secure_path))
-    # sort paths by length to start with the leaves of the directory tree
-    paths.sort(key=lambda path: len(str(path)), reverse=True)
+    paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
     for posix_path in paths:
         try:
             file_name = str(posix_path.relative_to(posix_dir_prefix))
@@ -430,6 +445,29 @@ def remove_files_recursive_wildcard(directory_path, path):
             deleted["failed"][file_name] = {"error": str(e)}
 
     return deleted
+
+
+def list_files_recursive_wildcard(directory_path, path):
+    """List file(s) fitting the wildcard from the workspace.
+
+    :param directory_path: Directory to list files from.
+    :param path: Wildcard pattern to use for the listing.
+    :return: Dictionary with the results:
+       - dictionary with names of succesfully listed files and their sizes
+       - dictionary with names of failed listing and corresponding
+       error messages.
+    """
+    paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
+    return [
+        {
+            "name": str(path.relative_to(posix_dir_prefix)),
+            "size": path.stat().st_size,
+            "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                WORKFLOW_TIME_FORMAT
+            ),
+        }
+        for path in paths
+    ]
 
 
 def remove_upper_level_references(path):
