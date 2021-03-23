@@ -26,6 +26,7 @@ from reana_workflow_controller.errors import (
 from reana_workflow_controller.rest.utils import (
     get_workflow_name,
     list_directory_files,
+    list_files_recursive_wildcard,
     remove_files_recursive_wildcard,
     use_paginate_args,
 )
@@ -397,6 +398,11 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
+        - name: file_name
+          in: query
+          description: File name(s) (glob) to list.
+          required: false
+          type: string
         - name: page
           in: query
           description: Results page number (pagination).
@@ -456,11 +462,14 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        file_list = list_directory_files(
-            os.path.join(
-                current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-            )
+        file_name = request.args.get("file_name")
+        abs_path_to_workspace = os.path.join(
+            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
+        if file_name:
+            file_list = list_files_recursive_wildcard(abs_path_to_workspace, file_name)
+        else:
+            file_list = list_directory_files(abs_path_to_workspace)
         pagination_dict = paginate(file_list)
         return jsonify(pagination_dict), 200
 
