@@ -59,6 +59,13 @@ REANA_WORKFLOW_ENGINE_IMAGE_SERIAL = os.getenv(
 )
 """Serial workflow engine version."""
 
+REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
+"""Maximum memory limit for user job containers. Exceeding this limit will terminate the container.
+
+Please see the following URL for possible values
+https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory.
+"""
+
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
     {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH}
 ]
