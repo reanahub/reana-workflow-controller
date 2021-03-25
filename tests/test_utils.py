@@ -13,12 +13,15 @@ import uuid
 from pathlib import Path
 
 import pytest
+from mock import Mock, patch
+from kubernetes.client.rest import ApiException
 from reana_db.models import Job, JobCache, Workflow, WorkflowStatus
 
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
     remove_files_recursive_wildcard,
+    stop_workflow,
 )
 
 
@@ -203,3 +206,19 @@ def test_workspace_permissions(
     assert os.path.exists(absolute_workflow_workspace)
     assert workspace_permissions == expeted_worspace_permissions
     delete_workflow(sample_yadage_workflow_in_db, hard_delete=True, workspace=True)
+
+
+def test_stop_workflow_with_kubernetes_failure(sample_serial_workflow_in_db):
+    """Test that workflows get stopped in DB even if Kubernetes call is not successfull."""
+    workflow = sample_serial_workflow_in_db
+    workflow.status = WorkflowStatus.running
+    mocked_k8s_client = Mock()
+    mocked_k8s_client.delete_namespaced_job = Mock(
+        side_effect=ApiException(reason="Job doens't exist.")
+    )
+    with patch(
+        "reana_workflow_controller.workflow_run_manager.current_k8s_batchv1_api_client",
+        mocked_k8s_client,
+    ):
+        stop_workflow(workflow)
+        assert workflow.status == WorkflowStatus.stopped

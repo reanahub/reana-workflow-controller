@@ -345,7 +345,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         to_delete = self.get_workflow_running_jobs_as_backend_ids() + [
             workflow_run_name
         ]
-        error = False
         for job in to_delete:
             try:
                 current_k8s_batchv1_api_client.delete_namespaced_job(
@@ -361,12 +360,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     f": Kubernetes job {job} could not be deleted.",
                     exc_info=True,
                 )
-                error = True
                 continue
-        if error:
-            raise REANAWorkflowStopError(
-                f"Workflow {self.workflow.id_} could not be stopped."
-            )
 
     def _create_job_spec(
         self,
