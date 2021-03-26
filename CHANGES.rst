@@ -5,6 +5,8 @@ Version 0.7.3 (UNRELEASED)
 --------------------------
 
 - Adds configuration environment variable to set job memory limits for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_MEMORY_LIMIT``).
+- Adds support for listing files using glob patterns.
+- Adds support for glob patterns and directory downloads, packaging files into a zip.
 
 Version 0.7.2 (2021-03-17)
 --------------------------

@@ -8,11 +8,14 @@
 
 """REANA Workflow Controller workspaces REST API."""
 
-import json
-import mimetypes
 import os
 
-from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    request,
+)
 from fs.errors import CreateFailed
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import NotFound
@@ -26,6 +29,7 @@ from reana_workflow_controller.errors import (
 from reana_workflow_controller.rest.utils import (
     get_workflow_name,
     list_directory_files,
+    download_files_recursive_wildcard,
     list_files_recursive_wildcard,
     remove_files_recursive_wildcard,
     use_paginate_args,
@@ -247,20 +251,8 @@ def download_file(workflow_id_or_name, file_name):  # noqa
             current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
 
-        preview = json.loads(request.args.get("preview", "false").lower())
-        response_mime_type = "multipart/form-data"
-        file_mime_type = mimetypes.guess_type(file_name)[0]
-        # Only display image files as preview
-        if preview and file_mime_type and file_mime_type.startswith("image"):
-            response_mime_type = file_mime_type
-        return (
-            send_from_directory(
-                absolute_workflow_workspace_path,
-                file_name,
-                mimetype=response_mime_type,
-                as_attachment=True,
-            ),
-            200,
+        return download_files_recursive_wildcard(
+            absolute_workflow_workspace_path, file_name
         )
 
     except ValueError:

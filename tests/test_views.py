@@ -11,6 +11,7 @@ import io
 import json
 import os
 import uuid
+from zipfile import ZipFile
 
 import fs
 import mock
@@ -303,6 +304,81 @@ def test_download_file_with_path(
             data=json.dumps(cwl_workflow_with_name),
         )
         assert res.data == file_binary_content
+
+
+def test_download_dir_or_wildcard(
+    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
+):
+    """Test download directory or file(s) matching a wildcard pattern."""
+
+    def _download(pattern, workflow_uuid):
+        return client.get(
+            url_for(
+                "workspaces.download_file",
+                workflow_id_or_name=workflow_uuid,
+                file_name=pattern,
+            ),
+            query_string={"user": default_user.id_},
+            content_type="application/json",
+            data=json.dumps(cwl_workflow_with_name),
+        )
+
+    with app.test_client() as client:
+        # create workflow
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={"user": default_user.id_},
+            content_type="application/json",
+            data=json.dumps(cwl_workflow_with_name),
+        )
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get("workflow_id")
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        # create files
+        files = {
+            "foo/1.txt": b"txt in foo dir",
+            "foo/bar/1.csv": b"csv in bar dir",
+            "foo/bar/baz/2.csv": b"csv in baz dir",
+        }
+        absolute_path_workflow_workspace = os.path.join(
+            tmp_shared_volume_path, workflow.workspace_path
+        )
+        for file_name, file_binary_content in files.items():
+            file_path = os.path.join(absolute_path_workflow_workspace, file_name)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb+") as f:
+                f.write(file_binary_content)
+
+        # download directory by name
+        res = _download("foo", workflow_uuid)
+        assert res.headers.get("Content-Type") == "application/zip"
+        zipfile = ZipFile(io.BytesIO(res.data))
+        assert len(zipfile.filelist) == 3
+        for file_name, file_binary_content in files.items():
+            assert zipfile.read(file_name) == file_binary_content
+
+        res = _download("foo/bar", workflow_uuid)
+        assert res.headers.get("Content-Type") == "application/zip"
+        zipfile = ZipFile(io.BytesIO(res.data))
+        assert len(zipfile.filelist) == 2
+        zipped_file_names = [f.filename for f in zipfile.filelist]
+        assert "foo/1.txt" not in zipped_file_names
+        assert zipfile.read("foo/bar/1.csv") == files["foo/bar/1.csv"]
+        assert zipfile.read("foo/bar/baz/2.csv") == files["foo/bar/baz/2.csv"]
+
+        # download by glob pattern
+        res = _download("**/*.csv", workflow_uuid)
+        assert res.headers.get("Content-Type") == "application/zip"
+        zipfile = ZipFile(io.BytesIO(res.data))
+        assert len(zipfile.filelist) == 2
+        res = _download("**/1.*", workflow_uuid)
+        assert res.headers.get("Content-Type") == "application/zip"
+        zipfile = ZipFile(io.BytesIO(res.data))
+        assert len(zipfile.filelist) == 2
+        res = _download("**/*.txt", workflow_uuid)
+        assert res.headers.get("Content-Type") != "application/zip"
+        assert res.data == files["foo/1.txt"]
 
 
 def test_get_files(
