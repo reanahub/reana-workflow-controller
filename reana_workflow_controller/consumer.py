@@ -111,6 +111,7 @@ def _update_workflow_status(workflow, status, logs):
             RunStatus.created,
             RunStatus.running,
             RunStatus.queued,
+            RunStatus.pending,
         ]
         if status not in alive_statuses:
             _delete_workflow_engine_pod(workflow)

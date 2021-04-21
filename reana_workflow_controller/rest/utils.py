@@ -48,7 +48,7 @@ def start_workflow(workflow, parameters):
     """Start a workflow."""
 
     def _start_workflow_db(workflow, parameters):
-        workflow.status = RunStatus.running
+        workflow.status = RunStatus.pending
         if parameters:
             workflow.input_parameters = parameters.get("input_parameters")
             workflow.operational_options = parameters.get("operational_options")
@@ -71,6 +71,7 @@ def start_workflow(workflow, parameters):
                 RunStatus.failed,
                 RunStatus.finished,
                 RunStatus.queued,
+                RunStatus.pending,
             ]:
                 raise REANAWorkflowControllerError(failure_message)
     elif workflow.status not in [RunStatus.created, RunStatus.queued]:
@@ -193,6 +194,7 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
         RunStatus.deleted,
         RunStatus.failed,
         RunStatus.queued,
+        RunStatus.pending,
     ]:
         try:
             to_be_deleted = [workflow]

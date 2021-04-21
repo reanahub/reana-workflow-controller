@@ -33,7 +33,7 @@ from reana_workflow_controller.rest.workflows_status import START, STOP
 from reana_workflow_controller.workflow_run_manager import WorkflowRunManager
 
 status_dict = {
-    START: RunStatus.running,
+    START: RunStatus.pending,
     STOP: RunStatus.finished,
 }
 
@@ -608,7 +608,7 @@ def test_start_already_started_workflow(
                 assert res.status_code == 409
                 expected_message = (
                     "Workflow {0} could not be started because"
-                    " it is already running."
+                    " it is already pending."
                 ).format(workflow_created_uuid)
                 assert json_response.get("message") == expected_message
 

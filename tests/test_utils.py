@@ -28,6 +28,7 @@ from reana_workflow_controller.rest.utils import (
         RunStatus.created,
         RunStatus.failed,
         RunStatus.finished,
+        RunStatus.pending,
         RunStatus.stopped,
         pytest.param(RunStatus.deleted, marks=pytest.mark.xfail),
         pytest.param(RunStatus.running, marks=pytest.mark.xfail),
