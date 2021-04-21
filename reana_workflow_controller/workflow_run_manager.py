@@ -22,7 +22,8 @@ from reana_commons.config import (
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_JOB_HOSTPATH_MOUNTS,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
-    REANA_RUNTIME_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_STORAGE_BACKEND,
     SHARED_VOLUME_PATH,
@@ -532,11 +533,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         job_controller_container.env.extend(job_controller_env_vars)
         job_controller_container.env.extend(job_controller_env_secrets)
-        if REANA_RUNTIME_KUBERNETES_NODE_LABEL:
+        if REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL:
             job_controller_container.env.append(
                 {
-                    "name": "REANA_RUNTIME_KUBERNETES_NODE_LABEL",
-                    "value": os.getenv("REANA_RUNTIME_KUBERNETES_NODE_LABEL"),
+                    "name": "REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL",
+                    "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
                 },
             )
 
@@ -549,7 +550,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         ]
         containers = [workflow_engine_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(
-            containers=containers, node_selector=REANA_RUNTIME_KUBERNETES_NODE_LABEL
+            containers=containers,
+            node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
         )
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME

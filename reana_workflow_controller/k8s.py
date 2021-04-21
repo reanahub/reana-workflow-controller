@@ -13,7 +13,7 @@ from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     CVMFS_REPOSITORIES,
     REANA_WORKFLOW_UMASK,
-    REANA_RUNTIME_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
 )
 from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
@@ -123,7 +123,8 @@ class InteractiveDeploymentK8sBuilder(object):
         """
         container = client.V1Container(name=self.deployment_name, image=self.image)
         pod_spec = client.V1PodSpec(
-            containers=[container], node_selector=REANA_RUNTIME_KUBERNETES_NODE_LABEL
+            containers=[container],
+            node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
         )
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self.deployment_name}),
