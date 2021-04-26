@@ -5,6 +5,7 @@ Version master (UNRELEASED)
 ---------------------------
 
 - Adds users quota accounting.
+- Adds new job properties ``started_at`` and ``finished_at`` to the ``/logs`` endpoint.
 
 Version 0.7.1 (2021-02-03)
 --------------------------

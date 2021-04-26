@@ -135,6 +135,12 @@ def build_workflow_logs(workflow, steps=None, paginate=None):
     jobs = paginate(query).get("items") if paginate else query
     all_logs = OrderedDict()
     for job in jobs:
+        started_at = (
+            job.started_at.strftime(WORKFLOW_TIME_FORMAT) if job.started_at else None
+        )
+        finished_at = (
+            job.finished_at.strftime(WORKFLOW_TIME_FORMAT) if job.finished_at else None
+        )
         item = {
             "workflow_uuid": str(job.workflow_uuid) or "",
             "job_name": job.job_name or "",
@@ -144,6 +150,8 @@ def build_workflow_logs(workflow, steps=None, paginate=None):
             "cmd": job.prettified_cmd or "",
             "status": job.status.name or "",
             "logs": job.logs or "",
+            "started_at": started_at,
+            "finished_at": finished_at,
         }
         all_logs[str(job.id_)] = item
 

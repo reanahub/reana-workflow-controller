@@ -31,7 +31,7 @@ from reana_commons.utils import (
     calculate_job_input_hash,
 )
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, RunStatus
+from reana_db.models import Job, JobCache, Workflow, RunStatus, JobStatus
 from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import (
@@ -145,7 +145,7 @@ def _update_run_progress(workflow_uuid, msg):
     job_progress = workflow.job_progress
     if "cached" in msg["progress"]:
         cached_jobs = msg["progress"]["cached"]  # noqa: F841
-    for status in PROGRESS_STATUSES:
+    for status, _ in PROGRESS_STATUSES:
         if status in msg["progress"]:
             previous_status = workflow.job_progress.get(status)
             previous_total = 0
@@ -174,17 +174,18 @@ def _update_run_progress(workflow_uuid, msg):
 
 def _update_job_progress(workflow_uuid, msg):
     """Update job progress for jobs in received message."""
-    for status in PROGRESS_STATUSES:
-        if status in msg["progress"]:
-            status_progress = msg["progress"][status]
+    for status_name, job_status in PROGRESS_STATUSES:
+        if status_name in msg["progress"]:
+            status_progress = msg["progress"][status_name]
             for job_id in status_progress["job_ids"]:
                 try:
                     uuid.UUID(job_id)
                 except Exception:
                     continue
-                Session.query(Job).filter_by(id_=job_id).update(
-                    {"workflow_uuid": workflow_uuid, "status": status}
-                )
+                job = Session.query(Job).filter_by(id_=job_id).one_or_none()
+                if job:
+                    job.workflow_uuid = workflow_uuid
+                    job.status = job_status
 
 
 def _update_job_cache(msg):

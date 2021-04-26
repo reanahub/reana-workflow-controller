@@ -11,6 +11,7 @@
 import os
 
 from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
+from reana_db.models import JobStatus
 
 from reana_workflow_controller.version import __version__
 
@@ -25,7 +26,12 @@ DEFAULT_NAME_FOR_WORKFLOWS = "workflow"
 WORKFLOW_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 """Time format for workflow starting time, created time etc."""
 
-PROGRESS_STATUSES = ["running", "finished", "failed", "total"]
+PROGRESS_STATUSES = [
+    ("running", JobStatus.running),
+    ("finished", JobStatus.finished),
+    ("failed", JobStatus.failed),
+    ("total", None),
+]
 
 WORKFLOW_QUEUES = {
     "cwl": "cwl-default-queue",
