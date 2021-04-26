@@ -59,6 +59,7 @@ from reana_workflow_controller.k8s import (
 
 from reana_workflow_controller.config import (  # isort:skip
     IMAGE_PULL_SECRETS,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
@@ -504,6 +505,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_KUBERNETES_JOBS_MEMORY_LIMIT",
                     "value": REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT",
+                    "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
                 },
             ]
         )
