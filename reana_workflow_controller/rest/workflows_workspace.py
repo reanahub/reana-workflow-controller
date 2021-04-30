@@ -8,11 +8,14 @@
 
 """REANA Workflow Controller workspaces REST API."""
 
-import json
-import mimetypes
 import os
 
-from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    request,
+)
 from fs.errors import CreateFailed
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import NotFound
@@ -30,6 +33,8 @@ from reana_workflow_controller.errors import (
 from reana_workflow_controller.rest.utils import (
     get_workflow_name,
     list_directory_files,
+    download_files_recursive_wildcard,
+    list_files_recursive_wildcard,
     remove_files_recursive_wildcard,
     use_paginate_args,
 )
@@ -253,20 +258,8 @@ def download_file(workflow_id_or_name, file_name):  # noqa
             current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
 
-        preview = json.loads(request.args.get("preview", "false").lower())
-        response_mime_type = "multipart/form-data"
-        file_mime_type = mimetypes.guess_type(file_name)[0]
-        # Only display image files as preview
-        if preview and file_mime_type and file_mime_type.startswith("image"):
-            response_mime_type = file_mime_type
-        return (
-            send_from_directory(
-                absolute_workflow_workspace_path,
-                file_name,
-                mimetype=response_mime_type,
-                as_attachment=True,
-            ),
-            200,
+        return download_files_recursive_wildcard(
+            absolute_workflow_workspace_path, file_name
         )
 
     except ValueError:
@@ -409,6 +402,11 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
+        - name: file_name
+          in: query
+          description: File name(s) (glob) to list.
+          required: false
+          type: string
         - name: page
           in: query
           description: Results page number (pagination).
@@ -473,11 +471,14 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        file_list = list_directory_files(
-            os.path.join(
-                current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-            )
+        file_name = request.args.get("file_name")
+        abs_path_to_workspace = os.path.join(
+            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
+        if file_name:
+            file_list = list_files_recursive_wildcard(abs_path_to_workspace, file_name)
+        else:
+            file_list = list_directory_files(abs_path_to_workspace)
         pagination_dict = paginate(file_list)
         return jsonify(pagination_dict), 200
 

@@ -1,11 +1,25 @@
 Changes
 =======
 
-Version master (UNRELEASED)
+Version 0.8.0 (UNRELEASED)
 ---------------------------
 
 - Adds users quota accounting.
 - Adds new job properties ``started_at`` and ``finished_at`` to the ``/logs`` endpoint.
+
+Version 0.7.3 (2021-04-28)
+--------------------------
+
+- Adds configuration environment variable to set job memory limits for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_MEMORY_LIMIT``).
+- Adds configuration environment variable to set maximum custom memory limits that users can assign to their job containers for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT``).
+- Adds support for listing files using glob patterns.
+- Adds support for glob patterns and directory downloads, packaging files into a zip.
+
+Version 0.7.2 (2021-03-17)
+--------------------------
+
+- Adds new configuration to toggle Kubernetes user jobs clean up.
+- Fixes ``job-status-consumer`` exception detection for better resilience.
 
 Version 0.7.1 (2021-02-03)
 --------------------------

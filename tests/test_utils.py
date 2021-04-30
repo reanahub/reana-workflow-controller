@@ -18,7 +18,9 @@ from reana_db.models import Job, JobCache, Workflow, RunStatus
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
+    list_files_recursive_wildcard,
     remove_files_recursive_wildcard,
+    stop_workflow,
 )
 
 
@@ -167,6 +169,31 @@ def test_delete_recursive_wildcard(tmp_shared_volume_path):
         assert key in deleted_files["deleted"]
         assert deleted_files["deleted"][key]["size"] == size
     assert not len(deleted_files["failed"])
+
+
+def test_list_recursive_wildcard(tmp_shared_volume_path):
+    """Test recursive wildcard deletion of files."""
+    file_binary_content = b"1,2,3,4\n5,6,7,8"
+    directory_path = Path(tmp_shared_volume_path, "ls_files_test")
+    files_to_list = ["file1.csv", "subdir/file2.csv", "file3.txt"]
+    posix_path_to_listed_files = []
+    for file_name in files_to_list:
+        posix_file_path = Path(directory_path, file_name)
+        posix_file_path.parent.mkdir(parents=True, exist_ok=True)
+        posix_file_path.touch()
+        posix_file_path.write_bytes(file_binary_content)
+        assert posix_file_path.exists()
+        posix_path_to_listed_files.append(posix_file_path)
+
+    listed_files = list_files_recursive_wildcard(directory_path, "**/*.csv")
+    listed_files_names = set(file["name"] for file in listed_files)
+    assert listed_files_names == set(
+        filter(lambda x: x.endswith(".csv"), files_to_list)
+    )
+
+    listed_files = list_files_recursive_wildcard(directory_path, "*.txt")
+    listed_files_names = set(file["name"] for file in listed_files)
+    assert listed_files_names == set(["file3.txt"])
 
 
 def test_workspace_permissions(

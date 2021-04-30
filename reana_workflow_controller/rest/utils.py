@@ -9,19 +9,24 @@
 """REANA Workflow Controller workflows REST API."""
 
 import difflib
+import fs
+import json
 import logging
+import mimetypes
 import os
 import pprint
 import subprocess
 import traceback
+import time
+import zipfile
 from collections import OrderedDict
 from datetime import datetime
 from functools import wraps
+from io import BytesIO
 from pathlib import Path
 
-import fs
 from flask import current_app as app
-from flask import jsonify
+from flask import jsonify, request, send_file, send_from_directory
 from git import Repo
 from kubernetes.client.rest import ApiException
 from reana_commons.config import REANA_WORKFLOW_UMASK
@@ -32,7 +37,7 @@ from reana_db.models import Job, JobCache, ResourceUnit, RunStatus, Workflow
 from sqlalchemy.exc import SQLAlchemyError
 from webargs import fields, validate
 from webargs.flaskparser import parser
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 
 from reana_workflow_controller.config import REANA_GITLAB_HOST, WORKFLOW_TIME_FORMAT
 from reana_workflow_controller.errors import (
@@ -405,6 +410,39 @@ def list_directory_files(directory):
     return file_list
 
 
+def is_directory(directory_path, path):
+    """Whether the given path matches a directory or not.
+
+    :param directory_path: Directory to check files from.
+    :param path: Optional wildcard pattern to use for the check.
+    :return: Full path if it is a directory, False if not.
+    """
+    secure_path = remove_upper_level_references(path)
+    full_path = Path(directory_path, secure_path)
+    if full_path.is_dir():
+        return full_path
+    return False
+
+
+def get_files_recursive_wildcard(directory_path, path):
+    """Get file(s) fitting the wildcard from the workspace.
+
+    :param directory_path: Directory to get files from.
+    :param path: Wildcard pattern to use for the extraction.
+    :return: Tuple containing the list of paths sorted by length
+        and the posix directory prefix.
+    """
+    secure_path = remove_upper_level_references(path)
+    # if `secure_path` is a directory, append `/*` to get all the files inside
+    if is_directory(directory_path, secure_path):
+        secure_path = f"{secure_path.rstrip('/')}/*"
+    posix_dir_prefix = Path(directory_path)
+    paths = list(posix_dir_prefix.glob(secure_path))
+    # sort paths by length to start with the leaves of the directory tree
+    paths.sort(key=lambda path: len(str(path)), reverse=True)
+    return paths, posix_dir_prefix
+
+
 def remove_files_recursive_wildcard(directory_path, path):
     """Remove file(s) fitting the wildcard from the workspace.
 
@@ -416,11 +454,7 @@ def remove_files_recursive_wildcard(directory_path, path):
        error messages.
     """
     deleted = {"deleted": {}, "failed": {}}
-    secure_path = remove_upper_level_references(path)
-    posix_dir_prefix = Path(directory_path)
-    paths = list(posix_dir_prefix.glob(secure_path))
-    # sort paths by length to start with the leaves of the directory tree
-    paths.sort(key=lambda path: len(str(path)), reverse=True)
+    paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
     for posix_path in paths:
         try:
             file_name = str(posix_path.relative_to(posix_dir_prefix))
@@ -432,6 +466,113 @@ def remove_files_recursive_wildcard(directory_path, path):
             deleted["failed"][file_name] = {"error": str(e)}
 
     return deleted
+
+
+def list_files_recursive_wildcard(directory_path, path):
+    """List file(s) fitting the wildcard from the workspace.
+
+    :param directory_path: Directory to list files from.
+    :param path: Wildcard pattern to use for the listing.
+    :return: Dictionary with the results:
+       - dictionary with names of succesfully listed files and their sizes
+       - dictionary with names of failed listing and corresponding
+       error messages.
+    """
+    paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
+    return [
+        {
+            "name": str(path.relative_to(posix_dir_prefix)),
+            "size": path.stat().st_size,
+            "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                WORKFLOW_TIME_FORMAT
+            ),
+        }
+        for path in paths
+    ]
+
+
+def download_files_recursive_wildcard(workspace_path, path):
+    """Download file(s) matching the given path pattern from the workspace.
+
+    This function finds out if the provided pattern corresponds to:
+    - a single file; then serves it directly
+    - a directory; then packages it into a zip file
+    - multiple files; then packages them into a zip file
+
+    :param workspace_path: Base workspace directory where files are located.
+    :param path: (Wildcard) pattern to use for the download.
+    :return: Flask function call to send file to the client.
+    """
+
+    def _send_zipped_dir_or_files(dir_path=None, file_paths=None):
+        """Wrap directory into a zip file in memory and send it to the client."""
+        timestr = time.strftime("%Y-%m-%d-%H%M%S")
+        filename = "download_{}.zip".format(timestr)
+        memory_file = BytesIO()
+        with zipfile.ZipFile(memory_file, "w", zipfile.ZIP_DEFLATED) as zipf:
+            if dir_path:
+                if len(list(dir_path.iterdir())):
+                    for root, dirs, files in os.walk(dir_path):
+                        for file in files:
+                            zipf.write(
+                                os.path.join(root, file),
+                                arcname=os.path.join(
+                                    path, str(Path(root).relative_to(dir_path)), file
+                                ),
+                            )
+                else:
+                    raise NotFound("The provided directory is empty.")
+            elif file_paths:
+                for file_path in file_paths:
+                    zipf.write(
+                        file_path,
+                        arcname=str(file_path.relative_to(Path(workspace_path))),
+                    )
+            else:
+                raise NotFound("The provided pattern does not match any file.")
+        memory_file.seek(0)
+        return send_file(
+            memory_file,
+            attachment_filename=filename,
+            as_attachment=True,
+            mimetype="application/zip",
+        )
+
+    def _send_single_file(absolute_file_path, workspace_path):
+        """Send single file from directory to the client."""
+        preview = json.loads(request.args.get("preview", "false").lower())
+        response_mime_type = "multipart/form-data"
+        file_mime_type = mimetypes.guess_type(path)[0]
+        # Only display image files as preview
+        if preview and file_mime_type and file_mime_type.startswith("image"):
+            response_mime_type = file_mime_type
+        relative_file_path = str(absolute_file_path.relative_to(workspace_path))
+        return (
+            send_from_directory(
+                workspace_path,
+                relative_file_path,
+                mimetype=response_mime_type,
+                as_attachment=True,
+                attachment_filename=relative_file_path,
+            ),
+            200,
+        )
+
+    full_path_dir = is_directory(workspace_path, path)
+    if full_path_dir:
+        return _send_zipped_dir_or_files(dir_path=full_path_dir)
+
+    else:
+        paths, _ = get_files_recursive_wildcard(workspace_path, path)
+        # filter out non-files
+        paths = [path for path in paths if path.is_file()]
+        # if it's a single file, serve it directly
+        if len(paths) == 1:
+            absolute_file_path = paths[0]
+            return _send_single_file(absolute_file_path, workspace_path)
+        # if multiple files, package them into a zip file and serve it
+        else:
+            return _send_zipped_dir_or_files(file_paths=paths)
 
 
 def remove_upper_level_references(path):

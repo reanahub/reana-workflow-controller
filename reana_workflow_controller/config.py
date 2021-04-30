@@ -11,7 +11,7 @@
 import os
 
 from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
-from reana_db.models import JobStatus
+from reana_db.models import JobStatus, RunStatus
 
 from reana_workflow_controller.version import __version__
 
@@ -63,6 +63,23 @@ REANA_WORKFLOW_ENGINE_IMAGE_SERIAL = os.getenv(
 )
 """Serial workflow engine version."""
 
+REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
+"""Maximum default memory limit for user job containers. Exceeding this limit will terminate the container.
+
+Please see the following URL for possible values
+https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory.
+"""
+
+REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT"
+)
+"""Maximum custom memory limit that users can assign to their job containers via
+``kubernetes_memory_limit`` in reana.yaml. Exceeding this limit will terminate the container.
+
+Please see the following URL for possible values
+https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory.
+"""
+
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
     {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH}
 ]
@@ -77,10 +94,6 @@ DEBUG_ENV_VARS = (
     {"name": "FLASK_ENV", "value": "development"},
 )
 """Common to all workflow engines environment variables for debug mode."""
-
-TTL_SECONDS_AFTER_FINISHED = 60
-"""Threshold in seconds to clean up terminated (either Complete or Failed)
-jobs."""
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook"
 """Default image for Jupyter based interactive session deployments."""
@@ -113,3 +126,12 @@ REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "CHANGE_ME")
 
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
+
+
+ALIVE_STATUSES = [
+    RunStatus.created,
+    RunStatus.running,
+    RunStatus.queued,
+    RunStatus.pending,
+]
+"""Alive workflow statuses."""

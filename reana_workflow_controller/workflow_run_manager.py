@@ -21,6 +21,7 @@ from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_JOB_HOSTPATH_MOUNTS,
+    REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
@@ -64,11 +65,12 @@ from reana_workflow_controller.k8s import (
 
 from reana_workflow_controller.config import (  # isort:skip
     IMAGE_PULL_SECRETS,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
-    TTL_SECONDS_AFTER_FINISHED,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS,
 )
@@ -373,7 +375,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         to_delete = self.get_workflow_running_jobs_as_backend_ids() + [
             workflow_run_name
         ]
-        error = False
         for job in to_delete:
             try:
                 current_k8s_batchv1_api_client.delete_namespaced_job(
@@ -389,12 +390,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     f": Kubernetes job {job} could not be deleted.",
                     exc_info=True,
                 )
-                error = True
                 continue
-        if error:
-            raise REANAWorkflowStopError(
-                f"Workflow {self.workflow.id_} could not be stopped."
-            )
 
     def _create_job_spec(
         self,
@@ -529,6 +525,20 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "name": "REANA_JOB_HOSTPATH_MOUNTS",
                     "value": json.dumps(REANA_JOB_HOSTPATH_MOUNTS),
                 },
+                {
+                    "name": "REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES",
+                    "value": ",".join(
+                        REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES
+                    ),
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MEMORY_LIMIT",
+                    "value": REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT",
+                    "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+                },
             ]
         )
         job_controller_container.env.extend(job_controller_env_vars)
@@ -583,7 +593,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         job.spec = spec
         job.spec.template.spec.restart_policy = "Never"
-        job.spec.ttl_seconds_after_finished = TTL_SECONDS_AFTER_FINISHED
+
         job.spec.backoff_limit = 0
         return job
 
