@@ -106,6 +106,14 @@ def get_workflows(paginate=None):  # noqa
           description: Number of results per page (pagination).
           required: false
           type: integer
+        - name: include_progress
+          in: query
+          description: Include progress information of the workflows.
+          type: boolean
+        - name: include_workspace_size
+          in: query
+          description: Include size information of the workspace.
+          type: boolean
       responses:
         200:
           description: >-
@@ -217,6 +225,8 @@ def get_workflows(paginate=None):  # noqa
         sort = request.args.get("sort", "desc")
         search = request.args.get("search", "")
         status_list = request.args.get("status", "")
+        include_progress = request.args.get("include_progress", verbose)
+        include_workspace_size = request.args.get("include_workspace_size", verbose)
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
@@ -237,7 +247,9 @@ def get_workflows(paginate=None):  # noqa
                 "status": workflow.status.name,
                 "user": user_uuid,
                 "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
-                "progress": get_workflow_progress(workflow),
+                "progress": get_workflow_progress(
+                    workflow, include_progress=include_progress
+                ),
             }
             if type_ == "interactive" or verbose:
                 int_session = workflow.sessions.first()
@@ -252,7 +264,7 @@ def get_workflows(paginate=None):  # noqa
                 "human_readable": "",
                 "raw": -1,
             }
-            if verbose:
+            if include_workspace_size:
                 workflow_response["size"] = (
                     workflow.get_quota_usage()
                     .get("disk", {})

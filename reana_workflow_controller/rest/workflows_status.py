@@ -309,7 +309,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                     "name": get_workflow_name(workflow),
                     "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                     "status": workflow.status.name,
-                    "progress": get_workflow_progress(workflow),
+                    "progress": get_workflow_progress(workflow, include_progress=True),
                     "user": user_uuid,
                     "logs": json.dumps(workflow_logs),
                 }

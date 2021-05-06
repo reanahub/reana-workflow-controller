@@ -70,6 +70,20 @@
             "name": "size",
             "required": false,
             "type": "integer"
+          },
+          {
+            "description": "Include progress information of the workflows.",
+            "in": "query",
+            "name": "include_progress",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Include size information of the workspace.",
+            "in": "query",
+            "name": "include_workspace_size",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "produces": [
