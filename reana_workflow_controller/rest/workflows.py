@@ -109,10 +109,12 @@ def get_workflows(paginate=None):  # noqa
         - name: include_progress
           in: query
           description: Include progress information of the workflows.
+          required: false
           type: boolean
         - name: include_workspace_size
           in: query
           description: Include size information of the workspace.
+          required: false
           type: boolean
       responses:
         200:
