@@ -102,6 +102,7 @@ class WorkflowRunManager:
                 "run-yadage-workflow "
                 "--workflow-uuid {id} "
                 "--workflow-workspace {workspace} "
+                "--workflow-json '{workflow_json}' "
                 "--workflow-file '{workflow_file}' "
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
