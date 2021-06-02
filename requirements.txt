@@ -64,7 +64,7 @@ sqlalchemy==1.3.24        # via alembic, reana-db, sqlalchemy-utils
 strict-rfc3339==0.7       # via jsonschema
 swagger-spec-validator==2.7.3  # via bravado-core
 typing-extensions==3.10.0.0  # via bravado
-urllib3==1.24.3           # via kubernetes, requests
+urllib3==1.26.5           # via kubernetes, requests
 uwsgi-tools==1.1.1        # via reana-workflow-controller (setup.py)
 uwsgi==2.0.19.1           # via reana-workflow-controller (setup.py)
 uwsgitop==0.11            # via reana-workflow-controller (setup.py)
