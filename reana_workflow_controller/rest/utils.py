@@ -479,16 +479,24 @@ def list_files_recursive_wildcard(directory_path, path):
        error messages.
     """
     paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
-    return [
-        {
-            "name": str(path.relative_to(posix_dir_prefix)),
-            "size": path.stat().st_size,
-            "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
-                WORKFLOW_TIME_FORMAT
-            ),
-        }
-        for path in paths
-    ]
+    list_files_recursive = []
+    for path in paths:
+        raw_size = path.stat().st_size
+        list_files_recursive.append(
+            {
+                "name": str(path.relative_to(posix_dir_prefix)),
+                "size": dict(
+                    raw=raw_size,
+                    human_readable=ResourceUnit.human_readable_unit(
+                        ResourceUnit.bytes_, raw_size
+                    ),
+                ),
+                "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                    WORKFLOW_TIME_FORMAT
+                ),
+            }
+        )
+    return list_files_recursive
 
 
 def download_files_recursive_wildcard(workspace_path, path):
