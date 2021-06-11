@@ -8,6 +8,7 @@
 
 """REANA Workflow Controller workspaces REST API."""
 
+import json
 import os
 
 from flask import (
@@ -417,6 +418,11 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
           description: Number of results per page (pagination).
           required: false
           type: integer
+        - name: search
+          in: query
+          description: Filter workflow workspace files.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -466,6 +472,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
     """
     try:
         user_uuid = request.args["user"]
+        search = request.args.get("search", None)
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
@@ -475,10 +482,14 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         abs_path_to_workspace = os.path.join(
             current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
+        if search:
+            search = json.loads(search)
         if file_name:
-            file_list = list_files_recursive_wildcard(abs_path_to_workspace, file_name)
+            file_list = list_files_recursive_wildcard(
+                abs_path_to_workspace, file_name, search=search
+            )
         else:
-            file_list = list_directory_files(abs_path_to_workspace)
+            file_list = list_directory_files(abs_path_to_workspace, search=search)
         pagination_dict = paginate(file_list)
         return jsonify(pagination_dict), 200
 

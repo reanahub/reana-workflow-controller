@@ -1111,6 +1111,13 @@
             "name": "size",
             "required": false,
             "type": "integer"
+          },
+          {
+            "description": "Filter workflow workspace files.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "type": "string"
           }
         ],
         "produces": [

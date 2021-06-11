@@ -234,7 +234,9 @@ def get_workflows(paginate=None):  # noqa
         workflows = []
         query = user.workflows
         if search:
-            query = query.filter(Workflow.name.ilike("%{}%".format(search)))
+            search = json.loads(search)
+            search_val = search.get("name")[0]
+            query = query.filter(Workflow.name.ilike("%{}%".format(search_val)))
         if status_list:
             workflow_status = [RunStatus[status] for status in status_list.split(",")]
             query = query.filter(Workflow.status.in_(workflow_status))

@@ -377,27 +377,29 @@ def mv_files(source, target, workflow):
         raise REANAWorkflowControllerError(message)
 
 
-def list_directory_files(directory):
+def list_directory_files(directory, search=None):
     """Return a list of files inside a given directory."""
     fs_ = fs.open_fs(directory)
     file_list = []
     for file_name in fs_.walk.files():
         try:
             file_details = fs_.getinfo(file_name, namespaces=["details"])
-            file_list.append(
-                {
-                    "name": file_name.lstrip("/"),
-                    "last-modified": file_details.modified.strftime(
-                        WORKFLOW_TIME_FORMAT
+            file_info = {
+                "name": file_name.lstrip("/"),
+                "last-modified": file_details.modified.strftime(WORKFLOW_TIME_FORMAT),
+                "size": dict(
+                    raw=file_details.size,
+                    human_readable=ResourceUnit.human_readable_unit(
+                        ResourceUnit.bytes_, file_details.size
                     ),
-                    "size": dict(
-                        raw=file_details.size,
-                        human_readable=ResourceUnit.human_readable_unit(
-                            ResourceUnit.bytes_, file_details.size
-                        ),
-                    ),
-                }
-            )
+                ),
+            }
+            if search:
+                filter_file = list_files_filter(file_info, search)
+                if filter_file:
+                    file_list.append(file_info)
+            else:
+                file_list.append(file_info)
         except fs.errors.ResourceNotFound as e:
             if os.path.islink(fs_.root_path + file_name):
                 target = os.path.realpath(fs_.root_path + file_name)
@@ -468,7 +470,7 @@ def remove_files_recursive_wildcard(directory_path, path):
     return deleted
 
 
-def list_files_recursive_wildcard(directory_path, path):
+def list_files_recursive_wildcard(directory_path, path, search=None):
     """List file(s) fitting the wildcard from the workspace.
 
     :param directory_path: Directory to list files from.
@@ -482,21 +484,46 @@ def list_files_recursive_wildcard(directory_path, path):
     list_files_recursive = []
     for path in paths:
         raw_size = path.stat().st_size
-        list_files_recursive.append(
-            {
-                "name": str(path.relative_to(posix_dir_prefix)),
-                "size": dict(
-                    raw=raw_size,
-                    human_readable=ResourceUnit.human_readable_unit(
-                        ResourceUnit.bytes_, raw_size
-                    ),
+        file_info = {
+            "name": str(path.relative_to(posix_dir_prefix)),
+            "size": dict(
+                raw=raw_size,
+                human_readable=ResourceUnit.human_readable_unit(
+                    ResourceUnit.bytes_, raw_size
                 ),
-                "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
-                    WORKFLOW_TIME_FORMAT
-                ),
-            }
-        )
+            ),
+            "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                WORKFLOW_TIME_FORMAT
+            ),
+        }
+        if search:
+            filter_file = list_files_filter(file_info, search)
+            if filter_file:
+                list_files_recursive.append(file_info)
+        else:
+            list_files_recursive.append(file_info)
     return list_files_recursive
+
+
+def list_files_filter(file_info, search_filters):
+    """Filter the file(s) matching the searching parameters.
+
+    :param file_info: names of files and their sizes
+    :param search_filters: search parameters based on `name`
+                           `size` and `last-modified`.
+
+    :return: Boolean after matching with searching filters.
+    """
+    filter_file = False
+    _file = {
+        "name": file_info["name"],
+        "size": str(file_info["size"]["raw"]),
+        "last-modified": file_info["last-modified"],
+    }
+    # Filter file only if all filters match exclusively.
+    if all(_filter in _file[k] for k, v in search_filters.items() for _filter in v):
+        filter_file = True
+    return filter_file
 
 
 def download_files_recursive_wildcard(workspace_path, path):
