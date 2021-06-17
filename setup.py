@@ -45,8 +45,8 @@ setup_requires = [
 ]
 
 install_requires = [
-    "Flask>=0.12",
-    "werkzeug>=0.16.1,<0.17",
+    "Flask>=1.0.4,<2.0",
+    "Werkzeug>=1.0.1,<2.0",
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
     "marshmallow>2.13.0,<=2.20.1",
