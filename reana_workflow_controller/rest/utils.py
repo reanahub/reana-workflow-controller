@@ -31,7 +31,12 @@ from git import Repo
 from kubernetes.client.rest import ApiException
 from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_commons.utils import get_workflow_status_change_verb
+from reana_commons.utils import (
+    get_workflow_status_change_verb,
+    remove_upper_level_references,
+    is_directory,
+    get_files_recursive_wildcard,
+)
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, ResourceUnit, RunStatus, Workflow
 from sqlalchemy.exc import SQLAlchemyError
@@ -412,39 +417,6 @@ def list_directory_files(directory, search=None):
     return file_list
 
 
-def is_directory(directory_path, path):
-    """Whether the given path matches a directory or not.
-
-    :param directory_path: Directory to check files from.
-    :param path: Optional wildcard pattern to use for the check.
-    :return: Full path if it is a directory, False if not.
-    """
-    secure_path = remove_upper_level_references(path)
-    full_path = Path(directory_path, secure_path)
-    if full_path.is_dir():
-        return full_path
-    return False
-
-
-def get_files_recursive_wildcard(directory_path, path):
-    """Get file(s) fitting the wildcard from the workspace.
-
-    :param directory_path: Directory to get files from.
-    :param path: Wildcard pattern to use for the extraction.
-    :return: Tuple containing the list of paths sorted by length
-        and the posix directory prefix.
-    """
-    secure_path = remove_upper_level_references(path)
-    # if `secure_path` is a directory, append `/*` to get all the files inside
-    if is_directory(directory_path, secure_path):
-        secure_path = f"{secure_path.rstrip('/')}/*"
-    posix_dir_prefix = Path(directory_path)
-    paths = list(posix_dir_prefix.glob(secure_path))
-    # sort paths by length to start with the leaves of the directory tree
-    paths.sort(key=lambda path: len(str(path)), reverse=True)
-    return paths, posix_dir_prefix
-
-
 def remove_files_recursive_wildcard(directory_path, path):
     """Remove file(s) fitting the wildcard from the workspace.
 
@@ -608,18 +580,6 @@ def download_files_recursive_wildcard(workspace_path, path):
         # if multiple files, package them into a zip file and serve it
         else:
             return _send_zipped_dir_or_files(file_paths=paths)
-
-
-def remove_upper_level_references(path):
-    """Remove upper than `./` references.
-
-    Collapse separators/up-level references avoiding references to paths
-    outside working directory.
-
-    :param path: User provided path to a file or directory.
-    :return: Returns the corresponding sanitized path.
-    """
-    return os.path.normpath("/" + path).lstrip("/")
 
 
 def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
