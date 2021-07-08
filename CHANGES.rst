@@ -7,6 +7,11 @@ Version 0.8.0 (UNRELEASED)
 - Adds users quota accounting.
 - Adds new job properties ``started_at`` and ``finished_at`` to the ``/logs`` endpoint.
 
+Version 0.7.4 (2021-07-05)
+--------------------------
+
+- Changes internal dependencies.
+
 Version 0.7.3 (2021-04-28)
 --------------------------
 
