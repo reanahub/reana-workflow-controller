@@ -489,7 +489,7 @@ def list_files_recursive_wildcard(directory_path, path):
     ]
 
 
-def download_files_recursive_wildcard(workspace_path, path):
+def download_files_recursive_wildcard(workflow_name, workspace_path, path):
     """Download file(s) matching the given path pattern from the workspace.
 
     This function finds out if the provided pattern corresponds to:
@@ -497,15 +497,20 @@ def download_files_recursive_wildcard(workspace_path, path):
     - a directory; then packages it into a zip file
     - multiple files; then packages them into a zip file
 
+    :param workflow_name: Full workflow name including run number.
     :param workspace_path: Base workspace directory where files are located.
     :param path: (Wildcard) pattern to use for the download.
     :return: Flask function call to send file to the client.
     """
 
-    def _send_zipped_dir_or_files(dir_path=None, file_paths=None):
+    def _send_zipped_dir_or_files(workflow_name, dir_path=None, file_paths=None):
         """Wrap directory into a zip file in memory and send it to the client."""
         timestr = time.strftime("%Y-%m-%d-%H%M%S")
-        filename = "download_{}.zip".format(timestr)
+        filename = "download_{}_{}_{}.zip".format(
+            workflow_name,
+            os.path.basename(remove_upper_level_references(path)),
+            timestr,
+        )
         memory_file = BytesIO()
         with zipfile.ZipFile(memory_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             if dir_path:
@@ -558,7 +563,7 @@ def download_files_recursive_wildcard(workspace_path, path):
 
     full_path_dir = is_directory(workspace_path, path)
     if full_path_dir:
-        return _send_zipped_dir_or_files(dir_path=full_path_dir)
+        return _send_zipped_dir_or_files(workflow_name, dir_path=full_path_dir)
 
     else:
         paths, _ = get_files_recursive_wildcard(workspace_path, path)
@@ -570,7 +575,7 @@ def download_files_recursive_wildcard(workspace_path, path):
             return _send_single_file(absolute_file_path, workspace_path)
         # if multiple files, package them into a zip file and serve it
         else:
-            return _send_zipped_dir_or_files(file_paths=paths)
+            return _send_zipped_dir_or_files(workflow_name, file_paths=paths)
 
 
 def remove_upper_level_references(path):
