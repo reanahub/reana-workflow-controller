@@ -63,6 +63,12 @@ REANA_WORKFLOW_ENGINE_IMAGE_SERIAL = os.getenv(
 )
 """Serial workflow engine version."""
 
+REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE = os.getenv(
+    "REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE",
+    "reanahub/reana-workflow-engine-snakemake:latest",
+)
+"""Snakemake workflow engine version."""
+
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum default memory limit for user job containers. Exceeding this limit will terminate the container.
 

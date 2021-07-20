@@ -69,6 +69,7 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
+    REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     SHARED_FS_MAPPING,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
@@ -116,6 +117,18 @@ class WorkflowRunManager:
                 "--workflow-uuid {id} "
                 "--workflow-workspace {workspace} "
                 "--workflow-json '{workflow_json}' "
+                "--workflow-parameters '{parameters}' "
+                "--operational-options '{options}' "
+            ),
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+        },
+        "snakemake": {
+            "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE),
+            "command": (
+                "run-snakemake-workflow "
+                "--workflow-uuid {id} "
+                "--workflow-workspace {workspace} "
+                "--workflow-file '{workflow_file}' "
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
             ),
