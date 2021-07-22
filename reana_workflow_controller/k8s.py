@@ -268,9 +268,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
     command_args = [
         "start-notebook.sh",
         "--NotebookApp.base_url='{base_url}'".format(base_url=access_path),
-        "--notebook-dir='{workflow_workspace}'".format(
-            workflow_workspace=os.path.join(SHARED_VOLUME_PATH, workspace)
-        ),
+        "--notebook-dir='{workflow_workspace}'".format(workflow_workspace=workspace),
     ]
     if access_token:
         command_args.append(

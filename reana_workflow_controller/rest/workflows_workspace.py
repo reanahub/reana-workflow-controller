@@ -142,13 +142,11 @@ def upload_file(workflow_id_or_name):
             full_file_name = full_file_name[1:]
         elif ".." in full_file_name.split("/"):
             raise REANAUploadPathError('Path cannot contain "..".')
-        absolute_workspace_path = os.path.join(
-            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-        )
+        absolute_workspace_path = workflow.workspace_path
         if len(full_file_name.split("/")) > 1:
             dirs = full_file_name.split("/")[:-1]
             absolute_workspace_path = os.path.join(
-                absolute_workspace_path, "/".join(dirs)
+                workflow.workspace_path, "/".join(dirs)
             )
             if not os.path.exists(absolute_workspace_path):
                 os.makedirs(absolute_workspace_path)
@@ -256,12 +254,8 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         workflow_name = workflow.get_full_workflow_name()
 
-        absolute_workflow_workspace_path = os.path.join(
-            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-        )
-
         return download_files_recursive_wildcard(
-            workflow_name, absolute_workflow_workspace_path, file_name
+            workflow_name, workflow.workspace_path, file_name
         )
 
     except ValueError:
@@ -345,10 +339,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        abs_path_to_workspace = os.path.join(
-            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-        )
-        deleted = remove_files_recursive_wildcard(abs_path_to_workspace, file_name)
+        deleted = remove_files_recursive_wildcard(workflow.workspace_path, file_name)
         # update user and workflow resource disk quota
         freed_up_bytes = sum(
             size.get("size", 0) for size in deleted["deleted"].values()
@@ -480,17 +471,14 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         file_name = request.args.get("file_name")
-        abs_path_to_workspace = os.path.join(
-            current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-        )
         if search:
             search = json.loads(search)
         if file_name:
             file_list = list_files_recursive_wildcard(
-                abs_path_to_workspace, file_name, search=search
+                workflow.workspace_path, file_name, search=search
             )
         else:
-            file_list = list_directory_files(abs_path_to_workspace, search=search)
+            file_list = list_directory_files(workflow.workspace_path, search=search)
         pagination_dict = paginate(file_list)
         return jsonify(pagination_dict), 200
 

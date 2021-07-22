@@ -220,6 +220,13 @@
             "type": "string"
           },
           {
+            "description": "A root path under which the workflow workspaces are stored.",
+            "in": "query",
+            "name": "workspace_root_path",
+            "required": false,
+            "type": "string"
+          },
+          {
             "description": "JSON object including workflow parameters and workflow specification in JSON format (`yadageschemas.load()` output) with necessary data to instantiate a yadage workflow.",
             "in": "body",
             "name": "workflow",

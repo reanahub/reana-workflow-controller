@@ -19,6 +19,7 @@ import subprocess
 import traceback
 import time
 import zipfile
+import shutil
 from collections import OrderedDict
 from datetime import datetime
 from functools import wraps
@@ -29,7 +30,7 @@ from flask import current_app as app
 from flask import jsonify, request, send_file, send_from_directory
 from git import Repo
 from kubernetes.client.rest import ApiException
-from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.config import REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (
     get_workflow_status_change_verb,
@@ -195,9 +196,7 @@ def remove_workflow_jobs_from_cache(workflow):
     """
     jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
     for job in jobs:
-        job_path = remove_upper_level_references(
-            os.path.join(workflow.workspace_path, "..", "archive", str(job.id_))
-        )
+        job_path = os.path.join(workflow.workspace_path, "..", "archive", str(job.id_))
         Session.query(JobCache).filter_by(job_id=job.id_).delete()
         remove_workflow_workspace(job_path)
     Session.commit()
@@ -322,8 +321,7 @@ def create_workflow_workspace(
     :return: Absolute workspace path.
     """
     os.umask(REANA_WORKFLOW_UMASK)
-    reana_fs = fs.open_fs(app.config["SHARED_VOLUME_PATH"])
-    reana_fs.makedirs(path, recreate=True)
+    os.makedirs(path, exist_ok=True)
     if git_url and git_ref:
         secret_store = REANAUserSecretsStore(user_id)
         gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
@@ -331,10 +329,7 @@ def create_workflow_workspace(
             gitlab_access_token, REANA_GITLAB_HOST, git_url
         )
         repo = Repo.clone_from(
-            url=url,
-            to_path=os.path.abspath(reana_fs.root_path + "/" + path),
-            branch=git_branch,
-            depth=1,
+            url=url, to_path=os.path.abspath(path), branch=git_branch, depth=1,
         )
         repo.head.reset(commit=git_ref)
 
@@ -345,31 +340,25 @@ def remove_workflow_workspace(path):
     :param path: Relative path to workspace directory.
     :return: None.
     """
-    reana_fs = fs.open_fs(app.config["SHARED_VOLUME_PATH"])
-    if reana_fs.exists(path):
-        reana_fs.removetree(path)
+    if os.path.isdir(path):
+        shutil.rmtree(path)
 
 
 def mv_files(source, target, workflow):
     """Move files within workspace."""
-    absolute_workspace_path = os.path.join(
-        app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
-    )
-    absolute_source_path = os.path.join(
-        app.config["SHARED_VOLUME_PATH"], absolute_workspace_path, source
-    )
+    absolute_source_path = os.path.join(workflow.workspace_path, source)
 
     if not os.path.exists(absolute_source_path):
         message = "Path {} does not exist".format(source)
         raise REANAWorkflowControllerError(message)
-    if not absolute_source_path.startswith(absolute_workspace_path):
+    if not absolute_source_path.startswith(workflow.workspace_path):
         message = "Source path is outside user workspace"
         raise REANAWorkflowControllerError(message)
-    if not absolute_source_path.startswith(absolute_workspace_path):
+    if not absolute_source_path.startswith(workflow.workspace_path):
         message = "Target path is outside workspace"
         raise REANAWorkflowControllerError(message)
     try:
-        reana_fs = fs.open_fs(absolute_workspace_path)
+        reana_fs = fs.open_fs(workflow.workspace_path)
         source_info = reana_fs.getinfo(source)
         if source_info.is_dir:
             reana_fs.movedir(src_path=source, dst_path=target, create=True)
@@ -605,35 +594,32 @@ def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
     """
     workspace_a = workflow_a.workspace_path
     workspace_b = workflow_b.workspace_path
-    reana_fs = fs.open_fs(app.config["SHARED_VOLUME_PATH"])
-    if reana_fs.exists(workspace_a) and reana_fs.exists(workspace_b):
+    if os.path.exists(workspace_a) and os.path.exists(workspace_b):
         diff_command = [
             "diff",
             "--unified={}".format(context_lines),
             "-r",
-            reana_fs.getospath(workspace_a),
-            reana_fs.getospath(workspace_b),
+            workspace_a,
+            workspace_b,
         ]
         if brief:
             diff_command.append("-q")
         diff_result = subprocess.run(diff_command, stdout=subprocess.PIPE)
         diff_result_string = diff_result.stdout.decode("utf-8")
         diff_result_string = diff_result_string.replace(
-            reana_fs.getospath(workspace_a).decode("utf-8"),
-            get_workflow_name(workflow_a),
+            workspace_a, get_workflow_name(workflow_a),
         )
         diff_result_string = diff_result_string.replace(
-            reana_fs.getospath(workspace_b).decode("utf-8"),
-            get_workflow_name(workflow_b),
+            workspace_b, get_workflow_name(workflow_b),
         )
 
         return diff_result_string
     else:
-        if not reana_fs.exists(workspace_a):
+        if not os.path.exists(workspace_a):
             raise ValueError(
                 "Workspace of {} does not exist.".format(get_workflow_name(workflow_a))
             )
-        if not reana_fs.exists(workspace_b):
+        if not os.path.exists(workspace_b):
             raise ValueError(
                 "Workspace of {} does not exist.".format(get_workflow_name(workflow_b))
             )

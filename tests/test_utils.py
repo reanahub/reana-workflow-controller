@@ -84,19 +84,11 @@ def test_delete_all_workflow_runs(
 
 @pytest.mark.parametrize("workspace", [True, False])
 def test_workspace_deletion(
-    app,
-    session,
-    default_user,
-    sample_yadage_workflow_in_db,
-    tmp_shared_volume_path,
-    workspace,
+    app, session, default_user, sample_yadage_workflow_in_db, workspace,
 ):
     """Test workspace deletion."""
     workflow = sample_yadage_workflow_in_db
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
-    absolute_workflow_workspace = os.path.join(
-        tmp_shared_volume_path, workflow.workspace_path
-    )
 
     # create a job for the workflow
     workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
@@ -107,19 +99,21 @@ def test_workspace_deletion(
     session.commit()
 
     # create cached workspace
-    cache_dir_path = os.path.abspath(
-        os.path.join(
-            absolute_workflow_workspace, os.pardir, "archive", str(workflow_job.id_)
-        )
+    cache_dir_path = os.path.join(
+        sample_yadage_workflow_in_db.workspace_path,
+        "..",
+        "archive",
+        str(workflow_job.id_),
     )
+
     os.makedirs(cache_dir_path)
 
     # check that the workflow workspace exists
-    assert os.path.exists(absolute_workflow_workspace)
+    assert os.path.exists(sample_yadage_workflow_in_db.workspace_path)
     assert os.path.exists(cache_dir_path)
     delete_workflow(workflow, workspace=workspace)
     if workspace:
-        assert not os.path.exists(absolute_workflow_workspace)
+        assert not os.path.exists(sample_yadage_workflow_in_db.workspace_path)
 
     # check that all cache entries for jobs
     # of the deleted workflow are removed
@@ -129,21 +123,17 @@ def test_workspace_deletion(
 
 
 def test_deletion_of_workspace_of_an_already_deleted_workflow(
-    app, session, default_user, sample_yadage_workflow_in_db, tmp_shared_volume_path
+    app, session, default_user, sample_yadage_workflow_in_db
 ):
     """Test workspace deletion of an already deleted workflow."""
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
-    absolute_workflow_workspace = os.path.join(
-        tmp_shared_volume_path, sample_yadage_workflow_in_db.workspace_path
-    )
-
     # check that the workflow workspace exists
-    assert os.path.exists(absolute_workflow_workspace)
+    assert os.path.exists(sample_yadage_workflow_in_db.workspace_path)
     delete_workflow(sample_yadage_workflow_in_db, workspace=False)
-    assert os.path.exists(absolute_workflow_workspace)
+    assert os.path.exists(sample_yadage_workflow_in_db.workspace_path)
 
     delete_workflow(sample_yadage_workflow_in_db, workspace=True)
-    assert not os.path.exists(absolute_workflow_workspace)
+    assert not os.path.exists(sample_yadage_workflow_in_db.workspace_path)
 
 
 def test_delete_recursive_wildcard(tmp_shared_volume_path):
@@ -202,10 +192,9 @@ def test_workspace_permissions(
     """Test workspace dir permissions."""
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
     expected_worspace_permissions = "drwxrwxr-x"
-    absolute_workflow_workspace = os.path.join(
-        tmp_shared_volume_path, sample_yadage_workflow_in_db.workspace_path
+    workspace_permissions = stat.filemode(
+        os.stat(sample_yadage_workflow_in_db.workspace_path).st_mode
     )
-    workspace_permissions = stat.filemode(os.stat(absolute_workflow_workspace).st_mode)
-    assert os.path.exists(absolute_workflow_workspace)
+    assert os.path.exists(sample_yadage_workflow_in_db.workspace_path)
     assert workspace_permissions == expected_worspace_permissions
     delete_workflow(sample_yadage_workflow_in_db, workspace=True)

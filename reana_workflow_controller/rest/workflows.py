@@ -12,7 +12,9 @@ import json
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
+from reana_commons.config import SHARED_VOLUME_PATH
 from reana_db.database import Session
+from reana_db.utils import build_workspace_path
 from reana_db.models import (
     User,
     Workflow,
@@ -307,6 +309,11 @@ def create_workflow():  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
+        - name: workspace_root_path
+          in: query
+          description: A root path under which the workflow workspaces are stored.
+          required: false
+          type: string
         - name: workflow
           in: body
           description: >-
@@ -399,6 +406,7 @@ def create_workflow():  # noqa
             git_ref = git_data["git_commit_sha"]
             git_repo = git_data["git_url"]
         # add spec and params to DB as JSON
+        workspace_root_path = request.args.get("workspace_root_path", None)
         workflow = Workflow(
             id_=workflow_uuid,
             name=workflow_name,
@@ -409,6 +417,9 @@ def create_workflow():  # noqa
             logs="",
             git_ref=git_ref,
             git_repo=git_repo,
+            workspace_path=build_workspace_path(
+                request.args["user"], workflow_uuid, workspace_root_path
+            ),
         )
         Session.add(workflow)
         Session.object_session(workflow).commit()

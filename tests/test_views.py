@@ -93,13 +93,16 @@ def test_get_workflows_missing_user(app):
 
 
 def test_create_workflow_with_name(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
+    app, session, default_user, cwl_workflow_with_name, tmp_shared_volume_path
 ):
     """Test create workflow and its workspace by specifying a name."""
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -121,20 +124,20 @@ def test_create_workflow_with_name(
         workflow = workflow_by_id
 
         # Check that the workflow workspace exists
-        absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
-        assert os.path.exists(absolute_workflow_workspace)
+        assert os.path.exists(workflow.workspace_path)
 
 
 def test_create_workflow_without_name(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_without_name
+    app, session, default_user, cwl_workflow_without_name, tmp_shared_volume_path
 ):
     """Test create workflow and its workspace without specifying a name."""
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_without_name),
         )
@@ -165,10 +168,7 @@ def test_create_workflow_without_name(
         workflow = workflow_by_id
 
         # Check that the workflow workspace exists
-        absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
-        assert os.path.exists(absolute_workflow_workspace)
+        assert os.path.exists(workflow.workspace_path)
 
 
 def test_create_workflow_wrong_user(
@@ -179,7 +179,10 @@ def test_create_workflow_wrong_user(
         random_user_uuid = uuid.uuid4()
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": random_user_uuid},
+            query_string={
+                "user": random_user_uuid,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -193,13 +196,18 @@ def test_create_workflow_wrong_user(
         assert not workflow
 
 
-def test_download_missing_file(app, default_user, cwl_workflow_with_name):
+def test_download_missing_file(
+    app, default_user, cwl_workflow_with_name, tmp_shared_volume_path
+):
     """Test download missing file."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -225,14 +233,22 @@ def test_download_missing_file(app, default_user, cwl_workflow_with_name):
 
 
 def test_download_file(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
+    app,
+    session,
+    default_user,
+    tmp_shared_volume_path,
+    cwl_workflow_with_name,
+    sample_serial_workflow_in_db,
 ):
     """Test download file from workspace."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -247,9 +263,7 @@ def test_download_file(
         # we use `secure_filename` here because
         # we use it in server side when adding
         # files
-        absolute_path_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
+        absolute_path_workflow_workspace = workflow.workspace_path
         file_path = os.path.join(absolute_path_workflow_workspace, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -276,7 +290,10 @@ def test_download_file_with_path(
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -291,10 +308,7 @@ def test_download_file_with_path(
         # we use `secure_filename` here because
         # we use it in server side when adding
         # files
-        absolute_path_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
-        file_path = os.path.join(absolute_path_workflow_workspace, file_name)
+        file_path = os.path.join(workflow.workspace_path, file_name)
         # because outputs directory doesn't exist by default
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb+") as f:
@@ -333,7 +347,10 @@ def test_download_dir_or_wildcard(
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -347,11 +364,8 @@ def test_download_dir_or_wildcard(
             "foo/bar/1.csv": b"csv in bar dir",
             "foo/bar/baz/2.csv": b"csv in baz dir",
         }
-        absolute_path_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
         for file_name, file_binary_content in files.items():
-            file_path = os.path.join(absolute_path_workflow_workspace, file_name)
+            file_path = os.path.join(workflow.workspace_path, file_name)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb+") as f:
                 f.write(file_binary_content)
@@ -395,7 +409,10 @@ def test_get_files(
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -404,9 +421,7 @@ def test_get_files(
         workflow_uuid = response_data.get("workflow_id")
         workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
         # create file
-        absolute_path_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
+        absolute_path_workflow_workspace = workflow.workspace_path
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
         test_files = []
         for i in range(5):
@@ -450,14 +465,17 @@ def test_get_files_unknown_workflow(app, default_user):
 
 
 def test_get_workflow_status_with_uuid(
-    app, session, default_user, cwl_workflow_with_name
+    app, session, default_user, cwl_workflow_with_name, tmp_shared_volume_path
 ):
     """Test get workflow status."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -535,13 +553,18 @@ def test_get_workflow_status_with_name(
         assert json_response.get("status") == workflow.status.name
 
 
-def test_get_workflow_status_unauthorized(app, default_user, cwl_workflow_with_name):
+def test_get_workflow_status_unauthorized(
+    app, default_user, cwl_workflow_with_name, tmp_shared_volume_path
+):
     """Test get workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -592,13 +615,17 @@ def test_set_workflow_status(
     session,
     default_user,
     yadage_workflow_with_name,
+    tmp_shared_volume_path,
 ):
     """Test set workflow status "Start"."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -637,6 +664,7 @@ def test_start_already_started_workflow(
     corev1_api_client_with_user_secrets,
     user_secrets,
     yadage_workflow_with_name,
+    tmp_shared_volume_path,
 ):
     """Test start workflow twice."""
     with app.test_client() as client:
@@ -644,7 +672,10 @@ def test_start_already_started_workflow(
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -734,13 +765,18 @@ def test_stop_workflow(
             )
 
 
-def test_set_workflow_status_unauthorized(app, default_user, yadage_workflow_with_name):
+def test_set_workflow_status_unauthorized(
+    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
+):
     """Test set workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -761,14 +797,17 @@ def test_set_workflow_status_unauthorized(app, default_user, yadage_workflow_wit
 
 
 def test_set_workflow_status_unknown_workflow(
-    app, default_user, yadage_workflow_with_name
+    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
 ):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -793,7 +832,10 @@ def test_upload_file(
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -819,7 +861,7 @@ def test_upload_file(
         # we use it in server side when adding
         # files
         absolute_file_path = os.path.join(
-            tmp_shared_volume_path, workflow_workspace, secure_filename(file_name)
+            workflow_workspace, secure_filename(file_name)
         )
 
         with open(absolute_file_path, "rb") as f:
@@ -849,13 +891,11 @@ def test_delete_file(app, default_user, sample_serial_workflow_in_db):
     from flask import current_app
 
     create_workflow_workspace(sample_serial_workflow_in_db.workspace_path)
-    abs_path_workspace = os.path.join(
-        current_app.config["SHARED_VOLUME_PATH"],
-        sample_serial_workflow_in_db.workspace_path,
-    )
     file_name = "dataset.csv"
     file_binary_content = b"1,2,3,4\n5,6,7,8"
-    abs_path_to_file = os.path.join(abs_path_workspace, file_name)
+    abs_path_to_file = os.path.join(
+        sample_serial_workflow_in_db.workspace_path, file_name
+    )
     with open(abs_path_to_file, "wb+") as f:
         f.write(file_binary_content)
     assert os.path.exists(abs_path_to_file)
@@ -872,13 +912,18 @@ def test_delete_file(app, default_user, sample_serial_workflow_in_db):
         assert not os.path.exists(abs_path_to_file)
 
 
-def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
+def test_get_created_workflow_logs(
+    app, default_user, cwl_workflow_with_name, tmp_shared_volume_path
+):
     """Test get workflow logs."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
@@ -902,13 +947,18 @@ def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
         assert response_data == expected_data
 
 
-def test_get_unknown_workflow_logs(app, default_user, yadage_workflow_with_name):
+def test_get_unknown_workflow_logs(
+    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
+):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -923,13 +973,18 @@ def test_get_unknown_workflow_logs(app, default_user, yadage_workflow_with_name)
         assert res.status_code == 404
 
 
-def test_get_workflow_logs_unauthorized(app, default_user, yadage_workflow_with_name):
+def test_get_workflow_logs_unauthorized(
+    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
+):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -1141,7 +1196,10 @@ def test_workspace_deletion(
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -1153,10 +1211,6 @@ def test_workspace_deletion(
         ).first()
         assert workflow
 
-        absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
-
         # create a job for the workflow
         workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
         job_cache_entry = JobCache(job_id=workflow_job.id_)
@@ -1166,7 +1220,7 @@ def test_workspace_deletion(
         session.commit()
 
         # check that the workflow workspace exists
-        assert os.path.exists(absolute_workflow_workspace)
+        assert os.path.exists(workflow.workspace_path)
         with app.test_client() as client:
             res = client.put(
                 url_for(
@@ -1177,7 +1231,7 @@ def test_workspace_deletion(
                 data=json.dumps({"workspace": workspace}),
             )
         if workspace:
-            assert not os.path.exists(absolute_workflow_workspace)
+            assert not os.path.exists(workflow.workspace_path)
 
         # check that all cache entries for jobs
         # of the deleted workflow are removed
@@ -1194,7 +1248,10 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.create_workflow"),
-            query_string={"user": default_user.id_},
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
         )
@@ -1206,12 +1263,8 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
         ).first()
         assert workflow
 
-        absolute_workflow_workspace = os.path.join(
-            tmp_shared_volume_path, workflow.workspace_path
-        )
-
         # check that the workflow workspace exists
-        assert os.path.exists(absolute_workflow_workspace)
+        assert os.path.exists(workflow.workspace_path)
         with app.test_client() as client:
             res = client.put(
                 url_for(
@@ -1221,10 +1274,10 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
                 content_type="application/json",
                 data=json.dumps({"workspace": False}),
             )
-        assert os.path.exists(absolute_workflow_workspace)
+        assert os.path.exists(workflow.workspace_path)
 
         delete_workflow(workflow, workspace=True)
-        assert not os.path.exists(absolute_workflow_workspace)
+        assert not os.path.exists(workflow.workspace_path)
 
 
 def test_get_workflow_diff(
@@ -1286,12 +1339,8 @@ def test_get_workspace_diff(
 ):
     """Test get workspace differences."""
     # create the workspaces for the two workflows
-    workspace_path_a = os.path.join(
-        tmp_shared_volume_path, sample_serial_workflow_in_db.workspace_path
-    )
-    workspace_path_b = os.path.join(
-        tmp_shared_volume_path, sample_yadage_workflow_in_db.workspace_path
-    )
+    workspace_path_a = sample_serial_workflow_in_db.workspace_path
+    workspace_path_b = sample_yadage_workflow_in_db.workspace_path
     # Create files that differ in one line
     csv_line = "1,2,3,4"
     file_name = "test.csv"
