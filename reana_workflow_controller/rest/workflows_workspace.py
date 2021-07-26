@@ -254,13 +254,14 @@ def download_file(workflow_id_or_name, file_name):  # noqa
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow_name = workflow.get_full_workflow_name()
 
         absolute_workflow_workspace_path = os.path.join(
             current_app.config["SHARED_VOLUME_PATH"], workflow.workspace_path
         )
 
         return download_files_recursive_wildcard(
-            absolute_workflow_workspace_path, file_name
+            workflow_name, absolute_workflow_workspace_path, file_name
         )
 
     except ValueError:
