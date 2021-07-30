@@ -34,7 +34,7 @@ from reana_commons.config import (
 )
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_commons.k8s.volumes import get_shared_volume
+from reana_commons.k8s.volumes import get_shared_volume, get_workspace_volume
 from reana_commons.utils import (
     build_unique_component_name,
     create_cvmfs_persistent_volume_claim,
@@ -440,10 +440,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
-        workspace_mount, workspace_volume = get_shared_volume(
+        workspace_mount, workspace_volume = get_workspace_volume(
             self.workflow.workspace_path
         )
-        db_mount, _ = get_shared_volume("db")
+        db_mount, shared_volume = get_shared_volume("db")
 
         workflow_metadata = client.V1ObjectMeta(
             name=name,
@@ -582,6 +582,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         spec.template.spec.volumes = [
             workspace_volume,
+            shared_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 
