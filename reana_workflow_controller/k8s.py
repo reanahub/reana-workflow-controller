@@ -20,7 +20,11 @@ from reana_commons.k8s.api_client import (
     current_k8s_corev1_api_client,
     current_k8s_networking_v1beta1,
 )
-from reana_commons.k8s.volumes import get_k8s_cvmfs_volume, get_shared_volume
+from reana_commons.k8s.volumes import (
+    get_k8s_cvmfs_volume,
+    get_shared_volume,
+    get_workspace_volume,
+)
 
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
@@ -155,7 +159,7 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_reana_shared_storage(self):
         """Add the REANA shared file system volume mount to the deployment."""
-        volume_mount, volume = get_shared_volume(self.workspace)
+        volume_mount, volume = get_workspace_volume(self.workspace)
         self.kubernetes_objects["deployment"].spec.template.spec.containers[
             0
         ].volume_mounts = [volume_mount]
