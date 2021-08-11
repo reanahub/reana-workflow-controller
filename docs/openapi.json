@@ -398,6 +398,134 @@
         "summary": "Move files within workspace."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/disk_usage": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource reports the disk usage of a workflow. Resource is expecting a workflow UUID and some parameters .",
+        "operationId": "get_workflow_disk_usage",
+        "parameters": [
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of owner of the workflow",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Additional input parameters and operational options.",
+            "in": "body",
+            "name": "parameters",
+            "required": false,
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about the disk usage is returned.",
+            "examples": {
+              "application/json": {
+                "disk_usage_info": [
+                  {
+                    "name": "file1.txt",
+                    "size": {
+                      "human_readable": "12 MB",
+                      "raw": 12580000
+                    }
+                  },
+                  {
+                    "name": "plot.png",
+                    "size": {
+                      "human_readable": "100 KB",
+                      "raw": 184320
+                    }
+                  }
+                ],
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "disk_usage_info": {
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "size": {
+                        "properties": {
+                          "human_readable": {
+                            "type": "string"
+                          },
+                          "raw": {
+                            "type": "number"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "user": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either user or workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get disk usage of a workflow."
+      }
+    },
     "/api/workflows/{workflow_id_or_name_a}/diff/{workflow_id_or_name_b}": {
       "get": {
         "description": "This resource shows the differences between the assets of two workflows. Resource is expecting two workflow UUIDs or names.",

@@ -646,3 +646,143 @@ def move_files(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 501
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/disk_usage", methods=["GET"])
+def get_workflow_disk_usage(workflow_id_or_name):  # noqa
+    r"""Get workflow disk usage.
+
+    ---
+    get:
+      summary: Get disk usage of a workflow.
+      description: >-
+        This resource reports the disk usage of a workflow.
+        Resource is expecting a workflow UUID and some parameters .
+      operationId: get_workflow_disk_usage
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of owner of the workflow.
+          required: true
+          type: string
+        - name: parameters
+          in: body
+          description: >-
+            Optional. Additional input parameters and operational options.
+          required: false
+          schema:
+            type: object
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about the disk usage is
+            returned.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              user:
+                type: string
+              disk_usage_info:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    size:
+                      type: object
+                      properties:
+                        raw:
+                          type: number
+                        human_readable:
+                          type: string
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "disk_usage_info": [{'name': 'file1.txt',
+                                      'size': {
+                                        'raw': 12580000,
+                                        'human_readable': '12 MB'
+                                       }
+                                    },
+                                    {'name': 'plot.png',
+                                     'size': {
+                                       'raw': 184320,
+                                       'human_readable': '100 KB'
+                                      }
+                                    }]
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        parameters = request.json or {}
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+        user_uuid = request.args["user"]
+        summarize = bool(parameters.get("summarize", False))
+        search = parameters.get("search", None)
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        disk_usage_info = workflow.get_workspace_disk_usage(
+            summarize=summarize, search=search
+        )
+        response = {
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.name,
+            "user": str(user_uuid),
+            "disk_usage_info": disk_usage_info,
+        }
+
+        return jsonify(response), 200
+    except REANAWorkflowControllerError as e:
+        return jsonify({"message": str(e)}), 409
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
