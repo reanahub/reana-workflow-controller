@@ -92,16 +92,16 @@ def test_get_workflows_missing_user(app):
         assert res.status_code == 400
 
 
-def test_create_workflow_with_name(
-    app, session, default_user, cwl_workflow_with_name, tmp_shared_volume_path
-):
+def test_create_workflow_with_name(app, session, default_user, cwl_workflow_with_name):
     """Test create workflow and its workspace by specifying a name."""
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -128,7 +128,7 @@ def test_create_workflow_with_name(
 
 
 def test_create_workflow_without_name(
-    app, session, default_user, cwl_workflow_without_name, tmp_shared_volume_path
+    app, session, default_user, cwl_workflow_without_name
 ):
     """Test create workflow and its workspace without specifying a name."""
     with app.test_client() as client:
@@ -136,7 +136,9 @@ def test_create_workflow_without_name(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_without_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_without_name),
@@ -171,9 +173,7 @@ def test_create_workflow_without_name(
         assert os.path.exists(workflow.workspace_path)
 
 
-def test_create_workflow_wrong_user(
-    app, session, tmp_shared_volume_path, cwl_workflow_with_name
-):
+def test_create_workflow_wrong_user(app, session, cwl_workflow_with_name):
     """Test create workflow providing unknown user."""
     with app.test_client() as client:
         random_user_uuid = uuid.uuid4()
@@ -181,7 +181,9 @@ def test_create_workflow_wrong_user(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": random_user_uuid,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -196,9 +198,7 @@ def test_create_workflow_wrong_user(
         assert not workflow
 
 
-def test_download_missing_file(
-    app, default_user, cwl_workflow_with_name, tmp_shared_volume_path
-):
+def test_download_missing_file(app, default_user, cwl_workflow_with_name):
     """Test download missing file."""
     with app.test_client() as client:
         # create workflow
@@ -206,7 +206,9 @@ def test_download_missing_file(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -233,12 +235,7 @@ def test_download_missing_file(
 
 
 def test_download_file(
-    app,
-    session,
-    default_user,
-    tmp_shared_volume_path,
-    cwl_workflow_with_name,
-    sample_serial_workflow_in_db,
+    app, session, default_user, cwl_workflow_with_name, sample_serial_workflow_in_db,
 ):
     """Test download file from workspace."""
     with app.test_client() as client:
@@ -247,7 +244,9 @@ def test_download_file(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -282,9 +281,7 @@ def test_download_file(
         assert res.data == file_binary_content
 
 
-def test_download_file_with_path(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
-):
+def test_download_file_with_path(app, session, default_user, cwl_workflow_with_name):
     """Test download file prepended with path."""
     with app.test_client() as client:
         # create workflow
@@ -292,7 +289,9 @@ def test_download_file_with_path(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -326,9 +325,7 @@ def test_download_file_with_path(
         assert res.data == file_binary_content
 
 
-def test_download_dir_or_wildcard(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
-):
+def test_download_dir_or_wildcard(app, session, default_user, cwl_workflow_with_name):
     """Test download directory or file(s) matching a wildcard pattern."""
 
     def _download(pattern, workflow_uuid):
@@ -349,7 +346,9 @@ def test_download_dir_or_wildcard(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -401,9 +400,7 @@ def test_download_dir_or_wildcard(
         assert res.data == files["foo/1.txt"]
 
 
-def test_get_files(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
-):
+def test_get_files(app, session, default_user, cwl_workflow_with_name):
     """Test get files list."""
     with app.test_client() as client:
         # create workflow
@@ -411,7 +408,9 @@ def test_get_files(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -465,7 +464,7 @@ def test_get_files_unknown_workflow(app, default_user):
 
 
 def test_get_workflow_status_with_uuid(
-    app, session, default_user, cwl_workflow_with_name, tmp_shared_volume_path
+    app, session, default_user, cwl_workflow_with_name
 ):
     """Test get workflow status."""
     with app.test_client() as client:
@@ -474,7 +473,9 @@ def test_get_workflow_status_with_uuid(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -553,9 +554,7 @@ def test_get_workflow_status_with_name(
         assert json_response.get("status") == workflow.status.name
 
 
-def test_get_workflow_status_unauthorized(
-    app, default_user, cwl_workflow_with_name, tmp_shared_volume_path
-):
+def test_get_workflow_status_unauthorized(app, default_user, cwl_workflow_with_name):
     """Test get workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
@@ -563,7 +562,9 @@ def test_get_workflow_status_unauthorized(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -615,7 +616,6 @@ def test_set_workflow_status(
     session,
     default_user,
     yadage_workflow_with_name,
-    tmp_shared_volume_path,
 ):
     """Test set workflow status "Start"."""
     with app.test_client() as client:
@@ -624,7 +624,9 @@ def test_set_workflow_status(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -664,7 +666,6 @@ def test_start_already_started_workflow(
     corev1_api_client_with_user_secrets,
     user_secrets,
     yadage_workflow_with_name,
-    tmp_shared_volume_path,
 ):
     """Test start workflow twice."""
     with app.test_client() as client:
@@ -674,7 +675,9 @@ def test_start_already_started_workflow(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -765,9 +768,7 @@ def test_stop_workflow(
             )
 
 
-def test_set_workflow_status_unauthorized(
-    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
-):
+def test_set_workflow_status_unauthorized(app, default_user, yadage_workflow_with_name):
     """Test set workflow status unauthorized."""
     with app.test_client() as client:
         # create workflow
@@ -775,7 +776,9 @@ def test_set_workflow_status_unauthorized(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -797,7 +800,7 @@ def test_set_workflow_status_unauthorized(
 
 
 def test_set_workflow_status_unknown_workflow(
-    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
+    app, default_user, yadage_workflow_with_name
 ):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
@@ -806,7 +809,9 @@ def test_set_workflow_status_unknown_workflow(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -824,9 +829,7 @@ def test_set_workflow_status_unknown_workflow(
         assert res.status_code == 404
 
 
-def test_upload_file(
-    app, session, default_user, tmp_shared_volume_path, cwl_workflow_with_name
-):
+def test_upload_file(app, session, default_user, cwl_workflow_with_name):
     """Test upload file."""
     with app.test_client() as client:
         # create workflow
@@ -834,7 +837,9 @@ def test_upload_file(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -912,9 +917,7 @@ def test_delete_file(app, default_user, sample_serial_workflow_in_db):
         assert not os.path.exists(abs_path_to_file)
 
 
-def test_get_created_workflow_logs(
-    app, default_user, cwl_workflow_with_name, tmp_shared_volume_path
-):
+def test_get_created_workflow_logs(app, default_user, cwl_workflow_with_name):
     """Test get workflow logs."""
     with app.test_client() as client:
         # create workflow
@@ -922,7 +925,9 @@ def test_get_created_workflow_logs(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": cwl_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
@@ -947,9 +952,7 @@ def test_get_created_workflow_logs(
         assert response_data == expected_data
 
 
-def test_get_unknown_workflow_logs(
-    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
-):
+def test_get_unknown_workflow_logs(app, default_user, yadage_workflow_with_name):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
@@ -957,7 +960,9 @@ def test_get_unknown_workflow_logs(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -973,9 +978,7 @@ def test_get_unknown_workflow_logs(
         assert res.status_code == 404
 
 
-def test_get_workflow_logs_unauthorized(
-    app, default_user, yadage_workflow_with_name, tmp_shared_volume_path
-):
+def test_get_workflow_logs_unauthorized(app, default_user, yadage_workflow_with_name):
     """Test set workflow status for unknown workflow."""
     with app.test_client() as client:
         # create workflow
@@ -983,7 +986,9 @@ def test_get_workflow_logs_unauthorized(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -1185,12 +1190,7 @@ def test_delete_all_workflow_runs(
 
 @pytest.mark.parametrize("workspace", [True, False])
 def test_workspace_deletion(
-    app,
-    session,
-    default_user,
-    yadage_workflow_with_name,
-    tmp_shared_volume_path,
-    workspace,
+    app, session, default_user, yadage_workflow_with_name, workspace,
 ):
     """Test workspace deletion."""
     with app.test_client() as client:
@@ -1198,7 +1198,9 @@ def test_workspace_deletion(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
@@ -1242,7 +1244,7 @@ def test_workspace_deletion(
 
 
 def test_deletion_of_workspace_of_an_already_deleted_workflow(
-    app, session, default_user, yadage_workflow_with_name, tmp_shared_volume_path
+    app, session, default_user, yadage_workflow_with_name
 ):
     """Test workspace deletion of an already deleted workflow."""
     with app.test_client() as client:
@@ -1250,7 +1252,9 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
             url_for("workflows.create_workflow"),
             query_string={
                 "user": default_user.id_,
-                "workspace_root_path": tmp_shared_volume_path,
+                "workspace_root_path": yadage_workflow_with_name["reana_specification"][
+                    "workspace"
+                ]["workspace_root_path"],
             },
             content_type="application/json",
             data=json.dumps(yadage_workflow_with_name),
