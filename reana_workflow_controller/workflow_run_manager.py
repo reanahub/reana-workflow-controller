@@ -31,6 +31,7 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_NAME,
     WORKFLOW_RUNTIME_USER_UID,
+    WORKSPACE_PATHS,
 )
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import REANAUserSecretsStore
@@ -553,6 +554,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT",
                     "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
                 },
+                {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
             ]
         )
         job_controller_container.env.extend(job_controller_env_vars)
