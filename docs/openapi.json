@@ -84,6 +84,13 @@
             "name": "include_workspace_size",
             "required": false,
             "type": "boolean"
+          },
+          {
+            "description": "Optional analysis UUID or name to filter.",
+            "in": "query",
+            "name": "workflow_id_or_name",
+            "required": false,
+            "type": "string"
           }
         ],
         "produces": [

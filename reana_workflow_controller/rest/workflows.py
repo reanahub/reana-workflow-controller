@@ -118,6 +118,11 @@ def get_workflows(paginate=None):  # noqa
           description: Include size information of the workspace.
           required: false
           type: boolean
+        - name: workflow_id_or_name
+          in: query
+          description: Optional analysis UUID or name to filter.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -231,6 +236,7 @@ def get_workflows(paginate=None):  # noqa
         status_list = request.args.get("status", "")
         include_progress = request.args.get("include_progress", verbose)
         include_workspace_size = request.args.get("include_workspace_size", verbose)
+        workflow = request.args.get("workflow_id_or_name")
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
@@ -242,6 +248,8 @@ def get_workflows(paginate=None):  # noqa
         if status_list:
             workflow_status = [RunStatus[status] for status in status_list.split(",")]
             query = query.filter(Workflow.status.in_(workflow_status))
+        if workflow:
+            query = query.filter(Workflow.name == workflow)
         if sort not in ["asc", "desc"]:
             sort = "desc"
         column_sorted = getattr(Workflow.created, sort)()
