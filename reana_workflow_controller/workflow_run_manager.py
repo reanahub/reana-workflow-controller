@@ -582,11 +582,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
-        spec.template.spec.volumes = [
+        volumes = [
             workspace_volume,
             shared_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
+        # filter out volumes with the same name
+        spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
 
         if os.getenv("FLASK_ENV") == "development":
             code_volume_name = "reana-code"
