@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.9.0 (UNRELEASED)
+---------------------------
+
+- Adds support for Kubernetes networking/v1 API to interactive sessions.
+
 Version 0.8.1 (2022-02-07)
 ---------------------------
 

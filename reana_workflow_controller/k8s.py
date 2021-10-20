@@ -6,8 +6,6 @@
 
 """REANA Workflow Controller Kubernetes utils."""
 
-import os
-
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
@@ -18,18 +16,16 @@ from reana_commons.config import (
 from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
     current_k8s_corev1_api_client,
-    current_k8s_networking_v1beta1,
+    current_k8s_networking_api_client,
 )
 from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volume,
-    get_shared_volume,
     get_workspace_volume,
 )
 
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
-    SHARED_VOLUME_PATH,
 )
 
 
@@ -76,22 +72,25 @@ class InteractiveDeploymentK8sBuilder(object):
         :param metadata: Common Kubernetes metadata for the interactive
             deployment.
         """
-        ingress_backend = client.NetworkingV1beta1IngressBackend(
-            service_name=self.deployment_name,
-            service_port=InteractiveDeploymentK8sBuilder.internal_service_port,
+        ingress_service_backend = client.V1IngressServiceBackend(
+            name=self.deployment_name,
+            port=client.V1ServiceBackendPort(
+                number=InteractiveDeploymentK8sBuilder.internal_service_port
+            ),
         )
-        ingress_rule_value = client.NetworkingV1beta1HTTPIngressRuleValue(
+        ingress_backend = client.V1IngressBackend(service=ingress_service_backend)
+        ingress_rule_value = client.V1HTTPIngressRuleValue(
             [
-                client.NetworkingV1beta1HTTPIngressPath(
-                    path=self.path, backend=ingress_backend
+                client.V1HTTPIngressPath(
+                    path=self.path, backend=ingress_backend, path_type="Prefix"
                 )
             ]
         )
-        spec = client.NetworkingV1beta1IngressSpec(
-            rules=[client.NetworkingV1beta1IngressRule(http=ingress_rule_value)]
+        spec = client.V1IngressSpec(
+            rules=[client.V1IngressRule(http=ingress_rule_value)]
         )
-        ingress = client.NetworkingV1beta1Ingress(
-            api_version="networking.k8s.io/v1beta1",
+        ingress = client.V1Ingress(
+            api_version="networking.k8s.io/v1",
             kind="Ingress",
             spec=spec,
             metadata=metadata,
@@ -306,7 +305,7 @@ def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
     instantiate_k8s_object = {
         "deployment": current_k8s_appsv1_api_client.create_namespaced_deployment,
         "service": current_k8s_corev1_api_client.create_namespaced_service,
-        "ingress": current_k8s_networking_v1beta1.create_namespaced_ingress,
+        "ingress": current_k8s_networking_api_client.create_namespaced_ingress,
     }
     try:
         parent_k8s_object_references = None
@@ -331,7 +330,7 @@ def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
     except ApiException as e:
         raise ApiException(
             "Exception when calling ExtensionsV1beta1Api->"
-            "create_namespaced_deployment_rollback: {}\n".format(e)
+            f"create_namespaced_deployment_rollback: {e}\n"
         )
 
 
@@ -346,7 +345,7 @@ def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
     delete_k8s_object = {
         "deployment": current_k8s_appsv1_api_client.delete_namespaced_deployment,
         "service": current_k8s_corev1_api_client.delete_namespaced_service,
-        "ingress": current_k8s_networking_v1beta1.delete_namespaced_ingress,
+        "ingress": current_k8s_networking_api_client.delete_namespaced_ingress,
     }
     try:
         for obj in kubernetes_objects.items():
@@ -370,7 +369,7 @@ def delete_k8s_ingress_object(ingress_name, namespace):
     :param namespace: k8s namespace of ingress object.
     """
     try:
-        current_k8s_networking_v1beta1.delete_namespaced_ingress(
+        current_k8s_networking_api_client.delete_namespaced_ingress(
             name=ingress_name, namespace=namespace, body=client.V1DeleteOptions()
         )
     except ApiException as k8s_api_exception:

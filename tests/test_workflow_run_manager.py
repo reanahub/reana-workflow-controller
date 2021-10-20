@@ -24,7 +24,7 @@ def test_start_interactive_session(sample_serial_workflow_in_db):
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_corev1_api_client=DEFAULT,
-        current_k8s_networking_v1beta1=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
         current_k8s_appsv1_api_client=DEFAULT,
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
@@ -37,7 +37,7 @@ def test_start_interactive_session(sample_serial_workflow_in_db):
             "current_k8s_corev1_api_client"
         ].create_namespaced_service.assert_called_once()
         mocks[
-            "current_k8s_networking_v1beta1"
+            "current_k8s_networking_api_client"
         ].create_namespaced_ingress.assert_called_once()
 
 
@@ -51,7 +51,7 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=mocked_k8s_client,
         current_k8s_corev1_api_client=DEFAULT,
-        current_k8s_networking_v1beta1=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
     ):
         with pytest.raises(
             REANAInteractiveSessionError, match=r".*Kubernetes has failed.*"
@@ -78,7 +78,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=mocked_k8s_client,
-        current_k8s_networking_v1beta1=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
         current_k8s_corev1_api_client=DEFAULT,
     ) as mocks:
         try:
@@ -90,7 +90,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
                 "current_k8s_corev1_api_client"
             ].delete_namespaced_service.assert_called_once()
             mocks[
-                "current_k8s_networking_v1beta1"
+                "current_k8s_networking_api_client"
             ].delete_namespaced_ingress.assert_called_once()
             mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
             assert not sample_serial_workflow_in_db.sessions.all()
@@ -124,7 +124,7 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=mocked_k8s_client,
-        current_k8s_networking_v1beta1=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
         current_k8s_corev1_api_client=DEFAULT,
     ):
         kwrm = KubernetesWorkflowRunManager(workflow)
