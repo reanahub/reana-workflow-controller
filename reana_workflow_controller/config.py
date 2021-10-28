@@ -101,7 +101,7 @@ DEBUG_ENV_VARS = (
 )
 """Common to all workflow engines environment variables for debug mode."""
 
-JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook"
+JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook:notebook-6.4.5"
 """Default image for Jupyter based interactive session deployments."""
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT = 8888
