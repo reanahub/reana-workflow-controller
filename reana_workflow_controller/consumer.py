@@ -39,6 +39,7 @@ from reana_workflow_controller.config import (
     PROGRESS_STATUSES,
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
+    REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 
@@ -64,6 +65,9 @@ class JobStatusConsumer(BaseConsumer):
                 queues=self.queue,
                 callbacks=[self.on_message],
                 accept=[self.message_default_format],
+                prefetch_count=REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT
+                if REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT
+                else None,
             )
         ]
 

@@ -48,6 +48,12 @@ SHARED_FS_MAPPING = {
 }
 """Mapping from the shared file system backend to the job file system."""
 
+REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT = int(
+    os.getenv("REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT", 200)
+)
+"""The value defines the max number of unacknowledged deliveries that are
+permitted on a ``jobs-status`` consumer."""
+
 REANA_WORKFLOW_ENGINE_IMAGE_CWL = os.getenv(
     "REANA_WORKFLOW_ENGINE_IMAGE_CWL", "reanahub/reana-workflow-engine-cwl:latest"
 )
