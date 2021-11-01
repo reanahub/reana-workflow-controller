@@ -21,13 +21,13 @@ from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_JOB_HOSTPATH_MOUNTS,
+    REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP,
     REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_STORAGE_BACKEND,
-    SHARED_VOLUME_PATH,
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_NAME,
     WORKFLOW_RUNTIME_USER_UID,
@@ -44,19 +44,10 @@ from reana_commons.utils import (
 )
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
-from reana_db.models import (
-    Job,
-    JobStatus,
-    InteractiveSession,
-    InteractiveSessionType,
-    RunStatus,
-)
+from reana_db.models import Job, JobStatus, InteractiveSession, InteractiveSessionType
 
-from reana_workflow_controller.errors import (
-    REANAInteractiveSessionError,
-    REANAWorkflowControllerError,
-    REANAWorkflowStopError,
-)
+from reana_workflow_controller.errors import REANAInteractiveSessionError
+
 from reana_workflow_controller.k8s import (
     build_interactive_k8s_objects,
     delete_k8s_ingress_object,
@@ -72,7 +63,6 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
-    SHARED_FS_MAPPING,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS,
 )
@@ -486,6 +476,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
                     "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                },
+                {
+                    "name": "REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP",
+                    "value": str(REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP),
                 },
             ]
         )
