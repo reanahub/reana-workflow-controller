@@ -438,7 +438,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         workflow_metadata = client.V1ObjectMeta(
             name=name,
-            labels={"reana_workflow_mode": "batch"},
+            labels={
+                "reana_workflow_mode": "batch",
+                "reana-run-batch-workflow-uuid": str(self.workflow.id_),
+            },
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
         job = client.V1Job()

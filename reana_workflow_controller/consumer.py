@@ -267,6 +267,7 @@ def _delete_workflow_engine_pod(workflow):
     try:
         jobs = current_k8s_corev1_api_client.list_namespaced_pod(
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            label_selector=f"reana-run-batch-workflow-uuid={str(workflow.id_)}",
         )
         for job in jobs.items:
             if str(workflow.id_) in job.metadata.name:
