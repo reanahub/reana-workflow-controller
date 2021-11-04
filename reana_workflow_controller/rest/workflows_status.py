@@ -23,7 +23,6 @@ from reana_workflow_controller.errors import (
 from reana_workflow_controller.rest.utils import (
     build_workflow_logs,
     delete_workflow,
-    get_current_job_progress,
     get_workflow_name,
     get_workflow_progress,
     start_workflow,

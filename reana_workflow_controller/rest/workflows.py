@@ -19,8 +19,6 @@ from reana_db.models import (
     User,
     Workflow,
     RunStatus,
-    InteractiveSession,
-    WorkflowSession,
 )
 from reana_db.utils import _get_workflow_with_uuid_or_name
 

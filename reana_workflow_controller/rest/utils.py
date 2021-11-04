@@ -25,8 +25,9 @@ from datetime import datetime
 from functools import wraps
 from io import BytesIO
 from pathlib import Path
+from typing import Dict
+from uuid import UUID
 
-from flask import current_app as app
 from flask import jsonify, request, send_file, send_from_directory
 from git import Repo
 from kubernetes.client.rest import ApiException
@@ -167,25 +168,6 @@ def build_workflow_logs(workflow, steps=None, paginate=None):
         all_logs[str(job.id_)] = item
 
     return all_logs
-
-
-def get_current_job_progress(workflow_id):
-    """Return job."""
-    current_job_commands = {}
-    workflow_jobs = Session.query(Job).filter_by(workflow_uuid=workflow_id).all()
-    for workflow_job in workflow_jobs:
-        job = (
-            Session.query(Job)
-            .filter_by(id_=workflow_job.id_)
-            .order_by(Job.created.desc())
-            .first()
-        )
-        if job:
-            current_job_commands[str(job.id_)] = {
-                "prettified_cmd": job.prettified_cmd,
-                "current_job_name": job.job_name,
-            }
-    return current_job_commands
 
 
 def remove_workflow_jobs_from_cache(workflow):
@@ -625,20 +607,33 @@ def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
             )
 
 
-def get_workflow_progress(workflow, include_progress=False):
+def get_most_recent_job_info(workflow_id: UUID) -> Dict[str, str]:
+    """Return most recent Job cmd and name from a certain workflow."""
+    current_job_commands = {}
+    most_recent_job = (
+        Session.query(Job)
+        .filter_by(workflow_uuid=workflow_id)
+        .order_by(Job.created.desc())
+        .first()
+    )
+    if most_recent_job:
+        current_job_commands = {
+            "prettified_cmd": most_recent_job.prettified_cmd,
+            "current_job_name": most_recent_job.job_name,
+        }
+    return current_job_commands
+
+
+def get_workflow_progress(workflow: Workflow, include_progress: bool = False) -> Dict:
     """Return workflow progress information.
 
     :param workflow: The workflow to get progress information from.
     :type: reana_db.models.Workflow instance.
+    :param include_progress: Whether or not to include the job progress information.
+    :type: bool.
 
     :return: Dictionary with workflow progress information.
     """
-    current_job_progress = get_current_job_progress(workflow.id_)
-    cmd_and_step_name = {}
-    try:
-        _, cmd_and_step_name = current_job_progress.popitem()
-    except Exception:
-        pass
     run_started_at = (
         workflow.run_started_at.strftime(WORKFLOW_TIME_FORMAT)
         if workflow.run_started_at
@@ -649,13 +644,14 @@ def get_workflow_progress(workflow, include_progress=False):
         if workflow.run_finished_at
         else None
     )
-    initial_progress_status = {"total": 0, "job_ids": []}
     progress = {
         "run_started_at": run_started_at,
         "run_finished_at": run_finished_at,
     }
 
     if include_progress:
+        initial_progress_status = {"total": 0, "job_ids": []}
+        most_recent_job_info = get_most_recent_job_info(workflow.id_)
         return {
             "total": (workflow.job_progress.get("total") or initial_progress_status),
             "running": (
@@ -665,8 +661,8 @@ def get_workflow_progress(workflow, include_progress=False):
                 workflow.job_progress.get("finished") or initial_progress_status
             ),
             "failed": (workflow.job_progress.get("failed") or initial_progress_status),
-            "current_command": cmd_and_step_name.get("prettified_cmd"),
-            "current_step_name": cmd_and_step_name.get("current_job_name"),
+            "current_command": most_recent_job_info.get("prettified_cmd"),
+            "current_step_name": most_recent_job_info.get("current_job_name"),
             **progress,
         }
 
