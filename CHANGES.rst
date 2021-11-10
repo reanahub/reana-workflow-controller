@@ -7,6 +7,8 @@ Version 0.8.0 (UNRELEASED)
 - Adds users quota accounting.
 - Adds new job properties ``started_at`` and ``finished_at`` to the ``/logs`` endpoint.
 - Changes to PostgreSQL 12.8
+- Changes workflow run manager to query the specific workflow engine during pod deletion.
+- Changes job status consumer to limit the number of messages received (``prefetch_count``).
 
 Version 0.7.4 (2021-07-05)
 --------------------------
