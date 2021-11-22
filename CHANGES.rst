@@ -1,14 +1,18 @@
 Changes
 =======
 
-Version 0.8.0 (UNRELEASED)
+Version 0.8.0 (2021-11-22)
 ---------------------------
 
 - Adds users quota accounting.
 - Adds new job properties ``started_at`` and ``finished_at`` to the ``/logs`` endpoint.
+- Adds configuration environment variable to limit the number of messages received in the job status consumer (``prefetch_count``).
+- Adds file search capabilities to the workflow workspace endpoint.
+- Adds Snakemake workflow engine support.
+- Adds support for custom workflow workspace path.
 - Changes to PostgreSQL 12.8
 - Changes workflow run manager to query the specific workflow engine during pod deletion.
-- Changes job status consumer to limit the number of messages received (``prefetch_count``).
+- Fixes workflow list endpoint query logic to improve optimization.
 
 Version 0.7.4 (2021-07-05)
 --------------------------
