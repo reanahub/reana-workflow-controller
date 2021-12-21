@@ -25,7 +25,7 @@ from datetime import datetime
 from functools import wraps
 from io import BytesIO
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 from uuid import UUID
 
 from flask import jsonify, request, send_file, send_from_directory
@@ -46,7 +46,11 @@ from webargs import fields, validate
 from webargs.flaskparser import parser
 from werkzeug.exceptions import BadRequest, NotFound
 
-from reana_workflow_controller.config import REANA_GITLAB_HOST, WORKFLOW_TIME_FORMAT
+from reana_workflow_controller.config import (
+    REANA_GITLAB_HOST,
+    WORKFLOW_TIME_FORMAT,
+    PREVIEWABLE_MIME_TYPE_PREFIXES,
+)
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
     REANAWorkflowControllerError,
@@ -521,13 +525,13 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
             mimetype="application/zip",
         )
 
-    def _send_single_file(absolute_file_path, workspace_path):
+    def _send_single_file(absolute_file_path: str, workspace_path: str):
         """Send single file from directory to the client."""
+        default_response_mime_type = "multipart/form-data"
         preview = json.loads(request.args.get("preview", "false").lower())
-        response_mime_type = "multipart/form-data"
-        file_mime_type = mimetypes.guess_type(path)[0]
-        # Only display image files as preview
-        if preview and file_mime_type and file_mime_type.startswith("image"):
+        response_mime_type = default_response_mime_type
+        file_mime_type = get_previewable_mime_type(path)
+        if preview and file_mime_type:
             response_mime_type = file_mime_type
         relative_file_path = str(absolute_file_path.relative_to(workspace_path))
         return (
@@ -535,7 +539,7 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
                 workspace_path,
                 relative_file_path,
                 mimetype=response_mime_type,
-                as_attachment=True,
+                as_attachment=response_mime_type == default_response_mime_type,
                 attachment_filename=relative_file_path,
             ),
             200,
@@ -556,6 +560,20 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
         # if multiple files, package them into a zip file and serve it
         else:
             return _send_zipped_dir_or_files(workflow_name, file_paths=paths)
+
+
+def get_previewable_mime_type(path: str) -> Optional[str]:
+    """Get the response mime-type of the given file path.
+
+    Takes into account previewable configuration.
+    :return: The file mime type if previewable, else ``None``.
+    """
+    mime_type = mimetypes.guess_type(path)[0]
+    if mime_type and any(
+        mime_type.startswith(mt) for mt in PREVIEWABLE_MIME_TYPE_PREFIXES
+    ):
+        return mime_type
+    return None
 
 
 def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):

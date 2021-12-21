@@ -18,6 +18,7 @@ from reana_db.models import Job, JobCache, Workflow, RunStatus
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
+    get_previewable_mime_type,
     list_files_recursive_wildcard,
     remove_files_recursive_wildcard,
     stop_workflow,
@@ -198,3 +199,20 @@ def test_workspace_permissions(
     assert os.path.exists(sample_yadage_workflow_in_db.workspace_path)
     assert workspace_permissions == expected_worspace_permissions
     delete_workflow(sample_yadage_workflow_in_db, workspace=True)
+
+
+@pytest.mark.parametrize(
+    "filename, mime_type",
+    [
+        ("report.html", "text/html"),
+        ("foo/bar/report.html", "text/html"),
+        ("results/plot.png", "image/png"),
+        ("results/plot.jpeg", "image/jpeg"),
+        ("steps/fitdata.root", None),
+        ("steps/gendata.c", None),
+        ("res/dag.gif", "image/gif"),
+    ],
+)
+def test_get_previewable_mime_type(filename: str, mime_type: str) -> None:
+    """Test obtaining previewable mime types from file path."""
+    assert get_previewable_mime_type(filename) == mime_type
