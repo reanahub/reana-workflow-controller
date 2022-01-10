@@ -30,6 +30,7 @@ extras_require = {
         "sphinxcontrib-httpdomain>=1.5.0",
         "sphinxcontrib-openapi>=0.3.0",
         "sphinxcontrib-redoc>=1.5.1",
+        "mistune<2.0.0",
     ],
     "tests": tests_require,
 }
