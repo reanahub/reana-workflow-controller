@@ -464,7 +464,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
     """
     try:
         user_uuid = request.args["user"]
-        search = request.args.get("search", None)
+        search = request.args.get("search")
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404

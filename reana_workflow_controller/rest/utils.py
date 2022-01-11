@@ -25,7 +25,7 @@ from datetime import datetime
 from functools import wraps
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Union
 from uuid import UUID
 
 from flask import jsonify, request, send_file, send_from_directory
@@ -357,7 +357,9 @@ def mv_files(source, target, workflow):
         raise REANAWorkflowControllerError(message)
 
 
-def list_directory_files(directory, search=None):
+def list_directory_files(
+    directory: str, search: Dict[str, List[str]] = None
+) -> List[dict]:
     """Return a list of files inside a given directory."""
     fs_ = fs.open_fs(directory)
     file_list = []
@@ -452,7 +454,9 @@ def list_files_recursive_wildcard(directory_path, path, search=None):
     return list_files_recursive
 
 
-def list_files_filter(file_info, search_filters):
+def list_files_filter(
+    file_info: Dict[str, Union[str, Dict]], search_filters: Dict[str, List[str]]
+) -> bool:
     """Filter the file(s) matching the searching parameters.
 
     :param file_info: names of files and their sizes
@@ -461,16 +465,17 @@ def list_files_filter(file_info, search_filters):
 
     :return: Boolean after matching with searching filters.
     """
-    filter_file = False
     _file = {
         "name": file_info["name"],
         "size": str(file_info["size"]["raw"]),
         "last-modified": file_info["last-modified"],
     }
     # Filter file only if all filters match exclusively.
-    if all(_filter in _file[k] for k, v in search_filters.items() for _filter in v):
-        filter_file = True
-    return filter_file
+    return all(
+        _filter.casefold() in _file[k].casefold()
+        for k, v in search_filters.items()
+        for _filter in v
+    )
 
 
 def download_files_recursive_wildcard(workflow_name, workspace_path, path):
