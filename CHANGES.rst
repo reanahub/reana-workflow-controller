@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.8.1 (UNRELEASED)
+---------------------------
+
+- Adds configuration environment variable to set default timeout for user's jobs for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT``).
+- Adds configuration environment variable to set maximum custom timeout limit that users can assign to their jobs for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT``).
+
 Version 0.8.0 (2021-11-22)
 ---------------------------
 
