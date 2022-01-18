@@ -28,6 +28,7 @@ from reana_commons.utils import (
     calculate_file_access_time,
     calculate_hash_of_dir,
     calculate_job_input_hash,
+    build_unique_component_name,
 )
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, RunStatus
@@ -144,15 +145,27 @@ def _update_workflow_status(workflow, status, logs):
             _update_commit_status(workflow, status)
 
         if status not in ALIVE_STATUSES:
+            workflow.run_finished_at = datetime.now()
+            workflow.logs = workflow.logs or ""
+
             try:
-                workflow.run_finished_at = datetime.now()
-                if RunStatus.should_cleanup_job(status):
-                    _delete_workflow_engine_pod(workflow)
-            except REANAWorkflowControllerError:
+                workflow_engine_logs = _get_workflow_engine_pod_logs(workflow)
+                workflow.logs += workflow_engine_logs + "\n"
+            except REANAWorkflowControllerError as exception:
                 logging.error(
-                    f"Could not clean up workflow engine for workflow {workflow.id_}"
+                    f"Could not fetch workflow engine pod logs for workflow {workflow.id_}."
+                    f" Error: {exception}"
                 )
                 workflow.logs += "Workflow engine logs could not be retrieved.\n"
+
+            if RunStatus.should_cleanup_job(status):
+                try:
+                    _delete_workflow_job(workflow)
+                except REANAWorkflowControllerError as exception:
+                    logging.error(
+                        f"Could not clean up workflow job for workflow {workflow.id_}."
+                        f" Error: {exception}"
+                    )
 
 
 def _update_commit_status(workflow, status):
@@ -266,28 +279,34 @@ def _update_job_cache(msg):
     Session.add(cached_job)
 
 
-def _delete_workflow_engine_pod(workflow):
-    """Delete workflow engine pod."""
+def _delete_workflow_job(workflow: Workflow) -> None:
+    job_name = build_unique_component_name("run-batch", workflow.id_)
     try:
-        jobs = current_k8s_corev1_api_client.list_namespaced_pod(
+        current_k8s_batchv1_api_client.delete_namespaced_job(
+            name=job_name,
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            propagation_policy="Background",
+        )
+    except ApiException as e:
+        raise REANAWorkflowControllerError(
+            f"Workflow engine pod could not be deleted. Error: {e}"
+        )
+
+
+def _get_workflow_engine_pod_logs(workflow: Workflow) -> str:
+    try:
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             label_selector=f"reana-run-batch-workflow-uuid={str(workflow.id_)}",
         )
-        for job in jobs.items:
-            if str(workflow.id_) in job.metadata.name:
-                workflow_enginge_logs = current_k8s_corev1_api_client.read_namespaced_pod_log(
-                    namespace=job.metadata.namespace,
-                    name=job.metadata.name,
+        for pod in pods.items:
+            if str(workflow.id_) in pod.metadata.name:
+                return current_k8s_corev1_api_client.read_namespaced_pod_log(
+                    namespace=pod.metadata.namespace,
+                    name=pod.metadata.name,
                     container="workflow-engine",
                 )
-                workflow.logs = (workflow.logs or "") + workflow_enginge_logs + "\n"
-                current_k8s_batchv1_api_client.delete_namespaced_job(
-                    namespace=job.metadata.namespace,
-                    propagation_policy="Background",
-                    name=job.metadata.labels["job-name"],
-                )
-                break
     except ApiException as e:
         raise REANAWorkflowControllerError(
-            "Workflow engine pod cound not be deleted {}.".format(e)
+            f"Workflow engine pod logs could not be fetched. Error: {e}"
         )
