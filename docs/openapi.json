@@ -3,7 +3,7 @@
   "info": {
     "description": "Submit and manage workflows",
     "title": "REANA Workflow Controller",
-    "version": "0.8.0"
+    "version": "0.8.1"
   },
   "parameters": {},
   "paths": {
