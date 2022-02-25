@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -113,7 +113,7 @@ class InteractiveDeploymentK8sBuilder(object):
             ],
             selector={"app": self.deployment_name},
         )
-        service = client.V1beta1APIService(
+        service = client.V1APIService(
             api_version="v1", kind="Service", spec=spec, metadata=metadata,
         )
         return service
