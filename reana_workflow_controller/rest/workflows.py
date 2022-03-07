@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -155,6 +155,9 @@ def get_workflows(paginate=None):  # noqa
                       type: string
                     progress:
                       type: object
+                    launcher_url:
+                      type: string
+                      x-nullable: true
           examples:
             application/json:
               [
@@ -168,6 +171,7 @@ def get_workflows(paginate=None):  # noqa
                   },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
+                  "launcher_url": "https://github.com/reanahub/reana-demo-helloworld.git",
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
@@ -179,6 +183,7 @@ def get_workflows(paginate=None):  # noqa
                   },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
+                  "launcher_url": "https://example.org/specs/reana-snakemake.yaml",
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
@@ -190,6 +195,7 @@ def get_workflows(paginate=None):  # noqa
                   },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
+                  "launcher_url": "https://zenodo.org/record/1/reana.yaml",
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
@@ -201,6 +207,7 @@ def get_workflows(paginate=None):  # noqa
                   },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
+                  "launcher_url": null,
                 }
               ]
         400:
@@ -258,6 +265,7 @@ def get_workflows(paginate=None):  # noqa
                 "name": get_workflow_name(workflow),
                 "status": workflow.status.name,
                 "user": user_uuid,
+                "launcher_url": workflow.launcher_url,
                 "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                 "progress": get_workflow_progress(
                     workflow, include_progress=include_progress
@@ -335,15 +343,16 @@ def create_workflow():  # noqa
                 description: Operational options.
               reana_specification:
                 type: object
-                description: >-
-                  Workflow specification in JSON format.
+                description: Workflow specification in JSON format.
               workflow_name:
                 type: string
                 description: Workflow name. If empty name will be generated.
               git_data:
                 type: object
-                description: >-
-                  GitLab data.
+                description: GitLab data.
+              launcher_url:
+                type: string
+                description: Launcher URL.
             required: [reana_specification,
                        workflow_name,
                        operational_options]
@@ -426,6 +435,7 @@ def create_workflow():  # noqa
             workspace_path=build_workspace_path(
                 request.args["user"], workflow_uuid, workspace_root_path
             ),
+            launcher_url=request.json.get("launcher_url"),
         )
         Session.add(workflow)
         Session.object_session(workflow).commit()

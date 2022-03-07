@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -69,6 +69,7 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
                 "created": response_data[0]["created"],
                 "progress": response_data[0]["progress"],
                 "size": {"raw": -1, "human_readable": ""},
+                "launcher_url": None,
             }
         ]
 
