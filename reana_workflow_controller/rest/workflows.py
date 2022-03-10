@@ -12,7 +12,6 @@ import json
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
-from reana_commons.config import SHARED_VOLUME_PATH
 from reana_db.database import Session
 from reana_db.utils import build_workspace_path
 from reana_db.models import (
@@ -36,6 +35,7 @@ from reana_workflow_controller.rest.utils import (
     get_workflow_name,
     get_workflow_progress,
     get_workspace_diff,
+    is_uuid_v4,
     use_paginate_args,
 )
 
@@ -241,7 +241,7 @@ def get_workflows(paginate=None):  # noqa
         status_list = request.args.get("status", "")
         include_progress = request.args.get("include_progress", verbose)
         include_workspace_size = request.args.get("include_workspace_size", verbose)
-        workflow = request.args.get("workflow_id_or_name")
+        workflow_id_or_name = request.args.get("workflow_id_or_name")
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
         workflows = []
@@ -253,8 +253,12 @@ def get_workflows(paginate=None):  # noqa
         if status_list:
             workflow_status = [RunStatus[status] for status in status_list.split(",")]
             query = query.filter(Workflow.status.in_(workflow_status))
-        if workflow:
-            query = query.filter(Workflow.name == workflow)
+        if workflow_id_or_name:
+            query = (
+                query.filter(Workflow.id_ == workflow_id_or_name)
+                if is_uuid_v4(workflow_id_or_name)
+                else query.filter(Workflow.name == workflow_id_or_name)
+            )
         if sort not in ["asc", "desc"]:
             sort = "desc"
         column_sorted = getattr(Workflow.created, sort)()

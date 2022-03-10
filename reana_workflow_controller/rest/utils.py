@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -140,6 +140,17 @@ def get_workflow_name(workflow):
     :type workflow: reana-commons.models.Workflow
     """
     return workflow.name + "." + str(workflow.run_number)
+
+
+def is_uuid_v4(uuid_or_name: str) -> bool:
+    """Check if given string is a valid UUIDv4."""
+    # Based on https://gist.github.com/ShawnMilo/7777304
+    try:
+        uuid = UUID(uuid_or_name, version=4)
+    except Exception:
+        return False
+
+    return uuid.hex == uuid_or_name.replace("-", "")
 
 
 def build_workflow_logs(workflow, steps=None, paginate=None):

@@ -5,6 +5,7 @@ Version 0.9.0 (UNRELEASED)
 ---------------------------
 
 - Adds support for Kubernetes networking/v1 API to interactive sessions.
+- Changes workflow list endpoint to add the possibility to filter by workflow id.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------
