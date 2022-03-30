@@ -6,6 +6,7 @@ Version 0.9.0 (UNRELEASED)
 
 - Adds support for Kubernetes networking/v1 API to interactive sessions.
 - Changes workflow list endpoint to add the possibility to filter by workflow id.
+- Changes default consumer prefetch count to handle 10 messages instead of 200 in order to reduce the probability of 406 PRECONDITION errors on message acknowledgement.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------

@@ -52,7 +52,7 @@ PREVIEWABLE_MIME_TYPE_PREFIXES = ["image/", "text/html"]
 """List of file mime-type prefixes that can be previewed directly from the server."""
 
 REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT = int(
-    os.getenv("REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT", 200)
+    os.getenv("REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT", 10)
 )
 """The value defines the max number of unacknowledged deliveries that are
 permitted on a ``jobs-status`` consumer."""
