@@ -85,7 +85,11 @@ def test_delete_all_workflow_runs(
 
 @pytest.mark.parametrize("workspace", [True, False])
 def test_workspace_deletion(
-    app, session, default_user, sample_yadage_workflow_in_db, workspace,
+    app,
+    session,
+    default_user,
+    sample_yadage_workflow_in_db,
+    workspace,
 ):
     """Test workspace deletion."""
     workflow = sample_yadage_workflow_in_db

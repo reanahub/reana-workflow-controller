@@ -19,11 +19,15 @@ readme = open("README.rst").read()
 history = open("CHANGES.rst").read()
 
 tests_require = [
-    "pytest-reana>=0.9.0a1,<0.10.0",
+    "pytest-reana>=0.9.0a4,<0.10.0",
 ]
 
 extras_require = {
-    "debug": ["wdb", "ipdb", "Flask-DebugToolbar",],
+    "debug": [
+        "wdb",
+        "ipdb",
+        "Flask-DebugToolbar",
+    ],
     "docs": [
         "Sphinx>=1.4.4",
         "sphinx-rtd-theme>=0.1.9",
@@ -53,8 +57,8 @@ install_requires = [
     "jsonpickle>=0.9.6",
     "marshmallow>2.13.0,<=2.20.1",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.9.0a5,<0.10.0",
-    "reana-db>=0.9.0a4,<0.10.0",
+    "reana-commons[kubernetes]>=0.9.0a6,<0.10.0",
+    "reana-db>=0.9.0a5,<0.10.0",
     "requests==2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
@@ -80,7 +84,9 @@ setup(
     author="REANA",
     author_email="info@reana.io",
     url="https://github.com/reanahub/reana-workflow-controller",
-    packages=["reana_workflow_controller",],
+    packages=[
+        "reana_workflow_controller",
+    ],
     include_package_data=True,
     zip_safe=False,
     entry_points={

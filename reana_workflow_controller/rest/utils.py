@@ -326,7 +326,10 @@ def create_workflow_workspace(
             gitlab_access_token, REANA_GITLAB_HOST, git_url
         )
         repo = Repo.clone_from(
-            url=url, to_path=os.path.abspath(path), branch=git_branch, depth=1,
+            url=url,
+            to_path=os.path.abspath(path),
+            branch=git_branch,
+            depth=1,
         )
         repo.head.reset(commit=git_ref)
 
@@ -623,10 +626,12 @@ def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
         diff_result = subprocess.run(diff_command, stdout=subprocess.PIPE)
         diff_result_string = diff_result.stdout.decode("utf-8")
         diff_result_string = diff_result_string.replace(
-            workspace_a, get_workflow_name(workflow_a),
+            workspace_a,
+            get_workflow_name(workflow_a),
         )
         diff_result_string = diff_result_string.replace(
-            workspace_b, get_workflow_name(workflow_b),
+            workspace_b,
+            get_workflow_name(workflow_b),
         )
 
         return diff_result_string

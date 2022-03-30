@@ -86,7 +86,8 @@ class JobStatusConsumer(BaseConsumer):
             workflow = (
                 Session.query(Workflow)
                 .filter(
-                    Workflow.id_ == workflow_uuid, Workflow.status.in_(ALIVE_STATUSES),
+                    Workflow.id_ == workflow_uuid,
+                    Workflow.status.in_(ALIVE_STATUSES),
                 )
                 .one_or_none()
             )

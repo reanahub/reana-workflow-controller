@@ -20,7 +20,9 @@ from reana_workflow_controller.consumer import JobStatusConsumer
 
 
 def test_workflow_finish_and_kubernetes_not_available(
-    in_memory_queue_connection, sample_serial_workflow_in_db, consume_queue,
+    in_memory_queue_connection,
+    sample_serial_workflow_in_db,
+    consume_queue,
 ):
     """Test workflow finish with a Kubernetes connection troubles."""
     sample_serial_workflow_in_db.status = RunStatus.running
@@ -30,7 +32,8 @@ def test_workflow_finish_and_kubernetes_not_available(
         connection=in_memory_queue_connection, queue=job_status_consumer.queue
     )
     workflow_status_publisher.publish_workflow_status(
-        str(sample_serial_workflow_in_db.id_), next_status.value,
+        str(sample_serial_workflow_in_db.id_),
+        next_status.value,
     )
     k8s_corev1_api_client_mock = Mock()
     k8s_corev1_api_client_mock.delete_namespaced_job = Mock(

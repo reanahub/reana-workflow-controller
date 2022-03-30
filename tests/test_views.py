@@ -1346,7 +1346,10 @@ def test_get_workspace_diff(
     csv_line = "1,2,3,4"
     file_name = "test.csv"
     for index, workspace in enumerate([workspace_path_a, workspace_path_b]):
-        with open(os.path.join(workspace, file_name), "w",) as f:
+        with open(
+            os.path.join(workspace, file_name),
+            "w",
+        ) as f:
             f.write("# File {}".format(index))
             f.write(os.linesep)
             f.write(csv_line)
@@ -1444,7 +1447,9 @@ def test_close_interactive_session(
     path = "/5d9b30fd-f225-4615-9107-b1373afec070"
     name = "interactive-jupyter-5d9b30fd-f225-4615-9107-b1373afec070-5lswkp"
     int_session = InteractiveSession(
-        name=name, path=path, owner_id=sample_serial_workflow_in_db.owner_id,
+        name=name,
+        path=path,
+        owner_id=sample_serial_workflow_in_db.owner_id,
     )
     sample_serial_workflow_in_db.sessions.append(int_session)
     session.add(sample_serial_workflow_in_db)

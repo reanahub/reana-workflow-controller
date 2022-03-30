@@ -58,7 +58,8 @@ class InteractiveDeploymentK8sBuilder(object):
         self.path = path
         self.cvmfs_repos = cvmfs_repos or []
         metadata = client.V1ObjectMeta(
-            name=deployment_name, labels={"reana_workflow_mode": "session"},
+            name=deployment_name,
+            labels={"reana_workflow_mode": "session"},
         )
         self.kubernetes_objects = {
             "ingress": self._build_ingress(metadata),
@@ -114,7 +115,10 @@ class InteractiveDeploymentK8sBuilder(object):
             selector={"app": self.deployment_name},
         )
         service = client.V1APIService(
-            api_version="v1", kind="Service", spec=spec, metadata=metadata,
+            api_version="v1",
+            kind="Service",
+            spec=spec,
+            metadata=metadata,
         )
         return service
 
@@ -139,7 +143,10 @@ class InteractiveDeploymentK8sBuilder(object):
             template=template,
         )
         deployment = client.V1Deployment(
-            api_version="apps/v1", kind="Deployment", metadata=metadata, spec=spec,
+            api_version="apps/v1",
+            kind="Deployment",
+            metadata=metadata,
+            spec=spec,
         )
 
         return deployment
