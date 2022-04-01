@@ -121,7 +121,7 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
                 ),
                 404,
             )
-        interactive_session_configuration = request.json or {}
+        interactive_session_configuration = request.json if request.is_json else {}
         user_uuid = request.args["user"]
         workflow = None
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)

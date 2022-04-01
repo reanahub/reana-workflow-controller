@@ -151,7 +151,7 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                 403,
             )
         steps = None
-        if request.json:
+        if request.is_json:
             steps = request.json
         if steps:
             workflow_logs = {
@@ -503,7 +503,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                 403,
             )
         parameters = {}
-        if request.json:
+        if request.is_json:
             parameters = request.json
         if status == START:
             start_workflow(workflow, parameters)
