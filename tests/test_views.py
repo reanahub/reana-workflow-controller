@@ -1124,8 +1124,8 @@ def test_start_workflow_kubernetes_failure(
         RunStatus.created,
         RunStatus.failed,
         RunStatus.finished,
-        pytest.param(RunStatus.deleted, marks=pytest.mark.xfail),
-        pytest.param(RunStatus.running, marks=pytest.mark.xfail),
+        RunStatus.deleted,
+        pytest.param(RunStatus.running, marks=pytest.mark.xfail(strict=True)),
     ],
 )
 def test_delete_workflow(

@@ -33,8 +33,8 @@ from reana_workflow_controller.rest.utils import (
         RunStatus.finished,
         RunStatus.pending,
         RunStatus.stopped,
-        pytest.param(RunStatus.deleted, marks=pytest.mark.xfail),
-        pytest.param(RunStatus.running, marks=pytest.mark.xfail),
+        RunStatus.deleted,
+        pytest.param(RunStatus.running, marks=pytest.mark.xfail(strict=True)),
     ],
 )
 def test_delete_workflow(
