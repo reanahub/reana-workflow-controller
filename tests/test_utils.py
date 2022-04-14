@@ -1,19 +1,25 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller utility tests."""
 
+import mock
 import os
+from pathlib import Path
 import stat
 import uuid
-from pathlib import Path
 
 import pytest
 from reana_db.models import Job, JobCache, Workflow, RunStatus
+from reana_db.utils import (
+    get_disk_usage_or_zero,
+    store_workflow_disk_quota,
+    update_users_disk_quota,
+)
 
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
@@ -84,7 +90,12 @@ def test_delete_all_workflow_runs(
 
 
 @pytest.mark.parametrize("workspace", [True, False])
+@mock.patch("reana_workflow_controller.rest.utils.store_workflow_disk_quota")
+@mock.patch("reana_workflow_controller.rest.utils.update_users_disk_quota")
+@mock.patch("reana_db.utils.WORKFLOW_TERMINATION_QUOTA_UPDATE_POLICY", "disk")
 def test_workspace_deletion(
+    mock_update_user_quota,
+    mock_update_workflow_quota,
     app,
     session,
     default_user,
@@ -94,6 +105,20 @@ def test_workspace_deletion(
     """Test workspace deletion."""
     workflow = sample_yadage_workflow_in_db
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
+
+    # Add file to the worskpace
+    file_size = 123
+    file_path = os.path.join(sample_yadage_workflow_in_db.workspace_path, "temp.txt")
+    with open(file_path, "w") as f:
+        f.write("A" * file_size)
+
+    # Get disk usage
+    disk_usage = get_disk_usage_or_zero(sample_yadage_workflow_in_db.workspace_path)
+    assert disk_usage
+
+    # Update disk quotas
+    store_workflow_disk_quota(sample_yadage_workflow_in_db)
+    update_users_disk_quota(sample_yadage_workflow_in_db.owner)
 
     # create a job for the workflow
     workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
@@ -119,6 +144,19 @@ def test_workspace_deletion(
     delete_workflow(workflow, workspace=workspace)
     if workspace:
         assert not os.path.exists(sample_yadage_workflow_in_db.workspace_path)
+        mock_update_user_quota.assert_called_once_with(
+            sample_yadage_workflow_in_db.owner,
+            bytes_to_sum=-disk_usage,
+            override_policy_checks=True,
+        )
+        mock_update_workflow_quota.assert_called_once_with(
+            sample_yadage_workflow_in_db,
+            bytes_to_sum=-disk_usage,
+            override_policy_checks=True,
+        )
+    else:
+        assert not mock_update_user_quota.called
+        assert not mock_update_workflow_quota.called
 
     # check that all cache entries for jobs
     # of the deleted workflow are removed

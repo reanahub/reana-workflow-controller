@@ -40,7 +40,20 @@ from reana_commons.utils import (
     get_files_recursive_wildcard,
 )
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, ResourceUnit, RunStatus, Workflow
+from reana_db.models import (
+    Job,
+    JobCache,
+    ResourceType,
+    ResourceUnit,
+    RunStatus,
+    Workflow,
+    WorkflowResource,
+)
+from reana_db.utils import (
+    store_workflow_disk_quota,
+    update_users_disk_quota,
+    get_default_quota_resource,
+)
 from sqlalchemy.exc import SQLAlchemyError
 from webargs import fields, validate
 from webargs.flaskparser import parser
@@ -224,6 +237,30 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
             for workflow in to_be_deleted:
                 if workspace:
                     remove_workflow_workspace(workflow.workspace_path)
+
+                    disk_resource = get_default_quota_resource(ResourceType.disk.name)
+                    workflow_disk_resource = WorkflowResource.query.filter(
+                        WorkflowResource.workflow_id == workflow.id_,
+                        WorkflowResource.resource_id == disk_resource.id_,
+                    ).one_or_none()
+                    disk_usage = None
+                    if workflow_disk_resource:
+                        disk_usage = workflow_disk_resource.quota_used
+
+                    if disk_usage:
+                        # We override the quota update policy checks so that the quotas
+                        # are updated immediately and the user can reuse the freed
+                        # resources without waiting.
+                        store_workflow_disk_quota(
+                            workflow,
+                            bytes_to_sum=-disk_usage,
+                            override_policy_checks=True,
+                        )
+                        update_users_disk_quota(
+                            workflow.owner,
+                            bytes_to_sum=-disk_usage,
+                            override_policy_checks=True,
+                        )
                 _mark_workflow_as_deleted_in_db(workflow)
                 remove_workflow_jobs_from_cache(workflow)
 
