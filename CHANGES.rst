@@ -8,6 +8,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes workflow list endpoint to add the possibility to filter by workflow id.
 - Changes default consumer prefetch count to handle 10 messages instead of 200 in order to reduce the probability of 406 PRECONDITION errors on message acknowledgement.
 - Changes the workflow status endpoint to update the disk quota usage when a workspace is deleted.
+- Adds setup of Kerberos when executing a workflow engine.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------

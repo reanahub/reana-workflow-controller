@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -12,6 +12,7 @@ import json
 
 from flask import Blueprint, jsonify, request
 
+from reana_commons.errors import REANASecretDoesNotExist
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
@@ -555,7 +556,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 409
     except REANAWorkflowStatusError as e:
         return jsonify({"message": str(e)}), 404
-    except KeyError as e:
+    except (REANASecretDoesNotExist, KeyError) as e:
         return jsonify({"message": str(e)}), 400
     except NotImplementedError as e:
         return jsonify({"message": str(e)}), 501

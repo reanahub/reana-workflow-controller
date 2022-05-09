@@ -34,6 +34,7 @@ from reana_commons.config import (
     WORKSPACE_PATHS,
 )
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
+from reana_commons.k8s.kerberos import get_kerberos_k8s_config
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.k8s.volumes import get_shared_volume, get_workspace_volume
 from reana_commons.utils import (
@@ -222,7 +223,13 @@ class WorkflowRunManager:
             ]
         )
         env_vars.extend(
-            [{"name": "REANA_USER_ID", "value": str(self.workflow.owner_id)}]
+            [
+                {"name": "REANA_USER_ID", "value": str(self.workflow.owner_id)},
+                {
+                    "name": "REANA_WORKFLOW_KERBEROS",
+                    "value": str(self.requires_kerberos()),
+                },
+            ]
         )
         cvmfs_volumes = self.retrieve_required_cvmfs_repos() or "false"
         if type(cvmfs_volumes) == list:
@@ -243,6 +250,14 @@ class WorkflowRunManager:
         )
         backend_ids = [j.backend_job_id for j in rows.all()]
         return backend_ids
+
+    def requires_kerberos(self) -> bool:
+        """Check whether Kerberos is necessary to run the workflow engine."""
+        return (
+            self.workflow.reana_specification["workflow"]
+            .get("resources", {})
+            .get("kerberos", False)
+        )
 
 
 class KubernetesWorkflowRunManager(WorkflowRunManager):
@@ -446,6 +461,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             },
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
+
+        secrets_store = REANAUserSecretsStore(owner_id)
+
+        kerberos = None
+        if self.requires_kerberos():
+            kerberos = get_kerberos_k8s_config(
+                secrets_store,
+                kubernetes_uid=WORKFLOW_RUNTIME_USER_UID,
+            )
+
         job = client.V1Job()
         job.api_version = "batch/v1"
         job.kind = "Job"
@@ -494,7 +519,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             run_as_user=WORKFLOW_RUNTIME_USER_UID,
         )
         workflow_engine_container.volume_mounts = [workspace_mount]
-        secrets_store = REANAUserSecretsStore(owner_id)
+
+        if kerberos:
+            workflow_engine_container.volume_mounts += kerberos.volume_mounts
+            workflow_engine_container.env += kerberos.env
+
         job_controller_env_secrets = secrets_store.get_env_secrets_as_k8s_spec()
 
         user = secrets_store.get_secret_value("CERN_USER") or WORKFLOW_RUNTIME_USER_NAME
@@ -585,6 +614,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec.template.spec = client.V1PodSpec(
             containers=containers,
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
+            init_containers=[],
         )
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
@@ -594,6 +624,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             shared_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
+
+        if kerberos:
+            volumes += kerberos.volumes
+            spec.template.spec.init_containers.append(kerberos.init_container)
+
         # filter out volumes with the same name
         spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
 

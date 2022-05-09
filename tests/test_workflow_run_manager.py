@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -13,6 +13,8 @@ from __future__ import absolute_import, print_function
 import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
+
+from reana_commons.config import KRB5_CONTAINER_NAME
 from reana_db.models import RunStatus, InteractiveSession, InteractiveSessionType
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
@@ -138,3 +140,32 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
             assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
             assert not workflow.sessions.first()
+
+
+def test_create_job_spec_kerberos(
+    sample_serial_workflow_in_db,
+    kerberos_user_secrets,
+    corev1_api_client_with_user_secrets,
+):
+    """Test creation of k8s job specification when Kerberos is required."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"].setdefault("resources", {})[
+        "kerberos"
+    ] = True
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(kerberos_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    init_containers = job.spec.template.spec.init_containers
+    assert len(init_containers) == 1
+    assert init_containers[0]["name"] == KRB5_CONTAINER_NAME
+
+    volumes = [volume["name"] for volume in job.spec.template.spec.volumes]
+    assert len(set(volumes)) == len(volumes)  # volumes have unique names
+    assert any(volume.startswith("reana-secretsstore") for volume in volumes)
+    assert "krb5-cache" in volumes
+    assert "krb5-conf" in volumes
