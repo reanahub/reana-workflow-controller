@@ -10,6 +10,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes the workflow status endpoint to update the disk quota usage when a workspace is deleted.
 - Adds setup of Kerberos when executing a workflow engine.
 - Adds the `REANA_WORKSPACE` environment variable to jupyter notebooks and terminals.
+- Changes the CWD of jupyter's terminals to the directory of the workflow's workspace.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------

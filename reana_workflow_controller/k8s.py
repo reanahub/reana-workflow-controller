@@ -279,6 +279,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
         "start-notebook.sh",
         "--NotebookApp.base_url='{base_url}'".format(base_url=access_path),
         "--notebook-dir='{workflow_workspace}'".format(workflow_workspace=workspace),
+        f'--NotebookApp.terminado_settings={{"shell_command": ["/usr/bin/bash", "-c", "cd \'{workspace}\' && bash"]}}',
     ]
     if access_token:
         command_args.append(
