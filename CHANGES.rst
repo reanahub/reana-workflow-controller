@@ -11,6 +11,7 @@ Version 0.9.0 (UNRELEASED)
 - Adds setup of Kerberos when executing a workflow engine.
 - Adds the `REANA_WORKSPACE` environment variable to jupyter notebooks and terminals.
 - Changes the CWD of jupyter's terminals to the directory of the workflow's workspace.
+- Changes the k8s specification of interactive sessions' pods to remove the environment variables used for service discovery.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------

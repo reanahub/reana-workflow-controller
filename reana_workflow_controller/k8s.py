@@ -132,6 +132,9 @@ class InteractiveDeploymentK8sBuilder(object):
         pod_spec = client.V1PodSpec(
             containers=[container],
             node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
+            # Disable service discovery with env variables, so that the environment is
+            # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
+            enable_service_links=False,
         )
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self.deployment_name}),
