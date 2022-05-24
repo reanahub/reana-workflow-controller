@@ -14,12 +14,9 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 from reana_db.database import Session
 from reana_db.utils import build_workspace_path
-from reana_db.models import (
-    User,
-    Workflow,
-    RunStatus,
-)
-from reana_db.utils import _get_workflow_with_uuid_or_name
+from reana_db.models import User, Workflow, RunStatus, ResourceType, WorkflowResource
+from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
+from sqlalchemy import and_, nullslast
 
 from reana_workflow_controller.config import (
     DEFAULT_NAME_FOR_WORKFLOWS,
@@ -259,9 +256,21 @@ def get_workflows(paginate=None):  # noqa
                 if is_uuid_v4(workflow_id_or_name)
                 else query.filter(Workflow.name == workflow_id_or_name)
             )
-        if sort not in ["asc", "desc"]:
-            sort = "desc"
-        column_sorted = getattr(Workflow.created, sort)()
+        column_sorted = Workflow.created.desc()
+        if sort in ["disk-desc", "cpu-desc"]:
+            resource_type = sort.split("-")[0]
+            resource = get_default_quota_resource(resource_type)
+            query = query.join(
+                WorkflowResource,
+                and_(
+                    Workflow.id_ == WorkflowResource.workflow_id,
+                    WorkflowResource.resource_id == resource.id_,
+                ),
+                isouter=True,
+            )
+            column_sorted = nullslast(WorkflowResource.quota_used.desc())
+        elif sort in ["asc", "desc"]:
+            column_sorted = getattr(Workflow.created, sort)()
         pagination_dict = paginate(query.order_by(column_sorted))
         for workflow in pagination_dict["items"]:
             workflow_response = {

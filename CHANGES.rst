@@ -6,6 +6,7 @@ Version 0.9.0 (UNRELEASED)
 
 - Adds support for Kubernetes networking/v1 API to interactive sessions.
 - Changes workflow list endpoint to add the possibility to filter by workflow id.
+- Changes workflow list endpoint to add the possibility to sort workflows by most used disk and cpu quota.
 - Changes default consumer prefetch count to handle 10 messages instead of 200 in order to reduce the probability of 406 PRECONDITION errors on message acknowledgement.
 - Changes the workflow status endpoint to update the disk quota usage when a workspace is deleted.
 - Adds setup of Kerberos when executing a workflow engine.
