@@ -183,10 +183,11 @@ def _update_commit_status(workflow, status):
     gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
     target_url = f"https://{REANA_HOSTNAME}/api/workflows/{workflow.id_}/logs"
     workflow_name = urlparse.quote_plus(workflow.git_repo)
+    system_name = "reana"
     commit_status_url = (
         f"{REANA_GITLAB_URL}/api/v4/projects/{workflow_name}/statuses/"
         f"{workflow.git_ref}?access_token={gitlab_access_token}&state={state}&"
-        f"target_url={target_url}"
+        f"target_url={target_url}&name={system_name}"
     )
     requests.post(commit_status_url)
 
