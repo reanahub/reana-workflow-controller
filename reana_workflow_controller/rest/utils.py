@@ -583,7 +583,7 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
 
     def _send_single_file(absolute_file_path: str, workspace_path: str):
         """Send single file from directory to the client."""
-        default_response_mime_type = "multipart/form-data"
+        default_response_mime_type = "application/octet-stream"
         preview = json.loads(request.args.get("preview", "false").lower())
         response_mime_type = default_response_mime_type
         file_mime_type = get_previewable_mime_type(path)

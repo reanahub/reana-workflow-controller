@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -195,7 +195,11 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         inside the workspace to return its content.
       operationId: download_file
       produces:
-        - multipart/form-data
+        - application/octet-stream
+        - application/json
+        - application/zip
+        - image/*
+        - text/html
       parameters:
         - name: user
           in: query
