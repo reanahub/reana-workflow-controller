@@ -14,7 +14,7 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 from reana_db.database import Session
 from reana_db.utils import build_workspace_path
-from reana_db.models import User, Workflow, RunStatus, ResourceType, WorkflowResource
+from reana_db.models import User, Workflow, RunStatus, WorkflowResource
 from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from sqlalchemy import and_, nullslast
 
@@ -366,9 +366,23 @@ def create_workflow():  # noqa
               launcher_url:
                 type: string
                 description: Launcher URL.
+              retention_rules:
+                type: array
+                title: Retention rules list for the files in the workspace.
+                minItems: 1
+                items:
+                  title: Retention rule for the files in the workspace.
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    workspace_files:
+                      type: string
+                    retention_days:
+                      type: integer
             required: [reana_specification,
                        workflow_name,
-                       operational_options]
+                       operational_options,
+                       retention_rules]
       responses:
         201:
           description: >-
@@ -435,13 +449,14 @@ def create_workflow():  # noqa
             git_repo = git_data["git_url"]
         # add spec and params to DB as JSON
         workspace_root_path = request.args.get("workspace_root_path", None)
+        reana_specification = request.json["reana_specification"]
         workflow = Workflow(
             id_=workflow_uuid,
             name=workflow_name,
             owner_id=request.args["user"],
-            reana_specification=request.json["reana_specification"],
+            reana_specification=reana_specification,
             operational_options=request.json.get("operational_options", {}),
-            type_=request.json["reana_specification"]["workflow"]["type"],
+            type_=reana_specification["workflow"]["type"],
             logs="",
             git_ref=git_ref,
             git_repo=git_repo,
@@ -452,6 +467,9 @@ def create_workflow():  # noqa
         )
         Session.add(workflow)
         Session.object_session(workflow).commit()
+        retention_rules = request.json.get("retention_rules", [])
+        if retention_rules:
+            workflow.set_workspace_retention_rules(retention_rules)
         if git_ref:
             create_workflow_workspace(
                 workflow.workspace_path,

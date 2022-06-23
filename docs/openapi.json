@@ -264,6 +264,24 @@
                   "description": "Workflow specification in JSON format.",
                   "type": "object"
                 },
+                "retention_rules": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "retention_days": {
+                        "type": "integer"
+                      },
+                      "workspace_files": {
+                        "type": "string"
+                      }
+                    },
+                    "title": "Retention rule for the files in the workspace.",
+                    "type": "object"
+                  },
+                  "minItems": 1,
+                  "title": "Retention rules list for the files in the workspace.",
+                  "type": "array"
+                },
                 "workflow_name": {
                   "description": "Workflow name. If empty name will be generated.",
                   "type": "string"
@@ -272,7 +290,8 @@
               "required": [
                 "reana_specification",
                 "workflow_name",
-                "operational_options"
+                "operational_options",
+                "retention_rules"
               ],
               "type": "object"
             }
