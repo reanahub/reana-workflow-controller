@@ -12,16 +12,15 @@ import json
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
+from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_db.database import Session
 from reana_db.utils import build_workspace_path
 from reana_db.models import User, Workflow, RunStatus, WorkflowResource
 from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from sqlalchemy import and_, nullslast
 
-from reana_workflow_controller.config import (
-    DEFAULT_NAME_FOR_WORKFLOWS,
-    WORKFLOW_TIME_FORMAT,
-)
+
+from reana_workflow_controller.config import DEFAULT_NAME_FOR_WORKFLOWS
 from reana_workflow_controller.errors import (
     REANAWorkflowControllerError,
     REANAWorkflowNameError,
@@ -112,6 +111,10 @@ def get_workflows(paginate=None):  # noqa
           in: query
           description: Include size information of the workspace.
           required: false
+          type: boolean
+        - name: include_retention_rules
+          in: query
+          description: Include workspace retention rules of the workflows.
           type: boolean
         - name: workflow_id_or_name
           in: query
@@ -238,6 +241,7 @@ def get_workflows(paginate=None):  # noqa
         status_list = request.args.get("status", "")
         include_progress = request.args.get("include_progress", verbose)
         include_workspace_size = request.args.get("include_workspace_size", verbose)
+        include_retention_rules = request.args.get("include_retention_rules", verbose)
         workflow_id_or_name = request.args.get("workflow_id_or_name")
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
@@ -297,6 +301,11 @@ def get_workflows(paginate=None):  # noqa
                 "human_readable": "",
                 "raw": -1,
             }
+            if include_retention_rules:
+                rules = workflow.retention_rules.all()
+                workflow_response["retention_rules"] = [
+                    rule.serialize() for rule in rules
+                ]
             if include_workspace_size:
                 workflow_response["size"] = (
                     workflow.get_quota_usage()

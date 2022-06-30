@@ -12,10 +12,10 @@ import json
 
 from flask import Blueprint, jsonify, request
 
+from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_commons.errors import REANASecretDoesNotExist
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
-from reana_workflow_controller.config import WORKFLOW_TIME_FORMAT
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
     REANAWorkflowControllerError,

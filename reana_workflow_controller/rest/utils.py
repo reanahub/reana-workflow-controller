@@ -31,7 +31,7 @@ from uuid import UUID
 from flask import jsonify, request, send_file, send_from_directory
 from git import Repo
 from kubernetes.client.rest import ApiException
-from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.config import REANA_WORKFLOW_UMASK, WORKFLOW_TIME_FORMAT
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (
     get_workflow_status_change_verb,
@@ -61,7 +61,6 @@ from werkzeug.exceptions import BadRequest, NotFound
 
 from reana_workflow_controller.config import (
     REANA_GITLAB_HOST,
-    WORKFLOW_TIME_FORMAT,
     PREVIEWABLE_MIME_TYPE_PREFIXES,
 )
 from reana_workflow_controller.errors import (

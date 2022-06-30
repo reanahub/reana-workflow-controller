@@ -5,13 +5,14 @@ Version 0.9.0 (UNRELEASED)
 ---------------------------
 
 - Adds support for Kubernetes networking/v1 API to interactive sessions.
+- Adds setup of Kerberos when executing a workflow engine.
+- Adds the `REANA_WORKSPACE` environment variable to jupyter notebooks and terminals.
 - Changes workflow create endpoint to populate workspace retention rules for the workflow.
+- Changes workflow list endpoint to return workspace retention rules for the workflow.
 - Changes workflow list endpoint to add the possibility to filter by workflow id.
 - Changes workflow list endpoint to add the possibility to sort workflows by most used disk and cpu quota.
 - Changes default consumer prefetch count to handle 10 messages instead of 200 in order to reduce the probability of 406 PRECONDITION errors on message acknowledgement.
 - Changes the workflow status endpoint to update the disk quota usage when a workspace is deleted.
-- Adds setup of Kerberos when executing a workflow engine.
-- Adds the `REANA_WORKSPACE` environment variable to jupyter notebooks and terminals.
 - Changes the CWD of jupyter's terminals to the directory of the workflow's workspace.
 - Changes the k8s specification of interactive sessions' pods to remove the environment variables used for service discovery.
 

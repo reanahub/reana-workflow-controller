@@ -23,9 +23,6 @@ DEFAULT_NAME_FOR_WORKFLOWS = "workflow"
    If workflow is manually named by the user that prefix will used instead.
 """
 
-WORKFLOW_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
-"""Time format for workflow starting time, created time etc."""
-
 PROGRESS_STATUSES = [
     ("running", JobStatus.running),
     ("finished", JobStatus.finished),
