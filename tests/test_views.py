@@ -1184,7 +1184,9 @@ def test_delete_all_workflow_runs(
         assert workflow.status == RunStatus.deleted
 
 
-@pytest.mark.parametrize("workspace", [True, False])
+@pytest.mark.parametrize(
+    "workspace", [True, pytest.param(False, marks=pytest.mark.xfail(strict=True))]
+)
 def test_workspace_deletion(
     app,
     session,
@@ -1231,6 +1233,7 @@ def test_workspace_deletion(
                 content_type="application/json",
                 data=json.dumps({"workspace": workspace}),
             )
+            assert res.status_code == 200
         if workspace:
             assert not os.path.exists(workflow.workspace_path)
 

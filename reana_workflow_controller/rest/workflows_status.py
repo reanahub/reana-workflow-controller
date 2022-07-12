@@ -522,7 +522,16 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             )
         elif status == DELETED:
             all_runs = True if request.json.get("all_runs") else False
-            workspace = True if request.json.get("workspace") else False
+            workspace = True if request.json.get("workspace", True) else False
+            if not workspace:
+                return (
+                    jsonify(
+                        {
+                            "message": "Workspace must always be deleted when deleting a workflow.",
+                        }
+                    ),
+                    400,
+                )
             return delete_workflow(workflow, all_runs, workspace)
         if status == STOP:
             stop_workflow(workflow)
