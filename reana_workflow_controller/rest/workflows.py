@@ -378,7 +378,6 @@ def create_workflow():  # noqa
               retention_rules:
                 type: array
                 title: Retention rules list for the files in the workspace.
-                minItems: 1
                 items:
                   title: Retention rule for the files in the workspace.
                   type: object

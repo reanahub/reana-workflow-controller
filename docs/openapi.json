@@ -284,7 +284,6 @@
                     "title": "Retention rule for the files in the workspace.",
                     "type": "object"
                   },
-                  "minItems": 1,
                   "title": "Retention rules list for the files in the workspace.",
                   "type": "array"
                 },
