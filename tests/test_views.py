@@ -56,7 +56,8 @@ def test_get_workflows(app, session, default_user, cwl_workflow_with_name):
         session.add(workflow)
         session.commit()
         res = client.get(
-            url_for("workflows.get_workflows"), query_string={"user": default_user.id_}
+            url_for("workflows.get_workflows"),
+            query_string={"user": default_user.id_, "type": "batch"},
         )
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))["items"]
@@ -81,7 +82,8 @@ def test_get_workflows_wrong_user(app):
     with app.test_client() as client:
         random_user_uuid = uuid.uuid4()
         res = client.get(
-            url_for("workflows.get_workflows"), query_string={"user": random_user_uuid}
+            url_for("workflows.get_workflows"),
+            query_string={"user": random_user_uuid, "type": "batch"},
         )
         assert res.status_code == 404
 
@@ -89,8 +91,62 @@ def test_get_workflows_wrong_user(app):
 def test_get_workflows_missing_user(app):
     """Test listing all workflows with missing user."""
     with app.test_client() as client:
-        res = client.get(url_for("workflows.get_workflows"), query_string={})
+        res = client.get(
+            url_for("workflows.get_workflows"), query_string={"type": "batch"}
+        )
         assert res.status_code == 400
+
+
+def test_get_workflows_missing_type(app, default_user):
+    """Test listing all workflows with missing type."""
+    with app.test_client() as client:
+        res = client.get(
+            url_for("workflows.get_workflows"), query_string={"user": default_user.id_}
+        )
+        assert res.status_code == 400
+
+
+def test_get_workflows_include_progress(
+    app, default_user, sample_yadage_workflow_in_db
+):
+    """Test listing all workflows without including progress."""
+    workflow = sample_yadage_workflow_in_db
+    with app.test_client() as client:
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            query_string={
+                "user": default_user.id_,
+                "type": "batch",
+                "verbose": "true",
+                "include_progress": "false",
+            },
+        )
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))["items"][0]
+        assert response_data["id"] == str(workflow.id_)
+        # full progress is not included even though verbose is set to True
+        assert "finished" not in response_data["progress"]
+
+
+def test_get_workflows_include_retention_rules(
+    app, default_user, sample_yadage_workflow_in_db
+):
+    """Test listing all workflows without including retention rules."""
+    workflow = sample_yadage_workflow_in_db
+    with app.test_client() as client:
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            query_string={
+                "user": default_user.id_,
+                "type": "batch",
+                "verbose": "true",
+                "include_retention_rules": "false",
+            },
+        )
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))["items"][0]
+        assert response_data["id"] == str(workflow.id_)
+        assert "retention_rules" not in response_data
 
 
 def test_create_workflow_with_name(

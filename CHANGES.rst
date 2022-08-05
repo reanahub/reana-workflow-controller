@@ -16,6 +16,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes the CWD of jupyter's terminals to the directory of the workflow's workspace.
 - Changes the k8s specification of interactive sessions' pods to remove the environment variables used for service discovery.
 - Changes the workflow set status endpoint to remove the workspace by default when a workflow is deleted and to fail if the request is asking not to delete the workspace.
+- Fixes the workflow list endpoint to correctly parse the boolean parameters ``include_progress``, ``include_workspace_size`` and ``include_retention_rules``.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------

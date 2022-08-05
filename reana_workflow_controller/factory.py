@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -12,11 +12,34 @@ from __future__ import absolute_import
 
 import logging
 
-from flask import Flask
+from flask import Flask, jsonify
+from marshmallow.exceptions import ValidationError
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.database import Session
+from werkzeug.exceptions import UnprocessableEntity
+
 
 from reana_db.models import Base  # isort:skip  # noqa
+
+
+def handle_args_validation_error(error: UnprocessableEntity):
+    """Error handler for werkzeug exception ``UnprocessableEntity``.
+
+    This error handler is needed to display useful error messages, instead of the
+    generic default one, when marshmallow argument validation fails.
+    """
+    error_message = error.description or str(error)
+
+    exception = getattr(error, "exc", None)
+    if isinstance(exception, ValidationError):
+        validation_messages = []
+        for field, messages in exception.normalized_messages().items():
+            validation_messages.append(
+                "Field '{}': {}".format(field, ", ".join(messages))
+            )
+        error_message = ". ".join(validation_messages)
+
+    return jsonify({"message": error_message}), 400
 
 
 def create_app(config_mapping=None):
@@ -40,5 +63,8 @@ def create_app(config_mapping=None):
     app.register_blueprint(workflows.blueprint, url_prefix="/api")
     app.register_blueprint(workflows_status.blueprint, url_prefix="/api")
     app.register_blueprint(workflows_workspace.blueprint, url_prefix="/api")
+
+    app.register_error_handler(UnprocessableEntity, handle_args_validation_error)
+
     app.session = Session
     return app

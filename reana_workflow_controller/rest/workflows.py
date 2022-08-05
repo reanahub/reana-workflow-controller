@@ -9,6 +9,7 @@
 """REANA Workflow Controller workflows REST API."""
 
 import json
+from typing import Optional
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
@@ -18,6 +19,8 @@ from reana_db.utils import build_workspace_path
 from reana_db.models import User, Workflow, RunStatus, WorkflowResource
 from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from sqlalchemy import and_, nullslast
+from webargs import fields
+from webargs.flaskparser import use_args
 
 
 from reana_workflow_controller.config import DEFAULT_NAME_FOR_WORKFLOWS
@@ -46,7 +49,22 @@ blueprint = Blueprint("workflows", __name__)
 
 @blueprint.route("/workflows", methods=["GET"])
 @use_paginate_args()
-def get_workflows(paginate=None):  # noqa
+@use_args(
+    {
+        "include_progress": fields.Bool(),
+        "include_workspace_size": fields.Bool(),
+        "include_retention_rules": fields.Bool(),
+        "search": fields.String(missing=""),
+        "sort": fields.String(missing="desc"),
+        "status": fields.String(missing=""),
+        "type": fields.String(required=True),
+        "user": fields.String(required=True),
+        "verbose": fields.Bool(missing=False),
+        "workflow_id_or_name": fields.String(),
+    },
+    location="query",
+)
+def get_workflows(args, paginate=None):  # noqa
     r"""Get all workflows.
 
     ---
@@ -231,20 +249,23 @@ def get_workflows(paginate=None):  # noqa
                 "message": "Internal workflow controller error."
               }
     """
+
+    user_uuid: str = args["user"]
+    type_: str = args["type"]
+    verbose: bool = args["verbose"]
+    sort: str = args["sort"]
+    search: str = args["search"]
+    status_list: str = args["status"]
+    include_progress: bool = args.get("include_progress", verbose)
+    include_workspace_size: bool = args.get("include_workspace_size", verbose)
+    include_retention_rules: bool = args.get("include_retention_rules", verbose)
+    workflow_id_or_name: Optional[str] = args.get("workflow_id_or_name")
+
     try:
-        user_uuid = request.args["user"]
         user = User.query.filter(User.id_ == user_uuid).first()
-        type_ = request.args.get("type", "batch")
-        verbose = json.loads(request.args.get("verbose", "false").lower())
-        sort = request.args.get("sort", "desc")
-        search = request.args.get("search", "")
-        status_list = request.args.get("status", "")
-        include_progress = request.args.get("include_progress", verbose)
-        include_workspace_size = request.args.get("include_workspace_size", verbose)
-        include_retention_rules = request.args.get("include_retention_rules", verbose)
-        workflow_id_or_name = request.args.get("workflow_id_or_name")
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
+
         workflows = []
         query = user.workflows
         if search:
