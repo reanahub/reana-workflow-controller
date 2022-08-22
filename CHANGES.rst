@@ -17,6 +17,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes the k8s specification of interactive sessions' pods to remove the environment variables used for service discovery.
 - Changes the workflow set status endpoint to remove the workspace by default when a workflow is deleted and to fail if the request is asking not to delete the workspace.
 - Fixes the workflow list endpoint to correctly parse the boolean parameters ``include_progress``, ``include_workspace_size`` and ``include_retention_rules``.
+- Changes to PostgreSQL 12.10.
 
 Version 0.8.1 (2022-02-07)
 ---------------------------
@@ -33,7 +34,7 @@ Version 0.8.0 (2021-11-22)
 - Adds file search capabilities to the workflow workspace endpoint.
 - Adds Snakemake workflow engine support.
 - Adds support for custom workflow workspace path.
-- Changes to PostgreSQL 12.8
+- Changes to PostgreSQL 12.8.
 - Changes workflow run manager to query the specific workflow engine during pod deletion.
 - Fixes workflow list endpoint query logic to improve optimization.
 
