@@ -40,7 +40,7 @@ mock==3.0.5               # via reana-commons
 monotonic==1.6            # via bravado
 msgpack-python==0.5.6     # via bravado
 msgpack==1.0.3            # via bravado-core
-oauthlib==3.2.0           # via requests-oauthlib
+oauthlib==3.2.1           # via requests-oauthlib
 packaging==21.3           # via reana-workflow-controller (setup.py)
 psycopg2-binary==2.9.3    # via reana-db
 pyasn1-modules==0.2.8     # via google-auth
