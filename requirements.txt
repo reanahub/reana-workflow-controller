@@ -33,7 +33,7 @@ jsonref==0.2              # via bravado-core
 jsonschema[format]==3.2.0  # via bravado-core, reana-commons, swagger-spec-validator
 kombu==5.2.4              # via reana-commons
 kubernetes==22.6.0        # via reana-commons
-mako==1.2.0               # via alembic
+mako==1.2.2               # via alembic
 markupsafe==2.0.1         # via jinja2, mako, reana-workflow-controller (setup.py)
 marshmallow==2.20.1       # via reana-workflow-controller (setup.py), webargs
 mock==3.0.5               # via reana-commons
