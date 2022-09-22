@@ -598,11 +598,6 @@ def move_files(workflow_id_or_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         source = request.args["source"]
         target = request.args["target"]
-        if workflow.status == "running":
-            return (
-                jsonify({"message": "Workflow is running, files can not be " "moved"}),
-                400,
-            )
 
         if not str(workflow.owner_id) == user_uuid:
             return (
