@@ -7,27 +7,29 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller utility tests."""
 
-import mock
 import os
-from pathlib import Path
 import stat
 import uuid
+from contextlib import nullcontext as does_not_raise
+from pathlib import Path
+from typing import ContextManager
 
+import mock
 import pytest
-from reana_db.models import Job, JobCache, Workflow, RunStatus
+from reana_db.models import Job, JobCache, RunStatus, Workflow
 from reana_db.utils import (
     get_disk_usage_or_zero,
     store_workflow_disk_quota,
     update_users_disk_quota,
 )
-
+from reana_workflow_controller.errors import REANAWorkflowControllerError
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
     get_previewable_mime_type,
     list_files_recursive_wildcard,
+    mv_files,
     remove_files_recursive_wildcard,
-    stop_workflow,
 )
 
 
@@ -258,3 +260,50 @@ def test_workspace_permissions(
 def test_get_previewable_mime_type(filename: str, mime_type: str) -> None:
     """Test obtaining previewable mime types from file path."""
     assert get_previewable_mime_type(filename) == mime_type
+
+
+@pytest.mark.parametrize(
+    "source, target, expectation",
+    [
+        ("a", "c", does_not_raise()),
+        ("dir/b", "dir/c", does_not_raise()),
+        ("dir", "newdir", does_not_raise()),
+        ("a", "newdir/a", pytest.raises(REANAWorkflowControllerError)),
+        ("a", "dir/b", pytest.raises(REANAWorkflowControllerError)),
+        ("not_existing", "c", pytest.raises(REANAWorkflowControllerError)),
+        ("/a", "c", pytest.raises(REANAWorkflowControllerError)),
+        ("a", "/c", pytest.raises(REANAWorkflowControllerError)),
+    ],
+)
+def test_mv_files(
+    source: str,
+    target: str,
+    expectation: ContextManager,
+    sample_serial_workflow_in_db: Workflow,
+    tmp_path: Path,
+):
+    """Test moving files in a workspace."""
+    workflow = sample_serial_workflow_in_db
+    workspace = tmp_path / "workspace"
+    workflow.workspace_path = str(workspace)
+
+    files = ["a", "dir/b"]
+    for file in files:
+        path = workspace / file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(file)
+
+    source_path = workspace / source
+    target_path = workspace / target
+
+    try:
+        source_content = source_path.read_text()
+    except (FileNotFoundError, IsADirectoryError):
+        source_content = None
+
+    with expectation:
+        mv_files(source, target, workflow)
+        assert not source_path.exists()
+        assert target_path.exists()
+        if source_content:
+            assert target_path.read_text() == source_content

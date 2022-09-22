@@ -383,14 +383,15 @@ def remove_workflow_workspace(path):
 def mv_files(source, target, workflow):
     """Move files within workspace."""
     absolute_source_path = os.path.join(workflow.workspace_path, source)
+    absolute_target_path = os.path.join(workflow.workspace_path, target)
 
     if not os.path.exists(absolute_source_path):
-        message = "Path {} does not exist".format(source)
+        message = "Source path {} does not exist".format(source)
         raise REANAWorkflowControllerError(message)
     if not absolute_source_path.startswith(workflow.workspace_path):
-        message = "Source path is outside user workspace"
+        message = "Source path is outside workspace"
         raise REANAWorkflowControllerError(message)
-    if not absolute_source_path.startswith(workflow.workspace_path):
+    if not absolute_target_path.startswith(workflow.workspace_path):
         message = "Target path is outside workspace"
         raise REANAWorkflowControllerError(message)
     try:
