@@ -47,9 +47,11 @@ setup_requires = [
 
 install_requires = [
     "Flask>=1.0.4,<2.0",
+    "click>=7.1.2,<8.1",
     "Werkzeug>=1.0.1,<2.0",
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
+    "markupsafe>=2.0.1,<2.1.0",
     "marshmallow>2.13.0,<=2.20.1",
     "packaging>=18.0",
     "reana-commons[kubernetes]>=0.8.3,<0.9.0",

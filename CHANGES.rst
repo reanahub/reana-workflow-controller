@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.8.2 (2022-10-06)
+---------------------------
+
+- Fixes ``delete --include-all-runs`` functionality to delete only workflow owner's past runs.
+
 Version 0.8.1 (2022-02-07)
 ---------------------------
 
