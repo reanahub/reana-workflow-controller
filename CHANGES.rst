@@ -20,6 +20,11 @@ Version 0.9.0 (UNRELEASED)
 - Changes the `move_files` endpoint to allow moving files while a workflow is running.
 - Fixes the workflow list endpoint to correctly parse the boolean parameters ``include_progress``, ``include_workspace_size`` and ``include_retention_rules``.
 
+Version 0.8.2 (2022-10-06)
+---------------------------
+
+- Fixes ``delete --include-all-runs`` functionality to delete only workflow owner's past runs.
+
 Version 0.8.1 (2022-02-07)
 ---------------------------
 

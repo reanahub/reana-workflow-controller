@@ -229,6 +229,7 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                     Session.query(Workflow)
                     .filter(
                         Workflow.name == workflow.name,
+                        Workflow.owner_id == workflow.owner_id,
                         Workflow.status != RunStatus.running,
                     )
                     .all()
