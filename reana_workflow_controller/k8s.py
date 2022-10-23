@@ -135,6 +135,7 @@ class InteractiveDeploymentK8sBuilder(object):
             # Disable service discovery with env variables, so that the environment is
             # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
             enable_service_links=False,
+            automount_service_account_token=False,
         )
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self.deployment_name}),
