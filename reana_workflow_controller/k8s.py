@@ -105,7 +105,7 @@ class InteractiveDeploymentK8sBuilder(object):
             deployment.
         """
         spec = client.V1ServiceSpec(
-            type="NodePort",
+            type="ClusterIP",
             ports=[
                 client.V1ServicePort(
                     port=InteractiveDeploymentK8sBuilder.internal_service_port,
