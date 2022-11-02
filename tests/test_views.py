@@ -419,7 +419,7 @@ def test_download_dir_or_wildcard(
         files = {
             "foo/1.txt": b"txt in foo dir",
             "foo/bar/1.csv": b"csv in bar dir",
-            "foo/bar/baz/2.csv": b"csv in baz dir",
+            "foo/bar/2.csv": b"csv in bar dir",
         }
         for file_name, file_binary_content in files.items():
             file_path = os.path.join(workflow.workspace_path, file_name)
@@ -442,18 +442,14 @@ def test_download_dir_or_wildcard(
         zipped_file_names = [f.filename for f in zipfile.filelist]
         assert "foo/1.txt" not in zipped_file_names
         assert zipfile.read("foo/bar/1.csv") == files["foo/bar/1.csv"]
-        assert zipfile.read("foo/bar/baz/2.csv") == files["foo/bar/baz/2.csv"]
+        assert zipfile.read("foo/bar/2.csv") == files["foo/bar/2.csv"]
 
         # download by glob pattern
-        res = _download("**/*.csv", workflow_uuid)
+        res = _download("*/*/*.csv", workflow_uuid)
         assert res.headers.get("Content-Type") == "application/zip"
         zipfile = ZipFile(io.BytesIO(res.data))
         assert len(zipfile.filelist) == 2
-        res = _download("**/1.*", workflow_uuid)
-        assert res.headers.get("Content-Type") == "application/zip"
-        zipfile = ZipFile(io.BytesIO(res.data))
-        assert len(zipfile.filelist) == 2
-        res = _download("**/*.txt", workflow_uuid)
+        res = _download("*/*.txt", workflow_uuid)
         assert res.headers.get("Content-Type") != "application/zip"
         assert res.data == files["foo/1.txt"]
 

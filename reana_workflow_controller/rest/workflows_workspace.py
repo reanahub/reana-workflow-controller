@@ -10,6 +10,7 @@
 
 import json
 import os
+import pathlib
 
 from flask import (
     Blueprint,
@@ -27,6 +28,7 @@ from reana_db.utils import (
     store_workflow_disk_quota,
     update_users_disk_quota,
 )
+from reana_workflow_controller import workspace
 from reana_workflow_controller.errors import (
     REANAUploadPathError,
     REANAWorkflowControllerError,
@@ -135,24 +137,16 @@ def upload_file(workflow_id_or_name):
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
 
-        filename = full_file_name.split("/")[-1]
+        relative_path = pathlib.Path(full_file_name)
+        if relative_path.is_absolute():
+            relative_path = relative_path.relative_to("/")
 
-        # Remove starting '/' in path
-        if full_file_name[0] == "/":
-            full_file_name = full_file_name[1:]
-        elif ".." in full_file_name.split("/"):
-            raise REANAUploadPathError('Path cannot contain "..".')
-        absolute_workspace_path = workflow.workspace_path
-        if len(full_file_name.split("/")) > 1:
-            dirs = full_file_name.split("/")[:-1]
-            absolute_workspace_path = os.path.join(
-                workflow.workspace_path, "/".join(dirs)
-            )
-            if not os.path.exists(absolute_workspace_path):
-                os.makedirs(absolute_workspace_path)
-        absolute_file_path = os.path.join(absolute_workspace_path, filename)
+        workspace.makedirs(workflow.workspace_path, relative_path.parent)
+        with workspace.open_file(
+            workflow.workspace_path, relative_path, mode="wb"
+        ) as dst:
+            FileStorage(request.stream).save(dst, buffer_size=32768)
 
-        FileStorage(request.stream).save(absolute_file_path, buffer_size=32768)
         # update user and workflow resource disk quota
         store_workflow_disk_quota(workflow, bytes_to_sum=request.content_length)
         update_users_disk_quota(workflow.owner, bytes_to_sum=request.content_length)

@@ -186,23 +186,25 @@ def test_delete_recursive_wildcard(tmp_shared_volume_path):
     file_binary_content = b"1,2,3,4\n5,6,7,8"
     size = 0
     directory_path = Path(tmp_shared_volume_path, "rm_files_test")
-    files_to_remove = ["file1.csv", "subdir/file2.csv"]
-    posix_path_to_deleted_files = []
-    for file_name in files_to_remove:
+    pattern = "*/*.csv"
+    files_to_remove = ["dir/file1.csv", "subdir/file2.csv"]
+    files_to_keep = ["file3.csv", "subdir/file4.txt"]
+    for file_name in files_to_remove + files_to_keep:
         posix_file_path = Path(directory_path, file_name)
-        posix_file_path.parent.mkdir(parents=True)
+        posix_file_path.parent.mkdir(parents=True, exist_ok=True)
         posix_file_path.touch()
         size = posix_file_path.write_bytes(file_binary_content)
         assert posix_file_path.exists()
-        posix_path_to_deleted_files.append(posix_file_path)
 
-    deleted_files = remove_files_recursive_wildcard(directory_path, "**/*")
-    for posix_file_path in posix_path_to_deleted_files:
-        assert not posix_file_path.exists()
+    deleted_files = remove_files_recursive_wildcard(directory_path, pattern)
 
-    for key in files_to_remove:
-        assert key in deleted_files["deleted"]
-        assert deleted_files["deleted"][key]["size"] == size
+    for file_path in files_to_remove:
+        assert not Path(directory_path, file_path).exists()
+        assert file_path in deleted_files["deleted"]
+        assert deleted_files["deleted"][file_path]["size"] == size
+    for file_path in files_to_keep:
+        assert Path(directory_path, file_path).exists()
+        assert file_path not in deleted_files["deleted"]
     assert not len(deleted_files["failed"])
 
 
@@ -210,7 +212,7 @@ def test_list_recursive_wildcard(tmp_shared_volume_path):
     """Test recursive wildcard deletion of files."""
     file_binary_content = b"1,2,3,4\n5,6,7,8"
     directory_path = Path(tmp_shared_volume_path, "ls_files_test")
-    files_to_list = ["file1.csv", "subdir/file2.csv", "file3.txt"]
+    files_to_list = ["dir/file1.csv", "subdir/file2.csv", "file3.txt"]
     posix_path_to_listed_files = []
     for file_name in files_to_list:
         posix_file_path = Path(directory_path, file_name)
@@ -220,7 +222,7 @@ def test_list_recursive_wildcard(tmp_shared_volume_path):
         assert posix_file_path.exists()
         posix_path_to_listed_files.append(posix_file_path)
 
-    listed_files = list_files_recursive_wildcard(directory_path, "**/*.csv")
+    listed_files = list_files_recursive_wildcard(directory_path, "*/*.csv")
     listed_files_names = set(file["name"] for file in listed_files)
     assert listed_files_names == set(
         filter(lambda x: x.endswith(".csv"), files_to_list)
@@ -268,8 +270,8 @@ def test_get_previewable_mime_type(filename: str, mime_type: str) -> None:
         ("a", "c", does_not_raise()),
         ("dir/b", "dir/c", does_not_raise()),
         ("dir", "newdir", does_not_raise()),
+        ("a", "dir/b", does_not_raise()),
         ("a", "newdir/a", pytest.raises(REANAWorkflowControllerError)),
-        ("a", "dir/b", pytest.raises(REANAWorkflowControllerError)),
         ("not_existing", "c", pytest.raises(REANAWorkflowControllerError)),
         ("/a", "c", pytest.raises(REANAWorkflowControllerError)),
         ("a", "/c", pytest.raises(REANAWorkflowControllerError)),

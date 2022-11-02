@@ -37,7 +37,6 @@ from reana_commons.utils import (
     get_workflow_status_change_verb,
     remove_upper_level_references,
     is_directory,
-    get_files_recursive_wildcard,
 )
 from reana_db.database import Session
 from reana_db.models import (
@@ -70,6 +69,7 @@ from reana_workflow_controller.errors import (
     REANAWorkflowStatusError,
 )
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
+from reana_workflow_controller import workspace
 
 
 def start_workflow(workflow, parameters):
@@ -386,84 +386,65 @@ def mv_files(source, target, workflow):
     absolute_source_path = os.path.join(workflow.workspace_path, source)
     absolute_target_path = os.path.join(workflow.workspace_path, target)
 
-    if not os.path.exists(absolute_source_path):
-        message = "Source path {} does not exist".format(source)
-        raise REANAWorkflowControllerError(message)
     if not absolute_source_path.startswith(workflow.workspace_path):
         message = "Source path is outside workspace"
         raise REANAWorkflowControllerError(message)
     if not absolute_target_path.startswith(workflow.workspace_path):
         message = "Target path is outside workspace"
         raise REANAWorkflowControllerError(message)
+
     try:
-        reana_fs = fs.open_fs(workflow.workspace_path)
-        source_info = reana_fs.getinfo(source)
-        if source_info.is_dir:
-            reana_fs.movedir(src_path=source, dst_path=target, create=True)
-        else:
-            reana_fs.move(src_path=source, dst_path=target)
-        reana_fs.close()
+        workspace.move(workflow.workspace_path, source, target)
     except Exception as e:
-        reana_fs.close()
         message = "Something went wrong:\n {}".format(e)
         raise REANAWorkflowControllerError(message)
 
 
 def list_directory_files(
-    directory: str, search: Dict[str, List[str]] = None
+    workspace_path: str, search: Dict[str, List[str]] = None
 ) -> List[dict]:
-    """Return a list of files inside a given directory."""
-    fs_ = fs.open_fs(directory)
+    """Return a list of files inside a given workspace."""
     file_list = []
-    for file_name in fs_.walk.files():
-        try:
-            file_details = fs_.getinfo(file_name, namespaces=["details"])
-            file_info = {
-                "name": file_name.lstrip("/"),
-                "last-modified": file_details.modified.strftime(WORKFLOW_TIME_FORMAT),
-                "size": dict(
-                    raw=file_details.size,
-                    human_readable=ResourceUnit.human_readable_unit(
-                        ResourceUnit.bytes_, file_details.size
-                    ),
+    for file_name in workspace.walk(workspace_path, include_dirs=False):
+        st = workspace.lstat(workspace_path, file_name)
+        file_info = {
+            "name": file_name,
+            "last-modified": datetime.fromtimestamp(st.st_mtime).strftime(
+                WORKFLOW_TIME_FORMAT
+            ),
+            "size": dict(
+                raw=st.st_size,
+                human_readable=ResourceUnit.human_readable_unit(
+                    ResourceUnit.bytes_,
+                    st.st_size,
                 ),
-            }
-            if search:
-                filter_file = list_files_filter(file_info, search)
-                if filter_file:
-                    file_list.append(file_info)
-            else:
+            ),
+        }
+        if search:
+            filter_file = list_files_filter(file_info, search)
+            if filter_file:
                 file_list.append(file_info)
-        except fs.errors.ResourceNotFound as e:
-            if os.path.islink(fs_.root_path + file_name):
-                target = os.path.realpath(fs_.root_path + file_name)
-                msg = "Symbolic link {} targeting {} could not be resolved: \
-                {}".format(
-                    file_name, target, e
-                )
-                logging.error(msg, exc_info=True)
-            continue
+        else:
+            file_list.append(file_info)
     return file_list
 
 
-def remove_files_recursive_wildcard(directory_path, path):
+def remove_files_recursive_wildcard(workspace_path, path_or_pattern):
     """Remove file(s) fitting the wildcard from the workspace.
 
-    :param directory_path: Directory to delete files from.
-    :param path: Wildcard pattern to use for the removal.
+    :param workspace_path: Directory to delete files from.
+    :param path_or_pattern: Wildcard pattern to use for the removal.
     :return: Dictionary with the results:
        - dictionary with names of succesfully deleted files and their sizes
        - dictionary with names of failed deletions and corresponding
        error messages.
     """
     deleted = {"deleted": {}, "failed": {}}
-    paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
-    for posix_path in paths:
+    for file_name in workspace.glob_or_walk_directory(
+        workspace_path, path_or_pattern, topdown=False
+    ):
         try:
-            file_name = str(posix_path.relative_to(posix_dir_prefix))
-            object_size = posix_path.stat().st_size
-            os.unlink(posix_path) if posix_path.is_file() else os.rmdir(posix_path)
-
+            object_size = workspace.delete(workspace_path, file_name)
             deleted["deleted"][file_name] = {"size": object_size}
         except Exception as e:
             deleted["failed"][file_name] = {"error": str(e)}
@@ -471,29 +452,30 @@ def remove_files_recursive_wildcard(directory_path, path):
     return deleted
 
 
-def list_files_recursive_wildcard(directory_path, path, search=None):
+def list_files_recursive_wildcard(workspace_path, path_or_pattern, search=None):
     """List file(s) fitting the wildcard from the workspace.
 
-    :param directory_path: Directory to list files from.
-    :param path: Wildcard pattern to use for the listing.
+    :param workspace_path: Directory to list files from.
+    :param path_or_pattern: Wildcard pattern to use for the listing.
     :return: Dictionary with the results:
        - dictionary with names of succesfully listed files and their sizes
        - dictionary with names of failed listing and corresponding
        error messages.
     """
-    paths, posix_dir_prefix = get_files_recursive_wildcard(directory_path, path)
     list_files_recursive = []
-    for path in paths:
-        raw_size = path.stat().st_size
+    for path in workspace.glob_or_walk_directory(workspace_path, path_or_pattern):
+        st = workspace.lstat(workspace_path, path)
+        raw_size = st.st_size
+        mtime = st.st_mtime
         file_info = {
-            "name": str(path.relative_to(posix_dir_prefix)),
+            "name": path,
             "size": dict(
                 raw=raw_size,
                 human_readable=ResourceUnit.human_readable_unit(
                     ResourceUnit.bytes_, raw_size
                 ),
             ),
-            "last-modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
+            "last-modified": datetime.fromtimestamp(mtime).strftime(
                 WORKFLOW_TIME_FORMAT
             ),
         }
@@ -530,7 +512,7 @@ def list_files_filter(
     )
 
 
-def download_files_recursive_wildcard(workflow_name, workspace_path, path):
+def download_files_recursive_wildcard(workflow_name, workspace_path, path_or_pattern):
     """Download file(s) matching the given path pattern from the workspace.
 
     This function finds out if the provided pattern corresponds to:
@@ -540,7 +522,7 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
 
     :param workflow_name: Full workflow name including run number.
     :param workspace_path: Base workspace directory where files are located.
-    :param path: (Wildcard) pattern to use for the download.
+    :param path_or_pattern: (Wildcard) pattern to use for the download.
     :return: Flask function call to send file to the client.
     """
 
@@ -549,7 +531,7 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
         timestr = time.strftime("%Y-%m-%d-%H%M%S")
         filename = "download_{}_{}_{}.zip".format(
             workflow_name,
-            os.path.basename(remove_upper_level_references(path)),
+            os.path.basename(remove_upper_level_references(path_or_pattern)),
             timestr,
         )
         memory_file = BytesIO()
@@ -558,20 +540,17 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
                 if len(list(dir_path.iterdir())):
                     for root, dirs, files in os.walk(dir_path):
                         for file in files:
-                            zipf.write(
-                                os.path.join(root, file),
-                                arcname=os.path.join(
-                                    path, str(Path(root).relative_to(dir_path)), file
-                                ),
-                            )
+                            relative_path = Path(root, file).relative_to(workspace_path)
+                            with workspace.open_file(
+                                workspace_path, relative_path, mode="rb"
+                            ) as f:
+                                zipf.writestr(str(relative_path), f.read())
                 else:
                     raise NotFound("The provided directory is empty.")
             elif file_paths:
-                for file_path in file_paths:
-                    zipf.write(
-                        file_path,
-                        arcname=str(file_path.relative_to(Path(workspace_path))),
-                    )
+                for path in file_paths:
+                    with workspace.open_file(workspace_path, path, mode="rb") as f:
+                        zipf.writestr(str(path), f.read())
             else:
                 raise NotFound("The provided pattern does not match any file.")
         memory_file.seek(0)
@@ -582,19 +561,17 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
             mimetype="application/zip",
         )
 
-    def _send_single_file(absolute_file_path: str, workspace_path: str):
+    def _send_single_file(workspace_path: str, relative_file_path: str):
         """Send single file from directory to the client."""
         default_response_mime_type = "application/octet-stream"
         preview = json.loads(request.args.get("preview", "false").lower())
         response_mime_type = default_response_mime_type
-        file_mime_type = get_previewable_mime_type(path)
+        file_mime_type = get_previewable_mime_type(path_or_pattern)
         if preview and file_mime_type:
             response_mime_type = file_mime_type
-        relative_file_path = str(absolute_file_path.relative_to(workspace_path))
         return (
-            send_from_directory(
-                workspace_path,
-                relative_file_path,
+            send_file(
+                workspace.open_file(workspace_path, relative_file_path, mode="rb"),
                 mimetype=response_mime_type,
                 as_attachment=response_mime_type == default_response_mime_type,
                 attachment_filename=relative_file_path,
@@ -602,18 +579,18 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path):
             200,
         )
 
-    full_path_dir = is_directory(workspace_path, path)
+    full_path_dir = is_directory(workspace_path, path_or_pattern)
     if full_path_dir:
         return _send_zipped_dir_or_files(workflow_name, dir_path=full_path_dir)
 
     else:
-        paths, _ = get_files_recursive_wildcard(workspace_path, path)
-        # filter out non-files
-        paths = [path for path in paths if path.is_file()]
+        paths = list(
+            workspace.glob(workspace_path, path_or_pattern, include_dirs=False)
+        )
         # if it's a single file, serve it directly
         if len(paths) == 1:
-            absolute_file_path = paths[0]
-            return _send_single_file(absolute_file_path, workspace_path)
+            relative_file_path = paths[0]
+            return _send_single_file(workspace_path, relative_file_path)
         # if multiple files, package them into a zip file and serve it
         else:
             return _send_zipped_dir_or_files(workflow_name, file_paths=paths)
