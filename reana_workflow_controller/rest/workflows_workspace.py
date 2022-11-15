@@ -22,13 +22,14 @@ from fs.errors import CreateFailed
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import NotFound
 
+from reana_commons import workspace
 from reana_db.models import User
 from reana_db.utils import (
     _get_workflow_with_uuid_or_name,
     store_workflow_disk_quota,
     update_users_disk_quota,
 )
-from reana_workflow_controller import workspace
+
 from reana_workflow_controller.errors import (
     REANAUploadPathError,
     REANAWorkflowControllerError,

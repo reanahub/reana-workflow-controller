@@ -31,6 +31,7 @@ from uuid import UUID
 from flask import jsonify, request, send_file, send_from_directory
 from git import Repo
 from kubernetes.client.rest import ApiException
+from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_UMASK, WORKFLOW_TIME_FORMAT
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import (
@@ -69,7 +70,6 @@ from reana_workflow_controller.errors import (
     REANAWorkflowStatusError,
 )
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
-from reana_workflow_controller import workspace
 
 
 def start_workflow(workflow, parameters):
