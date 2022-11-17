@@ -23,6 +23,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import NotFound
 
 from reana_commons import workspace
+from reana_commons.errors import REANAWorkspaceError
 from reana_db.models import User
 from reana_db.utils import (
     _get_workflow_with_uuid_or_name,
@@ -31,7 +32,6 @@ from reana_db.utils import (
 )
 
 from reana_workflow_controller.errors import (
-    REANAUploadPathError,
     REANAWorkflowControllerError,
 )
 from reana_workflow_controller.rest.utils import (
@@ -172,6 +172,8 @@ def upload_file(workflow_id_or_name):
         )
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
+    except REANAWorkspaceError as e:
+        return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
@@ -271,6 +273,8 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except REANAWorkspaceError as e:
+        return jsonify({"message": str(e)}), 400
     except NotFound:
         return jsonify({"message": "{0} does not exist.".format(file_name)}), 404
     except Exception as e:
@@ -361,6 +365,8 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except REANAWorkspaceError as e:
+        return jsonify({"message": str(e)}), 400
     except NotFound:
         return jsonify({"message": "{0} does not exist.".format(file_name)}), 404
     except OSError:
@@ -495,6 +501,8 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except REANAWorkspaceError as e:
+        return jsonify({"message": str(e)}), 400
     except CreateFailed:
         return jsonify({"message": "Workspace does not exist."}), 404
     except Exception as e:
