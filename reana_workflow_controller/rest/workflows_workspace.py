@@ -593,18 +593,6 @@ def move_files(workflow_id_or_name):  # noqa
         source = request.args["source"]
         target = request.args["target"]
 
-        if not str(workflow.owner_id) == user_uuid:
-            return (
-                jsonify(
-                    {
-                        "message": "User {} is not allowed to access workflow {}".format(
-                            user_uuid, workflow_id_or_name
-                        )
-                    }
-                ),
-                403,
-            )
-
         mv_files(source, target, workflow)
         message = "File(s) {} were successfully moved".format(source)
 

@@ -616,17 +616,6 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
     try:
         user_uuid = request.args["user"]
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        if not str(workflow.owner_id) == user_uuid:
-            return (
-                jsonify(
-                    {
-                        "message": "User {} is not allowed to access workflow {}".format(
-                            user_uuid, workflow_id_or_name
-                        )
-                    }
-                ),
-                403,
-            )
 
         workflow_parameters = workflow.get_input_parameters()
         return (

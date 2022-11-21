@@ -140,17 +140,6 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
 
-        if not str(workflow.owner_id) == user_uuid:
-            return (
-                jsonify(
-                    {
-                        "message": "User {} is not allowed to access workflow {}".format(
-                            user_uuid, workflow_id_or_name
-                        )
-                    }
-                ),
-                403,
-            )
         steps = None
         if request.is_json:
             steps = request.json
@@ -291,17 +280,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         user_uuid = request.args["user"]
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         workflow_logs = build_workflow_logs(workflow)
-        if not str(workflow.owner_id) == user_uuid:
-            return (
-                jsonify(
-                    {
-                        "message": "User {} is not allowed to access workflow {}".format(
-                            user_uuid, workflow_id_or_name
-                        )
-                    }
-                ),
-                403,
-            )
+
         return (
             jsonify(
                 {
@@ -492,17 +471,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                 400,
             )
 
-        if not str(workflow.owner_id) == user_uuid:
-            return (
-                jsonify(
-                    {
-                        "message": "User {} is not allowed to access workflow {}".format(
-                            user_uuid, workflow_id_or_name
-                        )
-                    }
-                ),
-                403,
-            )
         parameters = {}
         if request.is_json:
             parameters = request.json

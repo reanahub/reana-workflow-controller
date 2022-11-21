@@ -634,7 +634,7 @@ def test_get_workflow_status_unauthorized(
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
-        assert res.status_code == 403
+        assert res.status_code == 404
 
 
 def test_get_workflow_status_unknown_workflow(
@@ -846,7 +846,7 @@ def test_set_workflow_status_unauthorized(
             query_string={"user": random_user_uuid, "status": payload},
             content_type="application/json",
         )
-        assert res.status_code == 403
+        assert res.status_code == 404
 
 
 def test_set_workflow_status_unknown_workflow(
@@ -1049,7 +1049,7 @@ def test_get_workflow_logs_unauthorized(
             query_string={"user": random_user_uuid},
             content_type="application/json",
         )
-        assert res.status_code == 403
+        assert res.status_code == 404
 
 
 def test_start_input_parameters(
