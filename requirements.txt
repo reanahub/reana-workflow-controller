@@ -8,6 +8,7 @@ alembic==1.8.1            # via reana-db
 amqp==5.1.1               # via kombu
 appdirs==1.4.4            # via fs
 attrs==22.1.0             # via jsonschema
+bracex==2.3.post1         # via wcmatch
 bravado-core==5.17.1      # via bravado
 bravado==10.3.2           # via reana-commons
 cachetools==5.2.0         # via google-auth
@@ -51,7 +52,7 @@ pyrsistent==0.18.1        # via jsonschema
 python-dateutil==2.8.2    # via bravado, bravado-core, kubernetes
 pytz==2022.4              # via bravado-core
 pyyaml==5.4.1             # via bravado, bravado-core, kubernetes, reana-commons, swagger-spec-validator
-reana-commons[kubernetes]==0.9.0a14  # via reana-db, reana-workflow-controller (setup.py)
+reana-commons[kubernetes]==0.9.0a15  # via reana-db, reana-workflow-controller (setup.py)
 reana-db==0.9.0a9         # via reana-workflow-controller (setup.py)
 requests-oauthlib==1.3.1  # via kubernetes
 requests==2.25.0          # via bravado, bravado-core, kubernetes, reana-workflow-controller (setup.py), requests-oauthlib
@@ -70,6 +71,7 @@ uwsgi-tools==1.1.1        # via reana-workflow-controller (setup.py)
 uwsgi==2.0.20             # via reana-workflow-controller (setup.py)
 uwsgitop==0.11            # via reana-workflow-controller (setup.py)
 vine==5.0.0               # via amqp, kombu
+wcmatch==8.4.1            # via reana-commons
 webargs==6.1.1            # via reana-workflow-controller (setup.py)
 webcolors==1.12           # via jsonschema
 websocket-client==1.4.1   # via kubernetes
