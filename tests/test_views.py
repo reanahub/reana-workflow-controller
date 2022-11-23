@@ -1551,3 +1551,67 @@ def test_close_interactive_session_not_opened(
         )
         assert res.json == expected_data
         assert res._status_code == 404
+
+
+def test_get_workflow_retention_rules(app, sample_serial_workflow_with_retention_rule):
+    """Test get_workflow_retention_rules for a workflow without retention rules."""
+    workflow = sample_serial_workflow_with_retention_rule
+    with app.test_client() as client:
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_retention_rules",
+                workflow_id_or_name=workflow.id_,
+            ),
+            query_string={"user": workflow.owner.id_},
+        )
+        assert res.status_code == 200
+        assert res.json["workflow_id"] == str(workflow.id_)
+        assert res.json["workflow_name"] == workflow.get_full_workflow_name()
+        assert res.json["retention_rules"] == [
+            rule.serialize() for rule in workflow.retention_rules
+        ]
+
+
+def test_get_workflow_retention_rules_no_rules(app, sample_serial_workflow_in_db):
+    """Test get_workflow_retention_rules for a workflow without retention rules."""
+    workflow = sample_serial_workflow_in_db
+    with app.test_client() as client:
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_retention_rules",
+                workflow_id_or_name=workflow.id_,
+            ),
+            query_string={"user": workflow.owner.id_},
+        )
+        assert res.status_code == 200
+        assert res.json["workflow_id"] == str(workflow.id_)
+        assert res.json["workflow_name"] == workflow.get_full_workflow_name()
+        assert res.json["retention_rules"] == []
+
+
+def test_get_workflow_retention_rules_invalid_workflow(app, default_user):
+    """Test get_workflow_retention_rules for invalid workflow."""
+    with app.test_client() as client:
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_retention_rules",
+                workflow_id_or_name="invalid_name",
+            ),
+            query_string={"user": default_user.id_},
+        )
+        assert res.status_code == 404
+        assert b"invalid_name" in res.data
+
+
+def test_get_workflow_retention_rules_invalid_user(app, sample_serial_workflow_in_db):
+    """Test get_workflow_retention_rules for invalid user."""
+    workflow = sample_serial_workflow_in_db
+    with app.test_client() as client:
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_retention_rules",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": uuid.uuid4()},
+        )
+        assert res.status_code == 404

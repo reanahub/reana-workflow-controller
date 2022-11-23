@@ -9,6 +9,7 @@
 """REANA Workflow Controller workflows REST API."""
 
 import json
+import logging
 from typing import Optional
 from uuid import uuid4
 
@@ -20,7 +21,7 @@ from reana_db.models import User, Workflow, RunStatus, WorkflowResource
 from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from sqlalchemy import and_, nullslast
 from webargs import fields
-from webargs.flaskparser import use_args
+from webargs.flaskparser import use_args, use_kwargs
 
 
 from reana_workflow_controller.config import DEFAULT_NAME_FOR_WORKFLOWS
@@ -53,7 +54,6 @@ blueprint = Blueprint("workflows", __name__)
     {
         "include_progress": fields.Bool(),
         "include_workspace_size": fields.Bool(),
-        "include_retention_rules": fields.Bool(),
         "search": fields.String(missing=""),
         "sort": fields.String(missing="desc"),
         "status": fields.String(missing=""),
@@ -129,10 +129,6 @@ def get_workflows(args, paginate=None):  # noqa
           in: query
           description: Include size information of the workspace.
           required: false
-          type: boolean
-        - name: include_retention_rules
-          in: query
-          description: Include workspace retention rules of the workflows.
           type: boolean
         - name: workflow_id_or_name
           in: query
@@ -258,7 +254,6 @@ def get_workflows(args, paginate=None):  # noqa
     status_list: str = args["status"]
     include_progress: bool = args.get("include_progress", verbose)
     include_workspace_size: bool = args.get("include_workspace_size", verbose)
-    include_retention_rules: bool = args.get("include_retention_rules", verbose)
     workflow_id_or_name: Optional[str] = args.get("workflow_id_or_name")
 
     try:
@@ -322,11 +317,6 @@ def get_workflows(args, paginate=None):  # noqa
                 "human_readable": "",
                 "raw": -1,
             }
-            if include_retention_rules:
-                rules = workflow.retention_rules.all()
-                workflow_response["retention_rules"] = [
-                    rule.serialize() for rule in rules
-                ]
             if include_workspace_size:
                 workflow_response["size"] = (
                     workflow.get_quota_usage()
@@ -785,4 +775,116 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     except json.JSONDecodeError:
         return jsonify({"message": "Your request contains not valid JSON."}), 400
     except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/retention_rules")
+@use_kwargs({"user": fields.Str(required=True)}, location="query")
+def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
+    r"""Get the retention rules of a workflow.
+
+    ---
+    get:
+      summary: Get the retention rules of a workflow.
+      description: >-
+        This resource returns all the retention rules of a given workflow.
+      operationId: get_workflow_retention_rules
+      produces:
+       - application/json
+      parameters:
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The response contains the list of all the retention rules.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              retention_rules:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    workspace_files:
+                      type: string
+                    retention_days:
+                      type: integer
+                    apply_on:
+                      type: string
+                      x-nullable: true
+                    status:
+                      type: string
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "retention_rules": [
+                    {
+                      "id": "851da5cf-0b26-40c5-97a1-9acdbb35aac7",
+                      "workspace_files": "**/*.tmp",
+                      "retention_days": 1,
+                      "apply_on": "2022-11-24T23:59:59",
+                      "status": "active"
+                    }
+                ]
+              }
+        404:
+          description: >-
+            Request failed. User or workflow do not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
+                            exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Something went wrong."
+              }
+    """
+    try:
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user)
+
+        rules = workflow.retention_rules.all()
+        response = {
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.get_full_workflow_name(),
+            "retention_rules": [rule.serialize() for rule in rules],
+        }
+        return jsonify(response), 200
+    except ValueError as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 404
+    except Exception as e:
+        logging.exception(str(e))
         return jsonify({"message": str(e)}), 500

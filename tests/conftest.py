@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -15,7 +15,14 @@ import shutil
 import uuid
 
 import pytest
-from reana_db.models import Base, Job, JobStatus, User
+from reana_db.models import (
+    Base,
+    Job,
+    JobStatus,
+    User,
+    WorkspaceRetentionAuditLog,
+    WorkspaceRetentionRule,
+)
 from sqlalchemy_utils import create_database, database_exists, drop_database
 
 from reana_workflow_controller.factory import create_app
@@ -98,3 +105,22 @@ def add_kubernetes_jobs_to_workflow(session):
         return jobs
 
     yield add_kubernetes_jobs_to_workflow_callable
+
+
+@pytest.fixture()
+def sample_serial_workflow_with_retention_rule(session, sample_serial_workflow_in_db):
+    """Sample workflow with retention rules."""
+    workflow = sample_serial_workflow_in_db
+    rule = WorkspaceRetentionRule(
+        workflow_id=workflow.id_,
+        workspace_files="**/*.csv",
+        retention_days=42,
+    )
+    session.add(rule)
+    session.commit()
+
+    yield workflow
+
+    session.query(WorkspaceRetentionAuditLog).delete()
+    session.delete(rule)
+    session.commit()
