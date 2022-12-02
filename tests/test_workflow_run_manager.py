@@ -14,7 +14,7 @@ import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
 
-from reana_commons.config import KRB5_CONTAINER_NAME
+from reana_commons.config import KRB5_INIT_CONTAINER_NAME
 from reana_db.models import RunStatus, InteractiveSession, InteractiveSessionType
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
@@ -162,7 +162,7 @@ def test_create_job_spec_kerberos(
 
     init_containers = job.spec.template.spec.init_containers
     assert len(init_containers) == 1
-    assert init_containers[0]["name"] == KRB5_CONTAINER_NAME
+    assert init_containers[0]["name"] == KRB5_INIT_CONTAINER_NAME
 
     volumes = [volume["name"] for volume in job.spec.template.spec.volumes]
     assert len(set(volumes)) == len(volumes)  # volumes have unique names
