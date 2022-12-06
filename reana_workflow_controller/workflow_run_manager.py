@@ -652,6 +652,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     }
                 )
 
+        if kerberos:
+            spec.template.spec.containers.append(kerberos.renew_container)
+
         job.spec = spec
         job.spec.template.spec.restart_policy = "Never"
 
