@@ -211,12 +211,12 @@ def _update_run_progress(workflow_uuid, msg):
                 else:
                     job_progress["total"] = msg["progress"]["total"]
             else:
+                # remove invalid job IDs like `None`
+                new_job_ids = {
+                    job_id for job_id in msg["progress"][status]["job_ids"] if job_id
+                }
                 if previous_status:
-                    new_job_ids = set(previous_status.get("job_ids") or set()) | set(
-                        msg["progress"][status]["job_ids"]
-                    )
-                else:
-                    new_job_ids = set(msg["progress"][status]["job_ids"])
+                    new_job_ids |= set(previous_status.get("job_ids") or set())
                 job_progress[status] = {
                     "total": len(new_job_ids),
                     "job_ids": list(new_job_ids),

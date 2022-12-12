@@ -60,6 +60,7 @@ from webargs.flaskparser import parser
 from werkzeug.exceptions import BadRequest, NotFound
 
 from reana_workflow_controller.config import (
+    PROGRESS_STATUSES,
     REANA_GITLAB_HOST,
     PREVIEWABLE_MIME_TYPE_PREFIXES,
 )
@@ -705,20 +706,18 @@ def get_workflow_progress(workflow: Workflow, include_progress: bool = False) ->
 
     if include_progress:
         initial_progress_status = {"total": 0, "job_ids": []}
+        for status, _ in PROGRESS_STATUSES:
+            progress[status] = (
+                workflow.job_progress.get(status) or initial_progress_status
+            )
+            # remove invalid job IDs like `None` from the list
+            progress[status]["job_ids"] = [
+                job_id for job_id in progress[status]["job_ids"] if job_id
+            ]
+
         most_recent_job_info = get_most_recent_job_info(workflow.id_)
-        return {
-            "total": (workflow.job_progress.get("total") or initial_progress_status),
-            "running": (
-                workflow.job_progress.get("running") or initial_progress_status
-            ),
-            "finished": (
-                workflow.job_progress.get("finished") or initial_progress_status
-            ),
-            "failed": (workflow.job_progress.get("failed") or initial_progress_status),
-            "current_command": most_recent_job_info.get("prettified_cmd"),
-            "current_step_name": most_recent_job_info.get("current_job_name"),
-            **progress,
-        }
+        progress["current_command"] = most_recent_job_info.get("prettified_cmd")
+        progress["current_step_name"] = most_recent_job_info.get("current_job_name")
 
     return progress
 
