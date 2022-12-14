@@ -1,39 +1,48 @@
 Changes
 =======
 
-Version 0.9.0 (UNRELEASED)
----------------------------
+Version 0.9.0 (2023-01-19)
+--------------------------
 
-- Adds support for Kubernetes networking/v1 API to interactive sessions.
-- Adds setup of Kerberos when executing a workflow engine.
-- Adds the `REANA_WORKSPACE` environment variable to jupyter notebooks and terminals.
-- Changes workflow create endpoint to populate workspace retention rules for the workflow.
-- Changes workflow list endpoint to return workspace retention rules for the workflow.
-- Changes workflow list endpoint to add the possibility to filter by workflow id.
-- Changes workflow list endpoint to add the possibility to sort workflows by most used disk and cpu quota.
+- Adds the remote origin of workflows submitted via Launch-on-REANA (``launcher_url``) to the workflow list endpoint.
+- Adds support for Kerberos authentication for workflow orchestration.
+- Adds the ``REANA_WORKSPACE`` environment variable to jupyter notebooks and terminals.
+- Adds option to sort workflows by most disk and cpu quota usage to the workflow list endpoint.
+- Adds support for specifying and listing workspace file retention rules.
+- Changes workflow list endpoint to add the possibility to filter by workflow ID.
+- Changes the deployment of interactive sessions to use ``networking/v1`` Kubernetes API.
 - Changes default consumer prefetch count to handle 10 messages instead of 200 in order to reduce the probability of 406 PRECONDITION errors on message acknowledgement.
-- Changes the workflow status endpoint to update the disk quota usage when a workspace is deleted.
+- Changes to Flask v2.
+- Changes job status consumer to improve logging for not-alive workflows.
+- Changes the deletion of a workflow to also update the user disk quota usage if the workspace is deleted.
 - Changes the CWD of jupyter's terminals to the directory of the workflow's workspace.
 - Changes the k8s specification of interactive sessions' pods to remove the environment variables used for service discovery.
-- Changes the workflow set status endpoint to remove the workspace by default when a workflow is deleted and to fail if the request is asking not to delete the workspace.
+- Changes GitLab integration to use ``reana`` as pipeline name instead of ``default`` when setting status of a commit.
+- Changes the deletion of a workflow to always remove the workflow's workspace and to fail if the request is asking not to delete the workspace.
+- Changes the ``move_files`` endpoint to allow moving files while a workflow is running.
+- Changes the deployment of interactive sessions to improve security by not automounting the Kubernetes service account token.
+- Changes workspace file management commands to use common utility functions present in reana-commons.
 - Changes to PostgreSQL 12.13.
-- Changes the `move_files` endpoint to allow moving files while a workflow is running.
 - Changes the deployment of job-controller to avoid unnecessarily mounting the database's directory.
+- Changes the base image of the component to Ubuntu 20.04 LTS and reduces final Docker image size by removing build-time dependencies.
+- Fixes the download of files by changing the default MIME type to ``application/octet-stream``.
 - Fixes the workflow list endpoint to correctly parse the boolean parameters ``include_progress``, ``include_workspace_size`` and ``include_retention_rules``.
+- Fixes Kerberos authentication for long-running workflows by renewing the Kerberos ticket periodically.
+- Fixes job status consumer by discarding invalid job IDs.
 
 Version 0.8.2 (2022-10-06)
----------------------------
+--------------------------
 
 - Fixes ``delete --include-all-runs`` functionality to delete only workflow owner's past runs.
 
 Version 0.8.1 (2022-02-07)
----------------------------
+--------------------------
 
 - Adds configuration environment variable to set default timeout for user's jobs for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT``).
 - Adds configuration environment variable to set maximum custom timeout limit that users can assign to their jobs for the Kubernetes compute backend (``REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT``).
 
 Version 0.8.0 (2021-11-22)
----------------------------
+--------------------------
 
 - Adds users quota accounting.
 - Adds new job properties ``started_at`` and ``finished_at`` to the ``/logs`` endpoint.
