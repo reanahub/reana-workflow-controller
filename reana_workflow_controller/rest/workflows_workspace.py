@@ -503,7 +503,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         return jsonify({"message": "Malformed request."}), 400
     except REANAWorkspaceError as e:
         return jsonify({"message": str(e)}), 400
-    except CreateFailed:
+    except FileNotFoundError:
         return jsonify({"message": "Workspace does not exist."}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500

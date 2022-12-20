@@ -499,6 +499,50 @@ def test_get_files(
             assert file_.get("name") in test_files
 
 
+def test_get_files_deleted_workflow(
+    app, default_user, tmp_shared_volume_path, cwl_workflow_with_name
+):
+    """Test get files list of a deleted workflow without a workspace."""
+    with app.test_client() as client:
+        # create workflow
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={
+                "user": default_user.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
+            content_type="application/json",
+            data=json.dumps(cwl_workflow_with_name),
+        )
+
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get("workflow_id")
+
+        # delete workflow
+        res = client.put(
+            url_for(
+                "statuses.set_workflow_status",
+                workflow_id_or_name=workflow_uuid,
+            ),
+            query_string={"user": default_user.id_, "status": "deleted"},
+            content_type="application/json",
+            data=json.dumps({}),
+        )
+        assert res.status_code == 200
+
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        assert workflow.status == RunStatus.deleted
+        assert not os.path.exists(workflow.workspace_path)
+
+        # get list of files
+        res = client.get(
+            url_for("workspaces.get_files", workflow_id_or_name=workflow_uuid),
+            query_string={"user": default_user.id_},
+            content_type="application/json",
+        )
+        assert res.status_code == 404
+
+
 def test_get_files_unknown_workflow(app, default_user):
     """Test get list of files for non existing workflow."""
     with app.test_client() as client:
