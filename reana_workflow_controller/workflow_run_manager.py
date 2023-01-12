@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -36,7 +36,7 @@ from reana_commons.config import (
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.kerberos import get_kerberos_k8s_config
 from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_commons.k8s.volumes import get_shared_volume, get_workspace_volume
+from reana_commons.k8s.volumes import get_workspace_volume
 from reana_commons.utils import (
     build_unique_component_name,
     create_cvmfs_persistent_volume_claim,
@@ -451,7 +451,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workspace_mount, workspace_volume = get_workspace_volume(
             self.workflow.workspace_path
         )
-        db_mount, shared_volume = get_shared_volume("db")
 
         workflow_metadata = client.V1ObjectMeta(
             name=name,
@@ -604,8 +603,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
 
         secrets_volume_mount = secrets_store.get_secrets_volume_mount_as_k8s_spec()
-        job_controller_container.volume_mounts = [workspace_mount, db_mount]
-        job_controller_container.volume_mounts.append(secrets_volume_mount)
+        job_controller_container.volume_mounts = [workspace_mount, secrets_volume_mount]
 
         job_controller_container.ports = [
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
@@ -621,7 +619,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         volumes = [
             workspace_volume,
-            shared_volume,
             secrets_store.get_file_secrets_volume_as_k8s_specs(),
         ]
 

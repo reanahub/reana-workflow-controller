@@ -18,6 +18,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes the workflow set status endpoint to remove the workspace by default when a workflow is deleted and to fail if the request is asking not to delete the workspace.
 - Changes to PostgreSQL 12.13.
 - Changes the `move_files` endpoint to allow moving files while a workflow is running.
+- Changes the deployment of job-controller to avoid unnecessarily mounting the database's directory.
 - Fixes the workflow list endpoint to correctly parse the boolean parameters ``include_progress``, ``include_workspace_size`` and ``include_retention_rules``.
 
 Version 0.8.2 (2022-10-06)
