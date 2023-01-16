@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -32,9 +32,8 @@ extras_require = {
         "Sphinx>=1.5.1",
         "sphinx-rtd-theme>=0.1.9",
         "sphinxcontrib-httpdomain>=1.5.0",
-        "sphinxcontrib-openapi>=0.3.0",
+        "sphinxcontrib-openapi>=0.8.0",
         "sphinxcontrib-redoc>=1.5.1",
-        "mistune<2.0.0",
     ],
     "tests": tests_require,
 }
