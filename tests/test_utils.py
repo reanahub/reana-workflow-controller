@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller utility tests."""
 
 import os
+import json
 import stat
 import uuid
 from contextlib import nullcontext as does_not_raise
@@ -16,7 +17,14 @@ from typing import ContextManager
 
 import mock
 import pytest
-from reana_db.models import Job, JobCache, RunStatus, Workflow
+from reana_db.models import (
+    Job,
+    JobCache,
+    RunStatus,
+    Workflow,
+    InteractiveSession,
+    InteractiveSessionType,
+)
 from reana_db.utils import (
     get_disk_usage_or_zero,
     store_workflow_disk_quota,
@@ -89,6 +97,36 @@ def test_delete_all_workflow_runs(
             assert workflow.status == RunStatus.running
         else:
             assert workflow.status == RunStatus.deleted
+
+
+def test_delete_workflow_with_interactive_session(
+    app, session, sample_yadage_workflow_in_db
+):
+    """Test deletion of a workflow with an open session attached to the workspace."""
+    workflow = sample_yadage_workflow_in_db
+    create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
+
+    # Create an interactive session and attach it to the workflow
+    int_session = InteractiveSession(
+        name=workflow.name,
+        path="",
+        type_=InteractiveSessionType(0).name,
+        owner_id=workflow.owner_id,
+    )
+    workflow.sessions.append(int_session)
+    session.add(workflow)
+    session.commit()
+
+    # Test deletion of a workflow with attached interactive session
+    with mock.patch.multiple(
+        "reana_workflow_controller.k8s",
+        current_k8s_networking_api_client=mock.DEFAULT,
+    ):
+        (response, http_response) = delete_workflow(workflow)
+        data = json.loads(response.get_data())
+        assert "Workflow successfully deleted" in data["message"]
+        assert http_response == 200
+        assert not len(workflow.sessions.all())
 
 
 @pytest.mark.parametrize("workspace", [True, False])

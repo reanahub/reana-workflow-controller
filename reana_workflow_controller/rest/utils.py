@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -236,6 +236,11 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                     .all()
                 )
             for workflow in to_be_deleted:
+                int_session = workflow.sessions.first()
+                if int_session:
+                    kwrm = KubernetesWorkflowRunManager(workflow)
+                    kwrm.stop_interactive_session(int_session.id_)
+
                 if workspace:
                     remove_workflow_workspace(workflow.workspace_path)
 
