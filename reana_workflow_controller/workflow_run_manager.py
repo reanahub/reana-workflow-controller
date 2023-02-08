@@ -315,6 +315,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 access_path,
                 access_token=self.workflow.get_owner_access_token(),
                 cvmfs_repos=self.retrieve_required_cvmfs_repos(),
+                owner_id=self.workflow.owner_id,
+                workflow_id=self.workflow.id_,
                 **kwargs,
             )
 

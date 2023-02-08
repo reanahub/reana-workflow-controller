@@ -5,6 +5,7 @@ Version 0.9.1 (UNRELEASED)
 --------------------------
 
 - Changes the deletion of a workflow to automatically delete an open interactive session attached to its workspace.
+- Changes the k8s specification for interactive session pods to include labels for improved subset selection of objects.
 
 Version 0.9.0 (2023-01-19)
 --------------------------

@@ -38,11 +38,24 @@ class InteractiveDeploymentK8sBuilder(object):
        port exposed by deployment itself, the one which can change
        from one interactive session application to other."""
 
-    def __init__(self, deployment_name, workspace, image, port, path, cvmfs_repos=None):
+    def __init__(
+        self,
+        deployment_name,
+        workflow_id,
+        owner_id,
+        workspace,
+        image,
+        port,
+        path,
+        cvmfs_repos=None,
+    ):
         """Initialise basic interactive deployment builder for Kubernetes.
 
         :param deployment_name: Name which identifies all deployment objects
             and maps to the workflow it belongs.
+        :param workflow_id: UUID of the workflow to which the interactive
+            session belongs to.
+        :param owner_id: Owner of the interactive session.
         :param workspace: Path to the interactive session workspace, which
             matches with the workflow workspace the interactive session
             belongs to.
@@ -52,6 +65,8 @@ class InteractiveDeploymentK8sBuilder(object):
             from outside the cluster.
         """
         self.deployment_name = deployment_name
+        self.workflow_id = workflow_id
+        self.owner_id = owner_id
         self.workspace = workspace
         self.image = image
         self.port = port
@@ -137,12 +152,18 @@ class InteractiveDeploymentK8sBuilder(object):
             enable_service_links=False,
             automount_service_account_token=False,
         )
+        labels = {
+            "app": self.deployment_name,
+            "reana_workflow_mode": "session",
+            "reana-run-session-workflow-uuid": str(self.workflow_id),
+            "reana-run-session-owner-uuid": str(self.owner_id),
+        }
         template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(labels={"app": self.deployment_name}),
+            metadata=client.V1ObjectMeta(labels=labels),
             spec=pod_spec,
         )
         spec = client.V1DeploymentSpec(
-            selector=client.V1LabelSelector(match_labels={"app": self.deployment_name}),
+            selector=client.V1LabelSelector(match_labels=labels),
             replicas=1,
             template=template,
         )
@@ -252,6 +273,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
     access_path,
     access_token=None,
     cvmfs_repos=None,
+    owner_id=None,
+    workflow_id=None,
     image=None,
 ):
     """Build the Kubernetes specification for a Jupyter NB interactive session.
@@ -270,6 +293,9 @@ def build_interactive_jupyter_deployment_k8s_objects(
         a ``404``.
     :param cvmfs_mounts: List of CVMFS repos to make available. They
         should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
+    :param owner_id: Owner of the interactive session.
+    :param workflow_id: UUID of the workflow to which the interactive
+        session belongs to.
     :param image: Jupyter Notebook image to use, i.e.
         ``jupyter/tensorflow-notebook`` to enable ``tensorflow``.
     """
@@ -277,7 +303,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
     cvmfs_repos = cvmfs_repos or []
     port = JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT
     deployment_builder = InteractiveDeploymentK8sBuilder(
-        deployment_name, workspace, image, port, access_path
+        deployment_name, workflow_id, owner_id, workspace, image, port, access_path
     )
     command_args = [
         "start-notebook.sh",
