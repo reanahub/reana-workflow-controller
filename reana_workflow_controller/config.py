@@ -9,6 +9,7 @@
 """REANA Workflow Controller flask configuration."""
 
 import os
+import json
 
 from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
 from reana_db.models import JobStatus, RunStatus
@@ -151,6 +152,9 @@ REANA_GITLAB_URL = "https://{}".format(REANA_GITLAB_HOST)
 
 REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "CHANGE_ME")
 """REANA URL"""
+
+REANA_INGRESS_ANNOTATIONS = json.loads(os.getenv("REANA_INGRESS_ANNOTATIONS", "{}"))
+"""REANA Ingress annotations defined by the administrator."""
 
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""

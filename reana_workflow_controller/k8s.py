@@ -26,6 +26,7 @@ from reana_commons.k8s.volumes import (
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
+    REANA_INGRESS_ANNOTATIONS,
 )
 
 
@@ -77,12 +78,12 @@ class InteractiveDeploymentK8sBuilder(object):
             labels={"reana_workflow_mode": "session"},
         )
         self.kubernetes_objects = {
-            "ingress": self._build_ingress(metadata),
+            "ingress": self._build_ingress(),
             "service": self._build_service(metadata),
             "deployment": self._build_deployment(metadata),
         }
 
-    def _build_ingress(self, metadata):
+    def _build_ingress(self):
         """Build ingress Kubernetes object.
 
         :param metadata: Common Kubernetes metadata for the interactive
@@ -109,7 +110,10 @@ class InteractiveDeploymentK8sBuilder(object):
             api_version="networking.k8s.io/v1",
             kind="Ingress",
             spec=spec,
-            metadata=metadata,
+            metadata=client.V1ObjectMeta(
+                name=self.deployment_name,
+                annotations=REANA_INGRESS_ANNOTATIONS,
+            ),
         )
         return ingress
 
