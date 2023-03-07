@@ -7,6 +7,7 @@ Version 0.9.1 (UNRELEASED)
 - Changes the deletion of a workflow to automatically delete an open interactive session attached to its workspace.
 - Changes the k8s specification for interactive session pods to include labels for improved subset selection of objects.
 - Changes the k8s specification for interactive session ingress resource to include annotations.
+- Fixes uWSGI memory consumption on systems with very high allowed number of open files.
 
 Version 0.9.0 (2023-01-19)
 --------------------------

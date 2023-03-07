@@ -63,8 +63,12 @@ EXPOSE 5000
 
 # Run server
 # hadolint ignore=DL3025
-CMD uwsgi --module reana_workflow_controller.app:app \
-    --http-socket 0.0.0.0:5000 --master \
-    --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
+CMD uwsgi \
+    --http-socket 0.0.0.0:5000 \
+    --master \
+    --max-fd 1048576 \
+    --module reana_workflow_controller.app:app \
+    --processes ${UWSGI_PROCESSES} \
     --stats /tmp/stats.socket \
+    --threads ${UWSGI_THREADS} \
     --wsgi-disable-file-wrapper
