@@ -50,11 +50,15 @@ RUN if test -e modules/reana-db; then pip install -e modules/reana-db --upgrade;
 RUN pip check
 
 # Set useful environment variables
+ARG UWSGI_BUFFER_SIZE=8192
+ARG UWSGI_MAX_FD=1048576
 ARG UWSGI_PROCESSES=2
 ARG UWSGI_THREADS=2
 ENV FLASK_APP=reana_workflow_controller/app.py \
     PYTHONPATH=/workdir \
     TERM=xterm \
+    UWSGI_BUFFER_SIZE=${UWSGI_BUFFER_SIZE:-8192} \
+    UWSGI_MAX_FD=${UWSGI_MAX_FD:-1048576} \
     UWSGI_PROCESSES=${UWSGI_PROCESSES:-2} \
     UWSGI_THREADS=${UWSGI_THREADS:-2}
 
@@ -64,11 +68,17 @@ EXPOSE 5000
 # Run server
 # hadolint ignore=DL3025
 CMD uwsgi \
+    --buffer-size ${UWSGI_BUFFER_SIZE} \
+    --die-on-term \
+    --enable-threads \
     --http-socket 0.0.0.0:5000 \
     --master \
-    --max-fd 1048576 \
+    --max-fd ${UWSGI_MAX_FD} \
     --module reana_workflow_controller.app:app \
+    --need-app \
     --processes ${UWSGI_PROCESSES} \
+    --single-interpreter \
     --stats /tmp/stats.socket \
     --threads ${UWSGI_THREADS} \
+    --vacuum \
     --wsgi-disable-file-wrapper
