@@ -46,7 +46,7 @@ SHARED_FS_MAPPING = {
 }
 """Mapping from the shared file system backend to the job file system."""
 
-PREVIEWABLE_MIME_TYPE_PREFIXES = ["image/", "text/html"]
+PREVIEWABLE_MIME_TYPE_PREFIXES = ["image/", "text/html", "application/pdf"]
 """List of file mime-type prefixes that can be previewed directly from the server."""
 
 REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT = int(

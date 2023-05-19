@@ -4,6 +4,7 @@ Changes
 Version 0.9.1 (UNRELEASED)
 --------------------------
 
+- Adds ``application/pdf`` to the list of supported MIME types for file preview.
 - Changes the deletion of a workflow to automatically delete an open interactive session attached to its workspace.
 - Changes the k8s specification for interactive session pods to include labels for improved subset selection of objects.
 - Changes the k8s specification for interactive session ingress resource to include annotations.
