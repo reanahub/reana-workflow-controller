@@ -13,6 +13,7 @@ include *.txt
 include .flake8
 include pytest.ini
 include docs/openapi.json
+exclude .readthedocs.yaml
 prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
