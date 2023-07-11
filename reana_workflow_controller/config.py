@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -56,23 +56,26 @@ REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT = int(
 permitted on a ``jobs-status`` consumer."""
 
 REANA_WORKFLOW_ENGINE_IMAGE_CWL = os.getenv(
-    "REANA_WORKFLOW_ENGINE_IMAGE_CWL", "reanahub/reana-workflow-engine-cwl:latest"
+    "REANA_WORKFLOW_ENGINE_IMAGE_CWL",
+    "docker.io/reanahub/reana-workflow-engine-cwl:latest",
 )
 """CWL workflow engine version."""
 
 REANA_WORKFLOW_ENGINE_IMAGE_YADAGE = os.getenv(
-    "REANA_WORKFLOW_ENGINE_IMAGE_YADAGE", "reanahub/reana-workflow-engine-yadage:latest"
+    "REANA_WORKFLOW_ENGINE_IMAGE_YADAGE",
+    "docker.io/reanahub/reana-workflow-engine-yadage:latest",
 )
 """Yadage workflow engine version."""
 
 REANA_WORKFLOW_ENGINE_IMAGE_SERIAL = os.getenv(
-    "REANA_WORKFLOW_ENGINE_IMAGE_SERIAL", "reanahub/reana-workflow-engine-serial:latest"
+    "REANA_WORKFLOW_ENGINE_IMAGE_SERIAL",
+    "docker.io/reanahub/reana-workflow-engine-serial:latest",
 )
 """Serial workflow engine version."""
 
 REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE = os.getenv(
     "REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE",
-    "reanahub/reana-workflow-engine-snakemake:latest",
+    "docker.io/reanahub/reana-workflow-engine-snakemake:latest",
 )
 """Snakemake workflow engine version."""
 
@@ -124,14 +127,16 @@ DEBUG_ENV_VARS = (
 )
 """Common to all workflow engines environment variables for debug mode."""
 
-JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = "jupyter/scipy-notebook:notebook-6.4.5"
+JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = (
+    "docker.io/jupyter/scipy-notebook:notebook-6.4.5"
+)
 """Default image for Jupyter based interactive session deployments."""
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT = 8888
 """Default port for Jupyter based interactive session deployments."""
 
 JOB_CONTROLLER_IMAGE = os.getenv(
-    "REANA_JOB_CONTROLLER_IMAGE", "reanahub/reana-job-controller:latest"
+    "REANA_JOB_CONTROLLER_IMAGE", "docker.io/reanahub/reana-job-controller:latest"
 )
 """Default image for REANA Job Controller sidecar."""
 
