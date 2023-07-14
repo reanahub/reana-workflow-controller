@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -126,14 +126,14 @@ class JobStatusConsumer(BaseConsumer):
                     f"Event for workflow {workflow_uuid} that doesn't exist in DB received:\n"
                     f"{body}\nIgnoring..."
                 )
-        except REANAWorkflowControllerError as rwce:
-            logging.error(rwce, exc_info=True)
         except SQLAlchemyError as sae:
+            Session.rollback()
             logging.error(
                 f"Something went wrong while querying the database for workflow: {workflow_uuid}"
             )
             logging.error(sae, exc_info=True)
         except Exception as e:
+            Session.rollback()
             logging.error(
                 f"Unexpected error while processing workflow: {e}", exc_info=True
             )
