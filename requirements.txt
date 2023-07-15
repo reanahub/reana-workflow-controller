@@ -17,7 +17,7 @@ cffi==1.15.1              # via cryptography
 chardet==3.0.4            # via requests
 checksumdir==1.1.9        # via reana-commons
 click==8.1.3              # via flask, reana-commons
-cryptography==39.0.2      # via reana-db
+cryptography==41.0.2      # via reana-db
 flask==2.1.3              # via reana-workflow-controller (setup.py)
 fs==2.4.16                # via reana-commons
 gitdb==4.0.10             # via gitpython
