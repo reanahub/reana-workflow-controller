@@ -704,9 +704,15 @@ def get_workflow_progress(workflow: Workflow, include_progress: bool = False) ->
         if workflow.run_finished_at
         else None
     )
+    run_stopped_at = (
+        workflow.run_stopped_at.strftime(WORKFLOW_TIME_FORMAT)
+        if workflow.run_stopped_at
+        else None
+    )
     progress = {
         "run_started_at": run_started_at,
         "run_finished_at": run_finished_at,
+        "run_stopped_at": run_stopped_at,
     }
 
     if include_progress:

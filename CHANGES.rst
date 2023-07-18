@@ -4,6 +4,7 @@ Changes
 Version 0.9.1 (UNRELEASED)
 --------------------------
 
+- Adds the timestamp of when the workflow was stopped (``run_stopped_at``) to the workflow list and the workflow status endpoints.
 - Adds ``application/pdf`` to the list of supported MIME types for file preview.
 - Changes the deletion of a workflow to automatically delete an open interactive session attached to its workspace.
 - Changes the k8s specification for interactive session pods to include labels for improved subset selection of objects.
