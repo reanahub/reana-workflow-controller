@@ -242,14 +242,20 @@ class WorkflowRunManager:
 
         return env_vars
 
-    def get_workflow_running_jobs_as_backend_ids(self):
-        """Get all running jobs of a workflow as backend job IDs."""
+    def get_workflow_running_jobs(self):
+        """Get all running jobs of a workflow.
+
+        :return: A list of :class:`reana_db.models.Job` instances.
+        """
         session = Session.object_session(self.workflow)
         rows = session.query(Job).filter_by(
             workflow_uuid=str(self.workflow.id_), status=JobStatus.running
         )
-        backend_ids = [j.backend_job_id for j in rows.all()]
-        return backend_ids
+        return rows.all()
+
+    def get_workflow_running_jobs_as_backend_ids(self):
+        """Get all running jobs of a workflow as backend job IDs."""
+        return [j.backend_job_id for j in self.get_workflow_running_jobs()]
 
     def requires_kerberos(self) -> bool:
         """Check whether Kerberos is necessary to run the workflow engine."""
@@ -393,28 +399,49 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 current_db_sessions.delete(int_session)
                 current_db_sessions.commit()
 
+    def _delete_k8s_job_quiet(self, job_name):
+        """Delete a Kubernetes job.
+
+        This method will not raise an exception if the deletion fails, but will
+        only log the error.
+
+        :param job_name: Name of the Kubernetes job to be deleted.
+        :type job_name: str
+        :return: True if the job was deleted successfully, False otherwise.
+        """
+        try:
+            current_k8s_batchv1_api_client.delete_namespaced_job(
+                job_name,
+                REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                body=V1DeleteOptions(
+                    grace_period_seconds=0, propagation_policy="Background"
+                ),
+            )
+        except ApiException:
+            logging.error(
+                f"Error while trying to stop {self.workflow.id_}"
+                f": Kubernetes job {job_name} could not be deleted.",
+                exc_info=True,
+            )
+            return False
+        return True
+
     def stop_batch_workflow_run(self):
         """Stop a batch workflow run along with all its dependent jobs."""
+        jobs_to_delete = self.get_workflow_running_jobs()
+
+        for job in jobs_to_delete:
+            job_id = job.backend_job_id
+            if self._delete_k8s_job_quiet(job_id):
+                job.status = JobStatus.stopped
+                Session.add(job)
+
+        # Commit the session once all the jobs have been processed.
+        Session.commit()
+
+        # Delete the workflow run batch job
         workflow_run_name = self._workflow_run_name_generator("batch")
-        to_delete = self.get_workflow_running_jobs_as_backend_ids() + [
-            workflow_run_name
-        ]
-        for job in to_delete:
-            try:
-                current_k8s_batchv1_api_client.delete_namespaced_job(
-                    job,
-                    REANA_RUNTIME_KUBERNETES_NAMESPACE,
-                    body=V1DeleteOptions(
-                        grace_period_seconds=0, propagation_policy="Background"
-                    ),
-                )
-            except ApiException:
-                logging.error(
-                    f"Error while trying to stop {self.workflow.id_}"
-                    f": Kubernetes job {job} could not be deleted.",
-                    exc_info=True,
-                )
-                continue
+        self._delete_k8s_job_quiet(workflow_run_name)
 
     def _create_job_spec(
         self,

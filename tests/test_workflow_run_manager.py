@@ -15,7 +15,13 @@ from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
 
 from reana_commons.config import KRB5_INIT_CONTAINER_NAME
-from reana_db.models import RunStatus, InteractiveSession, InteractiveSessionType
+from reana_db.models import (
+    RunStatus,
+    InteractiveSession,
+    InteractiveSessionType,
+    JobStatus,
+    Job,
+)
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
@@ -113,8 +119,14 @@ def test_stop_workflow_backend_only_kubernetes(
         kwrm = KubernetesWorkflowRunManager(workflow)
         kwrm.stop_batch_workflow_run()
         for delete_call in api_client.delete_namespaced_job.call_args_list:
-            if delete_call.args[0] in backend_job_ids:
-                del backend_job_ids[backend_job_ids.index(delete_call.args[0])]
+            job_id = delete_call.args[0]
+            if job_id in backend_job_ids:
+                del backend_job_ids[backend_job_ids.index(job_id)]
+                # Check that the status of the job with that ID in the database is set to stopped
+                assert (
+                    Job.query.filter_by(backend_job_id=job_id).one().status
+                    == JobStatus.stopped
+                )
 
         assert not backend_job_ids
 
