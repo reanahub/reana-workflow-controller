@@ -1,11 +1,9 @@
 {
-  "definitions": {},
   "info": {
     "description": "Submit and manage workflows",
     "title": "REANA Workflow Controller",
     "version": "0.9.1a2"
   },
-  "parameters": {},
   "paths": {
     "/api/workflows": {
       "get": {
@@ -1550,6 +1548,5 @@
       }
     }
   },
-  "swagger": "2.0",
-  "tags": []
+  "swagger": "2.0"
 }
