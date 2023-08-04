@@ -232,7 +232,7 @@ class WorkflowRunManager:
             ]
         )
         cvmfs_volumes = self.retrieve_required_cvmfs_repos() or "false"
-        if type(cvmfs_volumes) == list:
+        if isinstance(cvmfs_volumes, list):
             cvmfs_env_var = {"name": "REANA_MOUNT_CVMFS", "value": str(cvmfs_volumes)}
             env_vars.append(cvmfs_env_var)
             for cvmfs_volume in cvmfs_volumes:
