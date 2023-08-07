@@ -12,7 +12,7 @@ bracex==2.3.post1         # via wcmatch
 bravado-core==5.17.1      # via bravado
 bravado==10.3.2           # via reana-commons
 cachetools==5.3.0         # via google-auth
-certifi==2022.12.7        # via kubernetes, requests
+certifi==2023.7.22        # via kubernetes, requests
 cffi==1.15.1              # via cryptography
 chardet==3.0.4            # via requests
 checksumdir==1.1.9        # via reana-commons
