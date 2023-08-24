@@ -67,7 +67,7 @@ swagger-spec-validator==3.0.3  # via bravado-core
 typing-extensions==4.5.0  # via alembic, bravado, swagger-spec-validator
 urllib3==1.26.14          # via kubernetes, requests
 uwsgi-tools==1.1.1        # via reana-workflow-controller (setup.py)
-uwsgi==2.0.21             # via reana-workflow-controller (setup.py)
+uwsgi==2.0.22             # via reana-workflow-controller (setup.py)
 uwsgitop==0.11            # via reana-workflow-controller (setup.py)
 vine==5.0.0               # via amqp, kombu
 wcmatch==8.4.1            # via reana-commons
