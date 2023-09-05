@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from uuid import UUID
 
-from flask import jsonify, request, send_file, send_from_directory
+from flask import jsonify, request, send_file
 from git import Repo
 from kubernetes.client.rest import ApiException
 from reana_commons import workspace
@@ -562,7 +562,7 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path_or_pat
         memory_file.seek(0)
         return send_file(
             memory_file,
-            attachment_filename=filename,
+            download_name=filename,
             as_attachment=True,
             mimetype="application/zip",
         )
@@ -580,7 +580,7 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path_or_pat
                 workspace.open_file(workspace_path, relative_file_path, mode="rb"),
                 mimetype=response_mime_type,
                 as_attachment=response_mime_type == default_response_mime_type,
-                attachment_filename=relative_file_path,
+                download_name=relative_file_path,
             ),
             200,
         )
