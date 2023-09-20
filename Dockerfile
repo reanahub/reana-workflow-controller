@@ -66,10 +66,14 @@ ENV FLASK_APP=reana_workflow_controller/app.py \
 EXPOSE 5000
 
 # Run server
+# exec is used to make sure signals are propagated to uwsgi,
+# while also allowing shell expansion
 # hadolint ignore=DL3025
-CMD uwsgi \
+CMD exec uwsgi \
     --buffer-size ${UWSGI_BUFFER_SIZE} \
     --die-on-term \
+    --hook-master-start "unix_signal:2 gracefully_kill_them_all" \
+    --hook-master-start "unix_signal:15 gracefully_kill_them_all" \
     --enable-threads \
     --http-socket 0.0.0.0:5000 \
     --master \

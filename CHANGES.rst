@@ -12,6 +12,7 @@ Version 0.9.1 (UNRELEASED)
 - Changes uWSGI configuration to increase buffer size, add vacuum option, etc.
 - Fixes job status inconsistency by correctly setting running jobs' status to ``stopped`` when a workflow is stopped.
 - Fixes uWSGI memory consumption on systems with very high allowed number of open files.
+- Fixes uWSGI and ``consume-job-queue`` command to gracefully stop when being terminated.
 
 Version 0.9.0 (2023-01-19)
 --------------------------
