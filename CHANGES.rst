@@ -1,18 +1,20 @@
 Changes
 =======
 
-Version 0.9.1 (UNRELEASED)
+Version 0.9.1 (2023-09-27)
 --------------------------
 
 - Adds the timestamp of when the workflow was stopped (``run_stopped_at``) to the workflow list and the workflow status endpoints.
-- Adds ``application/pdf`` to the list of supported MIME types for file preview.
+- Adds PDF files to the list of file types that can be previewed from the web interface.
 - Changes the deletion of a workflow to automatically delete an open interactive session attached to its workspace.
 - Changes the k8s specification for interactive session pods to include labels for improved subset selection of objects.
 - Changes the k8s specification for interactive session ingress resource to include annotations.
 - Changes uWSGI configuration to increase buffer size, add vacuum option, etc.
-- Fixes job status inconsistency by correctly setting running jobs' status to ``stopped`` when a workflow is stopped.
+- Fixes job status inconsistency when stopping a workflow by setting the job statuses to ``stopped`` for any running jobs.
+- Fixes job status consumer to correctly rollback the database transaction when an error occurs.
 - Fixes uWSGI memory consumption on systems with very high allowed number of open files.
 - Fixes uWSGI and ``consume-job-queue`` command to gracefully stop when being terminated.
+- Fixes container image names to be Podman-compatible.
 
 Version 0.9.0 (2023-01-19)
 --------------------------
