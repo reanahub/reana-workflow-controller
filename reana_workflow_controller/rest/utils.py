@@ -270,10 +270,16 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                 _mark_workflow_as_deleted_in_db(workflow)
                 remove_workflow_jobs_from_cache(workflow)
 
+            if all_runs:
+                message = "All workflows named {0} successfully deleted.".format(
+                    workflow.name
+                )
+            else:
+                message = "Workflow successfully deleted."
             return (
                 jsonify(
                     {
-                        "message": "Workflow successfully deleted",
+                        "message": message,
                         "workflow_id": workflow.id_,
                         "workflow_name": get_workflow_name(workflow),
                         "status": workflow.status.name,
