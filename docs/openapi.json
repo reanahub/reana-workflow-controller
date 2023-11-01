@@ -84,6 +84,13 @@
             "type": "boolean"
           },
           {
+            "description": "Include current command information.",
+            "in": "query",
+            "name": "include_last_command",
+            "required": false,
+            "type": "boolean"
+          },
+          {
             "description": "Optional analysis UUID or name to filter.",
             "in": "query",
             "name": "workflow_id_or_name",
@@ -1011,6 +1018,13 @@
             "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
+          },
+          {
+            "description": "Include information about the current command.",
+            "in": "query",
+            "name": "include_last_command",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "produces": [

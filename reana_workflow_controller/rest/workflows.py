@@ -54,6 +54,7 @@ blueprint = Blueprint("workflows", __name__)
     {
         "include_progress": fields.Bool(),
         "include_workspace_size": fields.Bool(),
+        "include_last_command": fields.Bool(),
         "search": fields.String(missing=""),
         "sort": fields.String(missing="desc"),
         "status": fields.String(missing=""),
@@ -128,6 +129,11 @@ def get_workflows(args, paginate=None):  # noqa
         - name: include_workspace_size
           in: query
           description: Include size information of the workspace.
+          required: false
+          type: boolean
+        - name: include_last_command
+          in: query
+          description: Include current command information.
           required: false
           type: boolean
         - name: workflow_id_or_name
@@ -245,7 +251,6 @@ def get_workflows(args, paginate=None):  # noqa
                 "message": "Internal workflow controller error."
               }
     """
-
     user_uuid: str = args["user"]
     type_: str = args["type"]
     verbose: bool = args["verbose"]
@@ -254,6 +259,7 @@ def get_workflows(args, paginate=None):  # noqa
     status_list: str = args["status"]
     include_progress: bool = args.get("include_progress", verbose)
     include_workspace_size: bool = args.get("include_workspace_size", verbose)
+    include_last_command: bool = args.get("include_last_command", verbose)
     workflow_id_or_name: Optional[str] = args.get("workflow_id_or_name")
 
     try:
@@ -301,7 +307,9 @@ def get_workflows(args, paginate=None):  # noqa
                 "launcher_url": workflow.launcher_url,
                 "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                 "progress": get_workflow_progress(
-                    workflow, include_progress=include_progress
+                    workflow,
+                    include_progress=include_progress,
+                    include_last_command=include_last_command,
                 ),
             }
             if type_ == "interactive" or verbose:

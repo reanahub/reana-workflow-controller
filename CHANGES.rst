@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.9.2 (UNRELEASED)
+--------------------------
+
+- Changes ``get_workflow_status``, ``get_workflows`` endpoints to add a ``include_last_command`` optional parameter to show info about currently executing command.
+
 Version 0.9.1 (2023-09-27)
 --------------------------
 

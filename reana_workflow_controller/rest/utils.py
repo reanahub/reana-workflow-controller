@@ -690,12 +690,18 @@ def get_most_recent_job_info(workflow_id: UUID) -> Dict[str, str]:
     return current_job_commands
 
 
-def get_workflow_progress(workflow: Workflow, include_progress: bool = False) -> Dict:
+def get_workflow_progress(
+    workflow: Workflow,
+    include_progress: bool = False,
+    include_last_command: bool = False,
+) -> Dict:
     """Return workflow progress information.
 
     :param workflow: The workflow to get progress information from.
     :type: reana_db.models.Workflow instance.
-    :param include_progress: Whether or not to include the job progress information.
+    :param include_progress: Whether to include the job progress information or not.
+    :type: bool.
+    :param include_last_command: Whether to include the information about the current command or not.
     :type: bool.
 
     :return: Dictionary with workflow progress information.
@@ -732,6 +738,7 @@ def get_workflow_progress(workflow: Workflow, include_progress: bool = False) ->
                 job_id for job_id in progress[status]["job_ids"] if job_id
             ]
 
+    if include_last_command:
         most_recent_job_info = get_most_recent_job_info(workflow.id_)
         progress["current_command"] = most_recent_job_info.get("prettified_cmd")
         progress["current_step_name"] = most_recent_job_info.get("current_job_name")

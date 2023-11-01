@@ -11,6 +11,8 @@
 import json
 
 from flask import Blueprint, jsonify, request
+from webargs import fields
+from webargs.flaskparser import use_kwargs
 
 from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_commons.errors import REANASecretDoesNotExist
@@ -186,7 +188,8 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["GET"])
-def get_workflow_status(workflow_id_or_name):  # noqa
+@use_kwargs({"include_last_command": fields.Bool(missing=False)}, location="query")
+def get_workflow_status(workflow_id_or_name, include_last_command):  # noqa
     r"""Get workflow status.
 
     ---
@@ -208,6 +211,11 @@ def get_workflow_status(workflow_id_or_name):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
+        - name: include_last_command
+          in: query
+          description: Include information about the current command.
+          required: false
+          type: boolean
       responses:
         200:
           description: >-
@@ -288,7 +296,11 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                     "name": get_workflow_name(workflow),
                     "created": workflow.created.strftime(WORKFLOW_TIME_FORMAT),
                     "status": workflow.status.name,
-                    "progress": get_workflow_progress(workflow, include_progress=True),
+                    "progress": get_workflow_progress(
+                        workflow,
+                        include_progress=True,
+                        include_last_command=include_last_command,
+                    ),
                     "user": user_uuid,
                     "logs": json.dumps(workflow_logs),
                 }
