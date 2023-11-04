@@ -1,29 +1,29 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """REANA Workflow Controller workflows REST API."""
 
+import datetime
 import json
 import logging
+import re
 from typing import Optional
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_db.database import Session
-from reana_db.utils import build_workspace_path
-from reana_db.models import User, Workflow, RunStatus, WorkflowResource
-from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
-from sqlalchemy import and_, nullslast
-from webargs import fields
-from webargs.flaskparser import use_args, use_kwargs
-
-
+from reana_db.models import RunStatus, User, UserWorkflow, Workflow, WorkflowResource
+from reana_db.utils import (
+    _get_workflow_with_uuid_or_name,
+    build_workspace_path,
+    get_default_quota_resource,
+)
 from reana_workflow_controller.config import DEFAULT_NAME_FOR_WORKFLOWS
 from reana_workflow_controller.errors import (
     REANAWorkflowControllerError,
@@ -38,7 +38,10 @@ from reana_workflow_controller.rest.utils import (
     is_uuid_v4,
     use_paginate_args,
 )
-
+from sqlalchemy import and_, nullslast, or_
+from sqlalchemy.orm import aliased
+from webargs import fields
+from webargs.flaskparser import use_args, use_kwargs
 
 START = "start"
 STOP = "stop"
@@ -885,6 +888,261 @@ def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
     except ValueError as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 404
+    except Exception as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/share", methods=["POST"])
+@use_kwargs(
+    {
+        "user_id": fields.Str(required=True),
+        "user_email_to_share_with": fields.Str(required=True),
+        "message": fields.Str(required=False),
+        "valid_until": fields.Str(required=False),
+    },
+    location="query",
+)
+def share_workflow(
+    workflow_id_or_name: str,
+    user_id: str,
+    user_email_to_share_with: str,
+    message: str = None,
+    valid_until: str = None,
+):
+    r"""Share a workflow with other users.
+
+    ---
+    post:
+      summary: Share a workflow with other users.
+      description: >-
+        This resource allows to share a workflow with other users.
+      operationId: share_workflow
+      produces:
+       - application/json
+      parameters:
+        - name: user_id
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: user_email_to_share_with
+          in: query
+          description: >-
+            Required. User to share the workflow with.
+          required: true
+          type: string
+        - name: message
+          in: query
+          description: Optional. Message to include when sharing the workflow.
+          required: false
+          type: string
+        - name: valid_until
+          in: query
+          description: Optional. Date when access to the workflow will expire (format YYYY-MM-DD).
+          required: false
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been shared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "The workflow has been shared with the user.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Malformed request.",
+                "errors": ["Missing data for required field."]
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to share the workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "errors": ["User is not allowed to share the workflow."]
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist or user does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist",
+                "errors": ["Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"]
+              }
+        409:
+          description: >-
+            Request failed. The workflow is already shared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "The workflow is already shared with the user.",
+                "errors": ["The workflow is already shared with the user."]
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                  type: array
+                  items:
+                    type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error.",
+                "errors": ["Internal controller error."]
+              }
+    """
+    try:
+        user = User.query.filter(User.id_ == user_id).first()
+        if not user:
+            return (
+                jsonify({"message": f"User with id '{user_id}' does not exist."}),
+                404,
+            )
+
+        if (
+            re.match(
+                r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b",
+                user_email_to_share_with,
+            )
+            is None
+        ):
+            raise ValueError(f"User email '{user_email_to_share_with}' is not valid.")
+
+        if user.email == user_email_to_share_with:
+            raise ValueError("Unable to share a workflow with yourself.")
+
+        user_to_share_with = (
+            Session.query(User).filter(User.email == user_email_to_share_with).first()
+        )
+
+        if not user_to_share_with:
+            return (
+                jsonify(
+                    {
+                        "message": f"User with email '{user_email_to_share_with}' does not exist."
+                    }
+                ),
+                404,
+            )
+
+        if valid_until:
+            try:
+                datetime.date.fromisoformat(valid_until)
+            except ValueError as e:
+                raise ValueError(
+                    f"Date format is not valid ({str(e)}). Please use YYYY-MM-DD format."
+                )
+
+            # check if date is in the future
+            if datetime.date.fromisoformat(valid_until) < datetime.date.today():
+                raise ValueError("The 'valid_until' date cannot be in the past.")
+
+        if message and len(message) > 5000:
+            raise ValueError(
+                "Message is too long. Please keep it under 5000 characters."
+            )
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user_id))
+
+        existing_share = (
+            Session.query(UserWorkflow)
+            .filter_by(user_id=user_to_share_with.id_, workflow_id=workflow.id_)
+            .first()
+        )
+
+        if existing_share:
+            return (
+                jsonify(
+                    {
+                        "message": f"{workflow.get_full_workflow_name()} is already shared with {user_email_to_share_with}."
+                    }
+                ),
+                409,
+            )
+
+        Session.add(
+            UserWorkflow(
+                user_id=user_to_share_with.id_,
+                workflow_id=workflow.id_,
+                message=message,
+                valid_until=valid_until,
+            )
+        )
+        Session.commit()
+
+        response = {
+            "message": "The workflow has been shared with the user.",
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.get_full_workflow_name(),
+        }
+        return jsonify(response), 200
+    except ValueError as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 400
     except Exception as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
