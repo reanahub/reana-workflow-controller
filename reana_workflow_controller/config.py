@@ -275,3 +275,5 @@ The job controller needs to clean up all the running jobs before the end of the 
 
 CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"]
 """Prefixes that can be removed from container image references to generate valid image aliases."""
+
+MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000

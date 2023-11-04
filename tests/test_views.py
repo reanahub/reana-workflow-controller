@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,20 +18,20 @@ import mock
 import pytest
 from flask import url_for
 from reana_db.models import (
+    InteractiveSession,
     Job,
     JobCache,
-    Workflow,
     RunStatus,
-    InteractiveSession,
+    Workflow,
+    UserWorkflow,
 )
-from werkzeug.utils import secure_filename
-
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
 )
 from reana_workflow_controller.rest.workflows_status import START, STOP
 from reana_workflow_controller.workflow_run_manager import WorkflowRunManager
+from werkzeug.utils import secure_filename
 
 status_dict = {
     START: RunStatus.pending,
@@ -1650,3 +1650,376 @@ def test_get_workflow_retention_rules_invalid_user(app, sample_serial_workflow_i
             query_string={"user": uuid.uuid4()},
         )
         assert res.status_code == 404
+
+
+def test_share_workflow(
+    app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user2.email,
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert response_data["message"] == "The workflow has been shared with the user."
+
+    session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+
+
+def test_share_workflow_with_message_and_valid_until(
+    app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow with a message and a valid until date."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user2.email,
+        "message": "This is a shared workflow with a message.",
+        "valid_until": "2999-12-31",
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert response_data["message"] == "The workflow has been shared with the user."
+
+    session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+
+
+def test_share_workflow_invalid_email(
+    app, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow with invalid email format."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    invalid_emails = [
+        "invalid_email",
+        "invalid_email@",
+        "@invalid_email.com",
+        "invalid_email.com",
+        "invalid@ email.com",  # Contains a space
+        "invalid email@domain.com",  # Contains a space
+        "invalid_email@.com",  # Empty domain
+        "invalid_email@com.",  # Empty top-level domain
+        "invalid_email@com",  # Missing top-level domain
+        "invalid_email@com.",  # Extra dot in top-level domain
+    ]
+
+    with app.test_client() as client:
+        for invalid_email in invalid_emails:
+            share_details = {
+                "user_email_to_share_with": invalid_email,
+            }
+
+            res = client.post(
+                url_for(
+                    "workflows.share_workflow",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                query_string={
+                    "user": str(user2.id_),
+                },
+                content_type="application/json",
+                data=json.dumps(share_details),
+            )
+            assert res.status_code == 404
+            response_data = res.get_json()
+            assert (
+                response_data["message"]
+                == f"User with email '{invalid_email}' does not exist."
+            )
+
+
+def test_share_workflow_with_valid_email_but_unexisting_user(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow with valid email but unexisting user."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    valid_emails = [
+        "valid_email@example.com",
+        "another_valid_email@test.org",
+        "john.doe@email-domain.net",
+        "alice.smith@sub.domain.co.uk",
+        "user2234@gmail.com",
+        "admin@company.com",
+        "support@website.org",
+        "marketing@example.net",
+        "jane_doe@sub.example.co",
+        "user.name@sub.domain.co.uk",
+    ]
+
+    with app.test_client() as client:
+        for valid_email in valid_emails:
+            share_details = {
+                "user_email_to_share_with": valid_email,
+            }
+
+            res = client.post(
+                url_for(
+                    "workflows.share_workflow",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                query_string={
+                    "user": str(user1.id_),
+                },
+                content_type="application/json",
+                data=json.dumps(share_details),
+            )
+            assert res.status_code == 404
+            response_data = res.get_json()
+            assert (
+                response_data["message"]
+                == f"User with email '{valid_email}' does not exist."
+            )
+
+
+def test_share_workflow_with_invalid_date_format(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow with an invalid date format for 'valid_until'."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user2.email,
+        "valid_until": "2023/12/31",  # Invalid format
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == "Date format is not valid (Invalid isoformat string: '2023/12/31'). Please use YYYY-MM-DD format."
+        )
+
+
+def test_share_non_existent_workflow(app, user1, user2):
+    """Test sharing a non-existent workflow."""
+    non_existent_workflow_id = "non_existent_workflow_id"
+    share_details = {
+        "user_email_to_share_with": user2.email,
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=non_existent_workflow_id,
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == f"REANA_WORKON is set to {non_existent_workflow_id}, but that workflow does not exist. Please set your REANA_WORKON environment variable appropriately."
+        )
+
+
+def test_share_workflow_with_self(
+    app, user1, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test attempting to share a workflow with yourself."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user1.email,
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert response_data["message"] == "Unable to share a workflow with yourself."
+
+
+def test_share_workflow_already_shared(
+    app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test attempting to share a workflow that is already shared with the user."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user2.email,
+    }
+    with app.test_client() as client:
+        client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+
+    # Attempt to share the same workflow again
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 409
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == f"{workflow.get_full_workflow_name()} is already shared with {user2.email}."
+        )
+
+    session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+
+
+def test_share_workflow_with_past_valid_until_date(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow with a 'valid_until' date in the past."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user2.email,
+        "valid_until": "2021-01-01",  # A date in the past
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert (
+            response_data["message"] == "The 'valid_until' date cannot be in the past."
+        )
+
+
+def test_share_workflow_with_long_message(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test share workflow with a message exceeding 5000 characters."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    long_message = "A" * 5001  # A message exceeding the 5000-character limit
+    share_details = {
+        "user_email_to_share_with": user2.email,
+        "message": long_message,
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == "Message is too long. Please keep it under 5000 characters."
+        )
+
+
+def test_share_multiple_workflows(
+    app,
+    session,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+    sample_yadage_workflow_in_db_owned_by_user1,
+):
+    """Test sharing multiple workflows with different users."""
+    workflow1 = sample_serial_workflow_in_db_owned_by_user1
+    share_details = {
+        "user_email_to_share_with": user2.email,
+    }
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow1.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert response_data["message"] == "The workflow has been shared with the user."
+
+    workflow2 = sample_yadage_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow2.id_),
+            ),
+            query_string={
+                "user": str(user1.id_),
+            },
+            content_type="application/json",
+            data=json.dumps(share_details),
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert response_data["message"] == "The workflow has been shared with the user."
+
+    session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
