@@ -1146,3 +1146,219 @@ def share_workflow(
     except Exception as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/unshare", methods=["POST"])
+@use_kwargs(
+    {
+        "user_id": fields.Str(required=True),
+        "user_email_to_unshare_with": fields.Str(required=True),
+    },
+    location="query",
+)
+def unshare_workflow(
+    workflow_id_or_name: str, user_id: str, user_email_to_unshare_with: str
+):
+    r"""Unshare a workflow with other users.
+
+    ---
+    post:
+      summary: Unshare a workflow with other users.
+      description: >-
+        This resource allows to unshare a workflow with other users.
+      operationId: unshare_workflow
+      produces:
+       - application/json
+      parameters:
+        - name: user_id
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: user_email_to_unshare_with
+          in: query
+          description: >-
+            Required. User to unshare the workflow with.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been unshared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "The workflow has been unsahred with the user.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Malformed request.",
+                "errors": ["Missing data for required field."]
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to unshare the workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "errors": ["User is not allowed to unshare the workflow."]
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist or user does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist",
+                "errors": ["Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"]
+              }
+        409:
+          description: >-
+            Request failed. The workflow is not shared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "The workflow is not shared with the user.",
+                "errors": ["The workflow is not shared with the user."]
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                  type: array
+                  items:
+                    type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error.",
+                "errors": ["Internal controller error."]
+              }
+    """
+    try:
+        user = User.query.filter(User.id_ == user_id).first()
+        if not user:
+            return (
+                jsonify({"message": f"User with id '{user_id}' does not exist."}),
+                404,
+            )
+
+        if (
+            re.match(
+                r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b",
+                user_email_to_unshare_with,
+            )
+            is None
+        ):
+            raise ValueError(f"User email '{user_email_to_unshare_with}' is not valid.")
+
+        if user.email == user_email_to_unshare_with:
+            raise ValueError("Unable to unshare a workflow with yourself.")
+
+        user_to_unshare_with = (
+            Session.query(User).filter(User.email == user_email_to_unshare_with).first()
+        )
+
+        if not user_to_unshare_with:
+            return (
+                jsonify(
+                    {
+                        "message": f"User with email '{user_email_to_unshare_with}' does not exist."
+                    }
+                ),
+                404,
+            )
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user_id))
+
+        existing_share = (
+            Session.query(UserWorkflow)
+            .filter_by(user_id=user_to_unshare_with.id_, workflow_id=workflow.id_)
+            .first()
+        )
+
+        if not existing_share:
+            return (
+                jsonify(
+                    {
+                        "message": f"{workflow.get_full_workflow_name()} is not shared with {user_email_to_unshare_with}."
+                    }
+                ),
+                409,
+            )
+
+        Session.delete(existing_share)
+        Session.commit()
+
+        response = {
+            "message": "The workflow has been unshared with the user.",
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.get_full_workflow_name(),
+        }
+
+        return jsonify(response), 200
+    except ValueError as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 500
