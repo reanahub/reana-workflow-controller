@@ -2023,3 +2023,319 @@ def test_share_multiple_workflows(
         assert response_data["message"] == "The workflow has been shared with the user."
 
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+
+
+def test_unshare_workflow(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unshare workflow."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 200
+        # unshare workflow
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert (
+            response_data["message"] == "The workflow has been unshared with the user."
+        )
+
+
+def test_unshare_workflow_not_shared(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unshare workflow that is not shared with the user."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # unshare workflow
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 409
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == f"{workflow.get_full_workflow_name()} is not shared with {user2.email}."
+        )
+
+
+def test_unshare_workflow_with_self(
+    app, user1, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test attempting to unshare a workflow with yourself."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user1.email,
+            },
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert response_data["message"] == "Unable to unshare a workflow with yourself."
+
+
+def test_unshare_workflow_with_invalid_email(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unshare workflow with invalid email format."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    invalid_emails = [
+        "invalid_email",
+        "invalid_email@",
+        "@invalid_email.com",
+        "invalid_email.com",
+        "invalid@ email.com",  # Contains a space
+        "invalid @email",  # Contains a space
+        "invalid_email@.com",  # Empty domain
+        "invalid_email@com.",  # Empty top-level domain
+        "invalid_email@com",  # Missing top-level domain
+        "invalid_email@com.",  # Extra dot in top-level domain
+    ]
+
+    with app.test_client() as client:
+        for invalid_email in invalid_emails:
+            res = client.post(
+                url_for(
+                    "workflows.unshare_workflow",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                query_string={
+                    "user_id": str(user1.id_),
+                    "user_email_to_unshare_with": invalid_email,
+                },
+            )
+            assert res.status_code == 400
+            response_data = res.get_json()
+            assert (
+                response_data["message"]
+                == f"User email '{invalid_email}' is not valid."
+            )
+
+
+def test_unshare_workflow_with_valid_email_but_unexisting_user(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unshare workflow with valid email but unexisting user."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    valid_emails = [
+        "valid_email@example.com",
+        "another_valid_email@test.org",
+        "john.doe@email-domain.net",
+        "alice.smith@sub.domain.co.uk",
+        "user2234@gmail.com",
+        "admin@company.com",
+        "support@website.org",
+        "marketing@example.net",
+        "jane_doe@sub.example.co",
+        "user.name@sub.domain.co.uk",
+    ]
+
+    with app.test_client() as client:
+        for valid_email in valid_emails:
+            res = client.post(
+                url_for(
+                    "workflows.unshare_workflow",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                query_string={
+                    "user_id": str(user1.id_),
+                    "user_email_to_unshare_with": valid_email,
+                },
+            )
+            assert res.status_code == 404
+            response_data = res.get_json()
+            assert (
+                response_data["message"]
+                == f"User with email '{valid_email}' does not exist."
+            )
+
+
+def test_unshare_non_existent_workflow(app, user1, user2):
+    """Test unsharing a non-existent workflow."""
+    non_existent_workflow_id = "non_existent_workflow_id"
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=non_existent_workflow_id,
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == f"REANA_WORKON is set to {non_existent_workflow_id}, but that workflow does not exist. Please set your REANA_WORKON environment variable appropriately."
+        )
+
+
+def test_unshare_workflow_already_unshared(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unsharing a workflow that is already unshared with the user."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # unshare workflow
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 409
+        response_data = res.get_json()
+        assert (
+            response_data["message"]
+            == f"{workflow.get_full_workflow_name()} is not shared with {user2.email}."
+        )
+
+
+def test_unshare_multiple_workflows(
+    app,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+    sample_yadage_workflow_in_db_owned_by_user1,
+):
+    """Test unsharing multiple workflows with different users."""
+    workflow1 = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow1.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 200
+        # unshare workflow
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow1.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert (
+            response_data["message"] == "The workflow has been unshared with the user."
+        )
+
+    workflow2 = sample_yadage_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow2.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 200
+        # unshare workflow
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow2.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert (
+            response_data["message"] == "The workflow has been unshared with the user."
+        )
+
+
+def test_unshare_workflow_with_message_and_valid_until(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unshare workflow with a message and a valid until date."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    message = "This is a shared workflow with a message."
+    valid_until = "2123-12-31"
+    with app.test_client() as client:
+        # share workflow
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps(
+                {
+                    "user_email_to_share_with": user2.email,
+                    "message": message,
+                    "valid_until": valid_until,
+                }
+            ),
+        )
+        assert res.status_code == 200
+        # unshare workflow
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert (
+            response_data["message"] == "The workflow has been unshared with the user."
+        )
