@@ -9,7 +9,6 @@
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
-    CVMFS_REPOSITORIES,
     REANA_WORKFLOW_UMASK,
     REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
 )
@@ -19,7 +18,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_networking_api_client,
 )
 from reana_commons.k8s.volumes import (
-    get_k8s_cvmfs_volume,
+    get_k8s_cvmfs_volumes,
     get_workspace_volume,
 )
 
@@ -200,39 +199,12 @@ class InteractiveDeploymentK8sBuilder(object):
         ].volume_mounts = [volume_mount]
         self.kubernetes_objects["deployment"].spec.template.spec.volumes = [volume]
 
-    def _build_cvmfs_volume_mount(self, cvmfs_repos):
-        """Build the Volume and VolumeMount necessary to enable CVMFS.
-
-        :param cvmfs_mounts: List of CVMFS repos to make available. They
-            should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
-        """
-        cvmfs_map = {}
-        volumes = []
-        volume_mounts = []
-        for repo in cvmfs_repos:
-            if repo in CVMFS_REPOSITORIES:
-                cvmfs_map[CVMFS_REPOSITORIES[repo]] = repo
-
-        for repo_name, path in cvmfs_map.items():
-            volume = get_k8s_cvmfs_volume(repo_name)
-            volumes.append(volume)
-            volume_mounts.append(
-                {
-                    "name": volume["name"],
-                    "mountPath": "/cvmfs/{}".format(path),
-                    "readOnly": volume["readOnly"],
-                }
-            )
-
-        return volumes, volume_mounts
-
     def add_cvmfs_repo_mounts(self, cvmfs_repos):
         """Add mounts for the provided CVMFS repositories to the deployment.
 
-        :param cvmfs_mounts: List of CVMFS repos to make available. They
-            should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
+        :param cvmfs_mounts: List of CVMFS repos to make available.
         """
-        cvmfs_volumes, cvmfs_volume_mounts = self._build_cvmfs_volume_mount(cvmfs_repos)
+        cvmfs_volume_mounts, cvmfs_volumes = get_k8s_cvmfs_volumes(cvmfs_repos)
         self.kubernetes_objects["deployment"].spec.template.spec.volumes.extend(
             cvmfs_volumes
         )
@@ -295,8 +267,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
         /me Traefik won't send the request to the interactive session
         (``/1234/me``) but to the root path (``/me``) giving most probably
         a ``404``.
-    :param cvmfs_mounts: List of CVMFS repos to make available. They
-        should be part of ``reana_commons.config.CVMFS_REPOSITORIES``.
+    :param cvmfs_mounts: List of CVMFS repos to make available.
     :param owner_id: Owner of the interactive session.
     :param workflow_id: UUID of the workflow to which the interactive
         session belongs to.

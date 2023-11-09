@@ -15,7 +15,6 @@ from kubernetes import client
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
-    CVMFS_REPOSITORIES,
     K8S_CERN_EOS_AVAILABLE,
     REANA_COMPONENT_NAMING_SCHEME,
     REANA_COMPONENT_PREFIX,
@@ -36,11 +35,12 @@ from reana_commons.config import (
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.kerberos import get_kerberos_k8s_config
 from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_commons.k8s.volumes import get_workspace_volume
+from reana_commons.k8s.volumes import (
+    create_cvmfs_persistent_volume_claim,
+    get_workspace_volume,
+)
 from reana_commons.utils import (
     build_unique_component_name,
-    create_cvmfs_persistent_volume_claim,
-    create_cvmfs_storage_class,
     format_cmd,
 )
 from reana_db.config import SQLALCHEMY_DATABASE_URI
@@ -231,14 +231,15 @@ class WorkflowRunManager:
                 },
             ]
         )
-        cvmfs_volumes = self.retrieve_required_cvmfs_repos() or "false"
-        if isinstance(cvmfs_volumes, list):
-            cvmfs_env_var = {"name": "REANA_MOUNT_CVMFS", "value": str(cvmfs_volumes)}
-            env_vars.append(cvmfs_env_var)
-            for cvmfs_volume in cvmfs_volumes:
-                if cvmfs_volume in CVMFS_REPOSITORIES:
-                    create_cvmfs_storage_class(cvmfs_volume)
-                    create_cvmfs_persistent_volume_claim(cvmfs_volume)
+
+        cvmfs_volumes = self.retrieve_required_cvmfs_repos()
+        if cvmfs_volumes:
+            env_vars.append(
+                {
+                    "name": "REANA_MOUNT_CVMFS",
+                    "value": str(cvmfs_volumes),
+                }
+            )
 
         return env_vars
 
@@ -287,7 +288,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             overwrite_input_parameters=overwrite_input_params,
             overwrite_operational_options=overwrite_operational_options,
         )
+
         try:
+            # Create PVC needed for CVMFS repos
+            if self.retrieve_required_cvmfs_repos():
+                create_cvmfs_persistent_volume_claim()
+
             current_k8s_batchv1_api_client.create_namespaced_job(
                 namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
             )
@@ -325,6 +331,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 workflow_id=self.workflow.id_,
                 **kwargs,
             )
+
+            # Create PVC needed for CVMFS repos
+            if self.retrieve_required_cvmfs_repos():
+                create_cvmfs_persistent_volume_claim()
 
             instantiate_chained_k8s_objects(
                 kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
