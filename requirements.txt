@@ -76,7 +76,7 @@ wcmatch==8.4.1            # via reana-commons
 webargs==6.1.1            # via reana-workflow-controller (setup.py)
 webcolors==1.13           # via jsonschema
 websocket-client==1.6.3   # via kubernetes
-werkzeug==2.3.7           # via flask, reana-commons, reana-workflow-controller (setup.py)
+werkzeug==2.3.8           # via flask, reana-commons, reana-workflow-controller (setup.py)
 zipp==3.17.0              # via importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
