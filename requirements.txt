@@ -67,7 +67,7 @@ strict-rfc3339==0.7       # via jsonschema
 swagger-spec-validator==3.0.3  # via bravado-core
 typing-extensions==4.8.0  # via alembic, bravado, kombu, swagger-spec-validator
 tzdata==2023.3            # via backports-zoneinfo
-urllib3==1.26.16          # via google-auth, kubernetes, requests
+urllib3==1.26.18          # via google-auth, kubernetes, requests
 uwsgi==2.0.22             # via reana-workflow-controller (setup.py)
 uwsgi-tools==1.1.1        # via reana-workflow-controller (setup.py)
 uwsgitop==0.11            # via reana-workflow-controller (setup.py)
