@@ -1362,3 +1362,155 @@ def unshare_workflow(
     except Exception as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/share-status", methods=["GET"])
+@use_kwargs(
+    {
+        "user_id": fields.Str(required=True),
+    },
+    location="query",
+)
+def get_workflow_share_status(
+    workflow_id_or_name: str,
+    user_id: str,
+):
+    r"""Get the share status of a workflow.
+
+    ---
+    get:
+      summary: Get the share status of a workflow.
+      description: >-
+        This resource returns the share status of a given workflow.
+      operationId: get_workflow_share_status
+      produces:
+       - application/json
+      parameters:
+        - name: user_id
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The response contains the share status of the workflow.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              shared_with:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    user_email:
+                      type: string
+                    valid_until:
+                      type: string
+                      x-nullable: true
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "shared_with": [
+                    {
+                      "user_email": "bob@example.org",
+                      "valid_until": "2022-11-24T23:59:59"
+                    }
+                ]
+              }
+        401:
+          description: >-
+            Request failed. User not signed in.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User not signed in."
+              }
+        403:
+          description: >-
+            Request failed. Credentials are invalid or revoked.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Token not valid."
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow mytest.1 does not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Something went wrong."
+              }
+    """
+    try:
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_id)
+
+        shared_with = (
+            Session.query(UserWorkflow)
+            .filter_by(workflow_id=workflow.id_)
+            .join(User, User.id_ == UserWorkflow.user_id)
+            .add_columns(User.email, UserWorkflow.valid_until)
+            .all()
+        )
+
+        response = {
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.get_full_workflow_name(),
+            "shared_with": [
+                {
+                    "user_email": share[1],
+                    "valid_until": share[2].strftime("%Y-%m-%dT%H:%M:%S")
+                    if share[2]
+                    else None,
+                }
+                for share in shared_with
+            ],
+        }
+
+        return jsonify(response), 200
+    except ValueError as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 404
+    except Exception as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 500

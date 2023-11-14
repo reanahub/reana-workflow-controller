@@ -2268,3 +2268,121 @@ def test_unshare_workflow_with_message_and_valid_until(
         assert (
             response_data["message"] == "The workflow has been unshared with the user."
         )
+
+
+def test_get_workflow_share_status(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test get_workflow_share_status."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow
+        client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_share_with": user2.email,
+            },
+        )
+        # get workflow share status
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_share_status",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_check": user2.email,
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert response_data["shared_with"][0]["user_email"] == "user2@reana.io"
+
+
+def test_get_workflow_share_status_not_shared(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test get_workflow_share_status for a workflow that is not shared."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # get workflow share status
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_share_status",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        assert response_data["shared_with"] == []
+
+
+def test_get_workflow_share_status_valid_until_not_set(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # Share the workflow without setting valid_until
+        client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_share_with": user2.email,
+            },
+        )
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_share_status",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        shared_with = response_data["shared_with"][0]
+        assert shared_with["valid_until"] is None
+
+
+def test_get_workflow_share_status_valid_until_set(
+    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    valid_until = "2023-12-31"
+    with app.test_client() as client:
+        # Share the workflow setting valid_until
+        client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_share_with": user2.email,
+                "valid_until": valid_until,
+            },
+        )
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_share_status",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+            },
+        )
+        assert res.status_code == 200
+        response_data = res.get_json()
+        shared_with = response_data["shared_with"][0]
+        assert shared_with["valid_until"] == valid_until + "T00:00:00"
