@@ -153,20 +153,20 @@ def _update_workflow_status(workflow, status, logs):
             try:
                 workflow_engine_logs = _get_workflow_engine_pod_logs(workflow)
                 workflow.logs += workflow_engine_logs + "\n"
-            except REANAWorkflowControllerError as exception:
-                logging.error(
-                    f"Could not fetch workflow engine pod logs for workflow {workflow.id_}."
-                    f" Error: {exception}"
+            except ApiException as e:
+                logging.exception(
+                    f"Could not fetch workflow engine pod logs for workflow {workflow.id_}. "
+                    f"Error: {e}"
                 )
                 workflow.logs += "Workflow engine logs could not be retrieved.\n"
 
             if RunStatus.should_cleanup_job(status):
                 try:
                     _delete_workflow_job(workflow)
-                except REANAWorkflowControllerError as exception:
+                except ApiException as e:
                     logging.error(
-                        f"Could not clean up workflow job for workflow {workflow.id_}."
-                        f" Error: {exception}"
+                        f"Could not clean up workflow job for workflow {workflow.id_}. "
+                        f"Error: {e}"
                     )
 
 
@@ -284,32 +284,25 @@ def _update_job_cache(msg):
 
 def _delete_workflow_job(workflow: Workflow) -> None:
     job_name = build_unique_component_name("run-batch", workflow.id_)
-    try:
-        current_k8s_batchv1_api_client.delete_namespaced_job(
-            name=job_name,
-            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-            propagation_policy="Background",
-        )
-    except ApiException as e:
-        raise REANAWorkflowControllerError(
-            f"Workflow engine pod could not be deleted. Error: {e}"
-        )
+    current_k8s_batchv1_api_client.delete_namespaced_job(
+        name=job_name,
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        propagation_policy="Background",
+    )
 
 
 def _get_workflow_engine_pod_logs(workflow: Workflow) -> str:
-    try:
-        pods = current_k8s_corev1_api_client.list_namespaced_pod(
-            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-            label_selector=f"reana-run-batch-workflow-uuid={str(workflow.id_)}",
-        )
-        for pod in pods.items:
-            if str(workflow.id_) in pod.metadata.name:
-                return current_k8s_corev1_api_client.read_namespaced_pod_log(
-                    namespace=pod.metadata.namespace,
-                    name=pod.metadata.name,
-                    container="workflow-engine",
-                )
-    except ApiException as e:
-        raise REANAWorkflowControllerError(
-            f"Workflow engine pod logs could not be fetched. Error: {e}"
-        )
+    pods = current_k8s_corev1_api_client.list_namespaced_pod(
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        label_selector=f"reana-run-batch-workflow-uuid={str(workflow.id_)}",
+    )
+    for pod in pods.items:
+        if str(workflow.id_) in pod.metadata.name:
+            return current_k8s_corev1_api_client.read_namespaced_pod_log(
+                namespace=pod.metadata.namespace,
+                name=pod.metadata.name,
+                container="workflow-engine",
+            )
+    # There might not be any pod returned by `list_namespaced_pod`, for example
+    # when a workflow fails to be scheduled
+    return ""
