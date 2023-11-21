@@ -13,13 +13,14 @@ import json
 import logging
 import re
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from flask import Blueprint, jsonify, request
 from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_db.database import Session
 from reana_db.models import RunStatus, User, UserWorkflow, Workflow, WorkflowResource
 from reana_db.utils import (
+    _get_workflow_by_uuid,
     _get_workflow_with_uuid_or_name,
     build_workspace_path,
     get_default_quota_resource,
@@ -64,6 +65,9 @@ blueprint = Blueprint("workflows", __name__)
         "user": fields.String(required=True),
         "verbose": fields.Bool(missing=False),
         "workflow_id_or_name": fields.String(),
+        "shared": fields.Bool(missing=False),
+        "shared_by": fields.String(),
+        "shared_with": fields.DelimitedList(fields.String()),
     },
     location="query",
 )
@@ -138,6 +142,21 @@ def get_workflows(args, paginate=None):  # noqa
           description: Optional analysis UUID or name to filter.
           required: false
           type: string
+        - name: shared
+          in: query
+          description: Optional flag to list all shared (owned and unowned) workflows.
+          required: false
+          type: boolean
+        - name: shared_by
+          in: query
+          description: Optional argument to list workflows shared by the specified user(s).
+          required: false
+          type: string
+        - name: shared_with
+          in: query
+          description: Optional argument to list workflows shared with the specified user(s).
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -175,6 +194,10 @@ def get_workflows(args, paginate=None):  # noqa
                     launcher_url:
                       type: string
                       x-nullable: true
+                    owner_email:
+                        type: string
+                    shared_with:
+                        type: string
           examples:
             application/json:
               [
@@ -258,14 +281,90 @@ def get_workflows(args, paginate=None):  # noqa
     include_progress: bool = args.get("include_progress", verbose)
     include_workspace_size: bool = args.get("include_workspace_size", verbose)
     workflow_id_or_name: Optional[str] = args.get("workflow_id_or_name")
+    shared: bool = args.get("shared")
+    shared_by: Optional[str] = args.get("shared_by")
+    shared_with: Optional[str] = args.get("shared_with")
 
     try:
+        if shared_by and shared_with:
+            return (
+                jsonify(
+                    {
+                        "message": "You cannot filter by shared_by and shared_with at the same time."
+                    }
+                ),
+                400,
+            )
+
         user = User.query.filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
 
         workflows = []
-        query = user.workflows
+
+        if not shared and not shared_with and not shared_by:
+            # default case: retrieve owned workflows
+            query = user.workflows
+        else:
+            if shared or shared_by:
+                # retrieve owned workflows and unowned workflows shared by others
+                workflows_shared_with_user = Session.query(
+                    user.shared_workflows.subquery().c.id_
+                )
+                query = Session.query(Workflow).filter(
+                    or_(
+                        Workflow.owner_id == user.id_,
+                        Workflow.id_.in_(workflows_shared_with_user),
+                    )
+                )
+            if shared_by and not shared:
+                if shared_by == "anybody":
+                    # retrieve unowned workflows shared by anyone
+                    query = query.filter(Workflow.id_.in_(workflows_shared_with_user))
+                else:
+                    # retrieve unowned workflows shared by specific user
+                    shared_by_user = (
+                        Session.query(User).filter(User.email == shared_by).first()
+                    )
+                    if not shared_by_user:
+                        return (
+                            jsonify(
+                                {
+                                    "message": f"User with email '{shared_by}' does not exist."
+                                }
+                            ),
+                            404,
+                        )
+                    query = query.filter(Workflow.owner_id == shared_by_user.id_)
+            if shared_with:
+                # starting point: retrieve owned workflows
+                query = user.workflows
+
+                first_shared_with = shared_with[0]
+                workflows_shared_by_user = Session.query(Workflow.id_).join(
+                    UserWorkflow,
+                    and_(
+                        Workflow.id_ == UserWorkflow.workflow_id,
+                        Workflow.owner_id == user.id_,
+                    ),
+                )
+
+                if first_shared_with == "nobody":
+                    # retrieve owned unshared workflows
+                    query = query.filter(Workflow.id_.notin_(workflows_shared_by_user))
+                elif first_shared_with == "anybody":
+                    # retrieve exclusively owned shared workflows
+                    query = query.filter(Workflow.id_.in_(workflows_shared_by_user))
+                else:
+                    # retrieve owned workflows shared with specific users
+                    shared_with_users = Session.query(User.id_).filter(
+                        User.email.in_(shared_with)
+                    )
+                    shared_with_workflows_ids = Session.query(
+                        UserWorkflow.workflow_id
+                    ).filter(UserWorkflow.user_id.in_(shared_with_users))
+                    query = query.filter(Workflow.id_.in_(shared_with_workflows_ids))
+
         if search:
             search = json.loads(search)
             search_val = search.get("name")[0]
@@ -295,7 +394,38 @@ def get_workflows(args, paginate=None):  # noqa
         elif sort in ["asc", "desc"]:
             column_sorted = getattr(Workflow.created, sort)()
         pagination_dict = paginate(query.order_by(column_sorted))
+
+        owner_ids = {workflow.owner_id for workflow in pagination_dict["items"]}
+        owners = dict(
+            Session.query(User.id_, User.email).filter(User.id_.in_(owner_ids)).all()
+        )
+
         for workflow in pagination_dict["items"]:
+            owner_email = owners.get(workflow.owner_id, "-")
+
+            if owner_email == user.email:
+                owner_email = "-"
+
+            if shared or shared_with:
+                shared_with_users = (
+                    Session.query(User.email)
+                    .join(
+                        UserWorkflow,
+                        and_(
+                            User.id_ == UserWorkflow.user_id,
+                            UserWorkflow.workflow_id == workflow.id_,
+                        ),
+                    )
+                    .all()
+                )
+            else:
+                shared_with_users = None
+
+            if shared_with_users and owner_email == "-":
+                shared_with_emails = [user[0] for user in shared_with_users]
+            else:
+                shared_with_emails = "-"
+
             workflow_response = {
                 "id": workflow.id_,
                 "name": get_workflow_name(workflow),
@@ -306,6 +436,10 @@ def get_workflows(args, paginate=None):  # noqa
                 "progress": get_workflow_progress(
                     workflow, include_progress=include_progress
                 ),
+                "owner_email": owner_email,
+                "shared_with": ",".join(shared_with_emails)
+                if shared_with_emails != "-"
+                else "-",
             }
             if type_ == "interactive" or verbose:
                 int_session = workflow.sessions.first()
@@ -1106,7 +1240,7 @@ def share_workflow(
                 "Message is too long. Please keep it under 5000 characters."
             )
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user_id))
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_id)
 
         existing_share = (
             Session.query(UserWorkflow)
