@@ -71,6 +71,8 @@ def test_get_workflows(app, session, user0, cwl_workflow_with_name):
                 "progress": response_data[0]["progress"],
                 "size": {"raw": -1, "human_readable": ""},
                 "launcher_url": None,
+                "owner_email": "-",
+                "shared_with": "-",
             }
         ]
 
@@ -145,6 +147,140 @@ def test_get_workflows_include_retention_rules(
         response_data = json.loads(res.get_data(as_text=True))["items"][0]
         assert response_data["id"] == str(workflow.id_)
         assert "retention_rules" not in response_data
+
+
+def test_get_workflows_shared(
+    app, user1, user2, sample_yadage_workflow_in_db_owned_by_user1
+):
+    """Test listing shared workflows."""
+    workflow = sample_yadage_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow with user2
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 200
+
+        # list shared workflows for user2
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            query_string={"user": user1.id_, "shared": True, "type": "batch"},
+        )
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))["items"]
+        assert len(response_data) == 1
+        assert response_data[0]["id"] == str(workflow.id_)
+        assert response_data[0]["shared_with"] == user2.email
+        assert response_data[0]["owner_email"] == "-"
+
+
+def test_get_workflows_shared_by(
+    app, user1, user2, sample_yadage_workflow_in_db_owned_by_user1
+):
+    """Test listing workflows shared by a user."""
+    workflow = sample_yadage_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow with user2
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 200
+
+        # list shared workflows for user1
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            query_string={
+                "user": user2.id_,
+                "shared_by": user1.email,
+                "type": "batch",
+            },
+        )
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))["items"]
+        assert len(response_data) == 1
+        assert response_data[0]["id"] == str(workflow.id_)
+        assert response_data[0]["owner_email"] == user1.email
+
+
+def test_get_workflows_shared_with(
+    app, user1, user2, sample_yadage_workflow_in_db_owned_by_user1
+):
+    """Test listing workflows shared with a user."""
+    workflow = sample_yadage_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow with user2
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 200
+
+        # list shared workflows for user2
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            query_string={
+                "user": user1.id_,
+                "shared_with": user2.email,
+                "type": "batch",
+            },
+        )
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))["items"]
+        assert len(response_data) == 1
+        assert response_data[0]["id"] == str(workflow.id_)
+        assert response_data[0]["shared_with"] == user2.email
+
+
+def test_get_workflows_shared_by_and_shared_with(
+    app, user1, user2, sample_yadage_workflow_in_db_owned_by_user1
+):
+    """Test listing workflows shared by and shared with a user."""
+    workflow = sample_yadage_workflow_in_db_owned_by_user1
+    with app.test_client() as client:
+        # share workflow with user2
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user_id": str(user1.id_),
+                "user_email_to_share_with": user2.email,
+            },
+        )
+
+        # list shared workflows for user2
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            query_string={
+                "user": user2.id_,
+                "shared_with": user1.email,
+                "shared_by": user1.email,
+                "type": "batch",
+            },
+        )
+        assert res.status_code == 400
+        response_data = res.get_json()
+        assert response_data["message"] == (
+            "You cannot filter by shared_by and shared_with at the same time."
+        )
 
 
 def test_create_workflow_with_name(
