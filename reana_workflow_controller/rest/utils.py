@@ -793,18 +793,17 @@ def use_paginate_args():
                     if isinstance(query_or_list, list)
                     else query_or_list.count()
                 )
+
                 if req.get("size"):
                     if isinstance(query_or_list, list):
                         items = query_or_list[req["from_idx"] : req["to_idx"]]
-                        total = len(query_or_list)
-                        has_next = req["to_idx"] < total
                     else:
                         items = query_or_list.slice(req["from_idx"], req["to_idx"])
-                        total = query_or_list.count()
-                        has_next = req["to_idx"] < total
                     has_prev = req["from_idx"] > 0
+                    has_next = req["to_idx"] < total
+
                 req.update(
-                    dict(items=items, has_prev=has_prev, has_next=has_next, total=total)
+                    items=items, has_prev=has_prev, has_next=has_next, total=total
                 )
                 return req
 
