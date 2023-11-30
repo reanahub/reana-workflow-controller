@@ -1,12 +1,15 @@
 Changes
 =======
 
-Version 0.9.2 (UNRELEASED)
+Version 0.9.2 (2023-12-12)
 --------------------------
 
+- Adds automated multi-platform container image building for amd64 and arm64 architectures.
 - Adds metadata labels to Dockerfile.
-- Changes the pagination logic to avoid counting twice the total amount of records.
-- Fixes job status consumer exception while attempting to fetch workflow engine logs for workflows could not have been successfully scheduled.
+- Changes CVMFS support to allow users to automatically mount any available repository.
+- Changes how pagination is performed in order to avoid counting twice the total number of records.
+- Changes the workflow deletion endpoint to return a different and more appropriate message when deleting all the runs of a workflow.
+- Fixes job status consumer exception while attempting to fetch workflow engine logs for workflows that were not successfully scheduled.
 - Fixes runtime uWSGI warning by rebuilding uWSGI with the PCRE support.
 
 Version 0.9.1 (2023-09-27)
