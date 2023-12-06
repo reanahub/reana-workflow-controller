@@ -19,10 +19,12 @@ RUN apt-get update -y && \
     apt-get install --no-install-recommends -y \
       gcc \
       git \
+      libpcre3 \
+      libpcre3-dev \
       libpython3.8 \
+      python3-pip \
       python3.8 \
       python3.8-dev \
-      python3-pip \
       vim-tiny && \
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /code/requirements.txt && \

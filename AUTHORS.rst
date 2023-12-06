@@ -15,6 +15,7 @@ The list of contributors in alphabetical order:
 - `Lukas Heinrich <https://orcid.org/0000-0002-4048-7584>`_
 - `Marco Donadoni <https://orcid.org/0000-0003-2922-5505>`_
 - `Marco Vidal <https://orcid.org/0000-0002-9363-4971>`_
+- `Michael R. Crusoe <https://orcid.org/0000-0002-2961-9670>`_
 - `Rokas Maciulaitis <https://orcid.org/0000-0003-1064-6967>`_
 - `Sinclert Perez <https://www.linkedin.com/in/sinclert>`_
 - `Tibor Simko <https://orcid.org/0000-0001-7202-5803>`_
