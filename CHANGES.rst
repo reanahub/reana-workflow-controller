@@ -4,6 +4,7 @@ Changes
 Version 0.9.2 (UNRELEASED)
 --------------------------
 
+- Adds metadata labels to Dockerfile.
 - Changes the pagination logic to avoid counting twice the total amount of records.
 - Fixes job status consumer exception while attempting to fetch workflow engine logs for workflows could not have been successfully scheduled.
 - Fixes runtime uWSGI warning by rebuilding uWSGI with the PCRE support.

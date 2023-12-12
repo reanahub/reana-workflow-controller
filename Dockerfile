@@ -93,3 +93,15 @@ CMD exec uwsgi \
     --threads ${UWSGI_THREADS} \
     --vacuum \
     --wsgi-disable-file-wrapper
+
+# Set image labels
+LABEL org.opencontainers.image.authors="team@reanahub.io"
+LABEL org.opencontainers.image.created="2023-12-12"
+LABEL org.opencontainers.image.description="REANA reproducible analysis platform - workflow controller component"
+LABEL org.opencontainers.image.documentation="https://reana-workflow-controller.readthedocs.io/"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.source="https://github.com/reanahub/reana-workflow-controller"
+LABEL org.opencontainers.image.title="reana-workflow-controller"
+LABEL org.opencontainers.image.url="https://github.com/reanahub/reana-workflow-controller"
+LABEL org.opencontainers.image.vendor="reanahub"
+LABEL org.opencontainers.image.version="0.9.2"
