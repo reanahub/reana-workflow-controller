@@ -252,7 +252,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
         workflow_name = workflow.get_full_workflow_name()
 
         return download_files_recursive_wildcard(
@@ -474,7 +474,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
         file_name = request.args.get("file_name")
         if search:
             search = json.loads(search)

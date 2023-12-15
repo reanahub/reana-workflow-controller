@@ -746,7 +746,7 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
 
     try:
         user_uuid = request.args["user"]
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
 
         workflow_parameters = workflow.get_input_parameters()
         return (
@@ -880,9 +880,13 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         context_lines = request.args.get("context_lines", 5)
 
         workflow_a_exists = False
-        workflow_a = _get_workflow_with_uuid_or_name(workflow_id_or_name_a, user_uuid)
+        workflow_a = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name_a, user_uuid, True
+        )
         workflow_a_exists = True
-        workflow_b = _get_workflow_with_uuid_or_name(workflow_id_or_name_b, user_uuid)
+        workflow_b = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name_b, user_uuid, True
+        )
         if not workflow_id_or_name_a or not workflow_id_or_name_b:
             raise ValueError("Workflow id or name is not supplied")
         specification_diff = get_specification_diff(workflow_a, workflow_b)
@@ -1014,7 +1018,7 @@ def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
               }
     """
     try:
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user, True)
 
         rules = workflow.retention_rules.all()
         response = {
