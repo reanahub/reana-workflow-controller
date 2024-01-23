@@ -107,7 +107,6 @@ class JobStatusConsumer(BaseConsumer):
                         msg = body_dict["message"]
                         if "progress" in msg:
                             _update_run_progress(workflow_uuid, msg)
-                            _update_job_progress(workflow_uuid, msg)
                         # Caching: calculate input hash and store in JobCache
                         if "caching_info" in msg:
                             _update_job_cache(msg)
@@ -226,22 +225,6 @@ def _update_run_progress(workflow_uuid, msg):
     workflow.job_progress = job_progress
     flag_modified(workflow, "job_progress")
     Session.add(workflow)
-
-
-def _update_job_progress(workflow_uuid, msg):
-    """Update job progress for jobs in received message."""
-    for status_name, job_status in PROGRESS_STATUSES:
-        if status_name in msg["progress"]:
-            status_progress = msg["progress"][status_name]
-            for job_id in status_progress["job_ids"]:
-                try:
-                    uuid.UUID(job_id)
-                except Exception:
-                    continue
-                job = Session.query(Job).filter_by(id_=job_id).one_or_none()
-                if job:
-                    job.workflow_uuid = workflow_uuid
-                    job.status = job_status
 
 
 def _update_job_cache(msg):
