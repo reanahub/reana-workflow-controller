@@ -698,7 +698,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def _create_job_controller_startup_cmd(self, user=None):
         """Create job controller startup cmd."""
-        base_cmd = "flask run -h 0.0.0.0;"
+        base_cmd = "exec flask run -h 0.0.0.0;"
         if user:
             add_group_cmd = "groupadd -f -g {} {};".format(
                 WORKFLOW_RUNTIME_USER_GID, WORKFLOW_RUNTIME_USER_GID
@@ -710,7 +710,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 WORKFLOW_RUNTIME_USER_UID,
                 self.workflow.workspace_path,
             )
-            run_app_cmd = 'su {} /bin/bash -c "{}"'.format(user, base_cmd)
+            run_app_cmd = 'exec su {} /bin/bash -c "{}"'.format(user, base_cmd)
             full_cmd = add_group_cmd + add_user_cmd + chown_workspace_cmd + run_app_cmd
             return [full_cmd]
         else:
