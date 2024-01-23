@@ -143,6 +143,9 @@ JOB_CONTROLLER_IMAGE = os.getenv(
 JOB_CONTROLLER_CONTAINER_PORT = 5000
 """Default container port for REANA Job Controller sidecar."""
 
+JOB_CONTROLLER_SHUTDOWN_ENDPOINT = "/shutdown"
+"""Endpoint of reana-job-controller used to stop all the jobs."""
+
 JOB_CONTROLLER_NAME = "job-controller"
 """Default job controller container name."""
 

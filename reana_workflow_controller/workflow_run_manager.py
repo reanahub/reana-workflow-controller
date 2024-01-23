@@ -58,6 +58,8 @@ from reana_workflow_controller.k8s import (
 
 from reana_workflow_controller.config import (  # isort:skip
     IMAGE_PULL_SECRETS,
+    JOB_CONTROLLER_CONTAINER_PORT,
+    JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
@@ -438,18 +440,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def stop_batch_workflow_run(self):
         """Stop a batch workflow run along with all its dependent jobs."""
-        jobs_to_delete = self.get_workflow_running_jobs()
-
-        for job in jobs_to_delete:
-            job_id = job.backend_job_id
-            if self._delete_k8s_job_quiet(job_id):
-                job.status = JobStatus.stopped
-                Session.add(job)
-
-        # Commit the session once all the jobs have been processed.
-        Session.commit()
-
-        # Delete the workflow run batch job
         workflow_run_name = self._workflow_run_name_generator("batch")
         self._delete_k8s_job_quiet(workflow_run_name)
 
@@ -575,6 +565,15 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             command=["/bin/bash", "-c"],
             args=self._create_job_controller_startup_cmd(user),
             ports=[],
+            # Make sure that all the jobs are stopped before the deletion of the run-batch pod
+            lifecycle=client.V1Lifecycle(
+                pre_stop=client.V1Handler(
+                    http_get=client.V1HTTPGetAction(
+                        port=JOB_CONTROLLER_CONTAINER_PORT,
+                        path=JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+                    )
+                )
+            ),
         )
 
         job_controller_env_vars.extend(

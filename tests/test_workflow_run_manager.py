@@ -110,25 +110,19 @@ def test_stop_workflow_backend_only_kubernetes(
     """Test deletion of workflows with only Kubernetes based jobs."""
     workflow = sample_serial_workflow_in_db
     workflow.status = RunStatus.running
-    workflow_jobs = add_kubernetes_jobs_to_workflow(workflow)
-    backend_job_ids = [job.backend_job_id for job in workflow_jobs]
     with patch(
         "reana_workflow_controller.workflow_run_manager."
         "current_k8s_batchv1_api_client"
     ) as api_client:
         kwrm = KubernetesWorkflowRunManager(workflow)
         kwrm.stop_batch_workflow_run()
-        for delete_call in api_client.delete_namespaced_job.call_args_list:
-            job_id = delete_call.args[0]
-            if job_id in backend_job_ids:
-                del backend_job_ids[backend_job_ids.index(job_id)]
-                # Check that the status of the job with that ID in the database is set to stopped
-                assert (
-                    Job.query.filter_by(backend_job_id=job_id).one().status
-                    == JobStatus.stopped
-                )
-
-        assert not backend_job_ids
+        # jobs are deleted by reana-job-controller, so this should be called
+        # only once to delete the run-batch pod
+        api_client.delete_namespaced_job.assert_called_once()
+        assert (
+            api_client.delete_namespaced_job.call_args.args[0]
+            == f"reana-run-batch-{workflow.id_}"
+        )
 
 
 def test_interactive_session_closure(sample_serial_workflow_in_db, session):
