@@ -823,12 +823,12 @@ def test_start_already_started_workflow(
 
 @pytest.mark.parametrize(
     "current_status, expected_status, expected_http_status_code, "
-    "k8s_stop_call_count",
+    "k8s_stop_call_count, should_update_logs",
     [
-        (RunStatus.created, RunStatus.created, 409, 0),
-        (RunStatus.running, RunStatus.stopped, 200, 1),
-        (RunStatus.failed, RunStatus.failed, 409, 0),
-        (RunStatus.finished, RunStatus.finished, 409, 0),
+        (RunStatus.created, RunStatus.created, 409, 0, False),
+        (RunStatus.running, RunStatus.stopped, 200, 1, True),
+        (RunStatus.failed, RunStatus.failed, 409, 0, False),
+        (RunStatus.finished, RunStatus.finished, 409, 0, False),
     ],
 )
 def test_stop_workflow(
@@ -836,6 +836,7 @@ def test_stop_workflow(
     expected_status,
     expected_http_status_code,
     k8s_stop_call_count,
+    should_update_logs,
     app,
     default_user,
     yadage_workflow_with_name,
@@ -847,10 +848,13 @@ def test_stop_workflow(
         sample_serial_workflow_in_db.status = current_status
         session.add(sample_serial_workflow_in_db)
         session.commit()
+        workflow_engine_logs = "these are the logs of workflow-engine"
         with mock.patch(
-            "reana_workflow_controller.workflow_run_manager."
-            "current_k8s_batchv1_api_client"
-        ) as stop_workflow_mock:
+            "reana_workflow_controller.consumer.current_k8s_batchv1_api_client"
+        ) as batch_api_mock, mock.patch(
+            "reana_workflow_controller.consumer._get_workflow_engine_pod_logs"
+        ) as get_logs_mock:
+            get_logs_mock.return_value = workflow_engine_logs
             res = client.put(
                 url_for(
                     "statuses.set_workflow_status",
@@ -861,9 +865,10 @@ def test_stop_workflow(
             assert sample_serial_workflow_in_db.status == expected_status
             assert res.status_code == expected_http_status_code
             assert (
-                stop_workflow_mock.delete_namespaced_job.call_count
-                == k8s_stop_call_count
+                batch_api_mock.delete_namespaced_job.call_count == k8s_stop_call_count
             )
+            if should_update_logs:
+                assert workflow_engine_logs in sample_serial_workflow_in_db.logs
 
 
 def test_set_workflow_status_unauthorized(

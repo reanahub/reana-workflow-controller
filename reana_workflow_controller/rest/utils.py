@@ -64,6 +64,7 @@ from reana_workflow_controller.config import (
     REANA_GITLAB_HOST,
     PREVIEWABLE_MIME_TYPE_PREFIXES,
 )
+from reana_workflow_controller.consumer import _update_workflow_status
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
     REANAWorkflowControllerError,
@@ -135,11 +136,8 @@ def start_workflow(workflow, parameters):
 
 def stop_workflow(workflow):
     """Stop a given workflow."""
-    if workflow.status == RunStatus.running:
-        kwrm = KubernetesWorkflowRunManager(workflow)
-        kwrm.stop_batch_workflow_run()
-        workflow.status = RunStatus.stopped
-        Session.add(workflow)
+    if workflow.can_transition_to(RunStatus.stopped):
+        _update_workflow_status(workflow, RunStatus.stopped, logs="")
         Session.commit()
     else:
         message = ("Workflow {id_} is not running.").format(id_=workflow.id_)
