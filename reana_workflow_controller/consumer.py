@@ -66,9 +66,11 @@ class JobStatusConsumer(BaseConsumer):
                 queues=self.queue,
                 callbacks=[self.on_message],
                 accept=[self.message_default_format],
-                prefetch_count=REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT
-                if REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT
-                else None,
+                prefetch_count=(
+                    REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT
+                    if REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT
+                    else None
+                ),
             )
         ]
 
