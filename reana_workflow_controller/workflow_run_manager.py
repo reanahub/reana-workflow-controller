@@ -27,6 +27,7 @@ from reana_commons.config import (
     REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_STORAGE_BACKEND,
+    WORKFLOW_RUNTIME_GROUP_NAME,
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_NAME,
     WORKFLOW_RUNTIME_USER_UID,
@@ -700,8 +701,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         """Create job controller startup cmd."""
         base_cmd = "exec flask run -h 0.0.0.0;"
         if user:
-            add_group_cmd = "groupadd -f -g {} {};".format(
-                WORKFLOW_RUNTIME_USER_GID, WORKFLOW_RUNTIME_USER_GID
+            add_group_cmd = (
+                "getent group '{gid}' || groupadd -f -g '{gid}' '{name}';".format(
+                    gid=WORKFLOW_RUNTIME_USER_GID, name=WORKFLOW_RUNTIME_GROUP_NAME
+                )
             )
             add_user_cmd = "useradd -u {} -g {} -M {};".format(
                 WORKFLOW_RUNTIME_USER_UID, WORKFLOW_RUNTIME_USER_GID, user
