@@ -6,7 +6,6 @@
 
 include *.json
 include *.md
-include *.rst
 include *.sh
 include *.txt
 include *.yaml
@@ -20,7 +19,7 @@ exclude .readthedocs.yaml
 prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
-recursive-include docs *.rst
+recursive-include docs *.md
 recursive-include docs *.txt
 recursive-include reana_workflow_controller *.html
 recursive-include reana_workflow_controller *.py
