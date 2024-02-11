@@ -496,6 +496,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             labels={
                 "reana_workflow_mode": "batch",
                 "reana-run-batch-workflow-uuid": str(self.workflow.id_),
+                "kueue.x-k8s.io/queue-name": "local-queue-batch",
             },
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
@@ -524,6 +525,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             volume_mounts=[],
             command=["/bin/bash", "-c"],
             args=command,
+            # resources=client.V1ResourceRequirements(
+            #     requests={"cpu": "1", "memory": "2Gi"},
+            #     limits={"cpu": "3", "memory": "4Gi"},
+            # ),
         )
         workflow_engine_env_vars.extend(
             [
@@ -575,6 +580,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             command=["/bin/bash", "-c"],
             args=self._create_job_controller_startup_cmd(user),
             ports=[],
+            # resources=client.V1ResourceRequirements(
+            #     requests={"cpu": "1", "memory": "2Gi"},
+            #     limits={"cpu": "3", "memory": "4Gi"},
+            # ),
         )
 
         job_controller_env_vars.extend(
