@@ -496,7 +496,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             labels={
                 "reana_workflow_mode": "batch",
                 "reana-run-batch-workflow-uuid": str(self.workflow.id_),
-                "kueue.x-k8s.io/queue-name": "local-queue-batch",
+                "kueue.x-k8s.io/queue-name": "batch-queue-batch",
             },
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
