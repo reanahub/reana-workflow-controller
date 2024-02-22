@@ -1,11 +1,12 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Workflow run manager interface."""
 import base64
+import copy
 import json
 import logging
 import os
@@ -71,6 +72,10 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS,
+    WORKFLOW_ENGINE_CWL_ENV_VARS,
+    WORKFLOW_ENGINE_SERIAL_ENV_VARS,
+    WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS,
+    WORKFLOW_ENGINE_YADAGE_ENV_VARS,
 )
 
 
@@ -92,7 +97,8 @@ class WorkflowRunManager:
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
             ),
-            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS
+            + WORKFLOW_ENGINE_CWL_ENV_VARS,
         },
         "yadage": {
             "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_YADAGE),
@@ -105,7 +111,8 @@ class WorkflowRunManager:
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
             ),
-            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS
+            + WORKFLOW_ENGINE_YADAGE_ENV_VARS,
         },
         "serial": {
             "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_SERIAL),
@@ -117,7 +124,8 @@ class WorkflowRunManager:
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
             ),
-            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS
+            + WORKFLOW_ENGINE_SERIAL_ENV_VARS,
         },
         "snakemake": {
             "image": "{}".format(REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE),
@@ -129,7 +137,8 @@ class WorkflowRunManager:
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
             ),
-            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS,
+            "environment_variables": WORKFLOW_ENGINE_COMMON_ENV_VARS
+            + WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS,
         },
     }
     """Mapping between engines and their basis configuration."""
@@ -220,7 +229,7 @@ class WorkflowRunManager:
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
-        env_vars = list(
+        env_vars = copy.deepcopy(
             WorkflowRunManager.engine_mapping[self.workflow.type_][
                 "environment_variables"
             ]

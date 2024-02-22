@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -15,6 +15,12 @@ from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
 from reana_db.models import JobStatus, RunStatus
 
 from reana_workflow_controller.version import __version__
+
+
+def _env_vars_dict_to_k8s_list(env_vars):
+    """Convert env vars stored as a dictionary into a k8s-compatible list."""
+    return [{"name": name, "value": str(value)} for name, value in env_vars.items()]
+
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
@@ -116,6 +122,27 @@ WORKFLOW_ENGINE_COMMON_ENV_VARS = [
     {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH}
 ]
 """Common to all workflow engines environment variables."""
+
+
+WORKFLOW_ENGINE_CWL_ENV_VARS = _env_vars_dict_to_k8s_list(
+    json.loads(os.getenv("REANA_WORKFLOW_ENGINE_CWL_ENV_VARS", "{}"))
+)
+"""Environment variables to be passed to the CWL workflow engine container."""
+
+WORKFLOW_ENGINE_SERIAL_ENV_VARS = _env_vars_dict_to_k8s_list(
+    json.loads(os.getenv("REANA_WORKFLOW_ENGINE_SERIAL_ENV_VARS", "{}"))
+)
+"""Environment variables to be passed to the serial workflow engine container."""
+
+WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS = _env_vars_dict_to_k8s_list(
+    json.loads(os.getenv("REANA_WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS", "{}"))
+)
+"""Environment variables to be passed to the Snakemake workflow engine container."""
+
+WORKFLOW_ENGINE_YADAGE_ENV_VARS = _env_vars_dict_to_k8s_list(
+    json.loads(os.getenv("REANA_WORKFLOW_ENGINE_YADAGE_ENV_VARS", "{}"))
+)
+"""Environment variables to be passed to the Yadage workflow engine container."""
 
 DEBUG_ENV_VARS = (
     {
