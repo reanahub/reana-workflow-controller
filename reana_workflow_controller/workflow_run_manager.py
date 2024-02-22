@@ -61,6 +61,7 @@ from reana_workflow_controller.k8s import (
 from reana_workflow_controller.config import (  # isort:skip
     IMAGE_PULL_SECRETS,
     JOB_CONTROLLER_CONTAINER_PORT,
+    JOB_CONTROLLER_ENV_VARS,
     JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
@@ -484,7 +485,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             overwrite_operational_options=overwrite_operational_options,
         )
         workflow_engine_env_vars = env_vars or self._workflow_engine_env_vars()
-        job_controller_env_vars = []
         owner_id = str(self.workflow.owner_id)
         command = format_cmd(command)
         workspace_mount, workspace_volume = get_workspace_volume(
@@ -586,6 +586,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             ),
         )
 
+        job_controller_env_vars = copy.deepcopy(JOB_CONTROLLER_ENV_VARS)
         job_controller_env_vars.extend(
             [
                 {"name": "REANA_USER_ID", "value": owner_id},

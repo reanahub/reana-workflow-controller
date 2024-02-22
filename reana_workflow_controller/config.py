@@ -167,6 +167,12 @@ JOB_CONTROLLER_IMAGE = os.getenv(
 )
 """Default image for REANA Job Controller sidecar."""
 
+
+JOB_CONTROLLER_ENV_VARS = _env_vars_dict_to_k8s_list(
+    json.loads(os.getenv("REANA_JOB_CONTROLLER_ENV_VARS", "{}"))
+)
+"""Environment variables to be passed to the job controller container."""
+
 JOB_CONTROLLER_CONTAINER_PORT = 5000
 """Default container port for REANA Job Controller sidecar."""
 
