@@ -63,6 +63,7 @@ from reana_workflow_controller.config import (  # isort:skip
     JOB_CONTROLLER_CONTAINER_PORT,
     JOB_CONTROLLER_ENV_VARS,
     JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+    REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
@@ -662,6 +663,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             containers=containers,
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
             init_containers=[],
+            termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
         )
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME

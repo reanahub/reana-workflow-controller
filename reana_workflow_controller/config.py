@@ -208,3 +208,11 @@ ALIVE_STATUSES = [
     RunStatus.pending,
 ]
 """Alive workflow statuses."""
+
+REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD = int(
+    os.getenv("REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD", "120")
+)
+"""Grace period before terminating the job controller and workflow engine pod.
+
+The job controller needs to clean up all the running jobs before the end of the grace period.
+"""
