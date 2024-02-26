@@ -315,7 +315,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
       responses:
         200:
           description: >-
-            Requests succeeded. The file has been downloaded.
+            Requests succeeded. Details about deleted files and failed deletions are returned.
           schema:
             type: file
         404:
