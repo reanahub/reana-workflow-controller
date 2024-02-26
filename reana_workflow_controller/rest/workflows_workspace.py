@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -315,7 +315,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
       responses:
         200:
           description: >-
-            Requests succeeded. The file has been downloaded.
+            Request succeeded. Details about deleted files and failed deletions are returned.
           schema:
             type: file
         404:
