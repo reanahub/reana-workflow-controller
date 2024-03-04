@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.9.3](https://github.com/reanahub/reana-workflow-controller/compare/0.9.2...0.9.3) (2024-03-04)
+
+
+### Build
+
+* **docker:** non-editable submodules in "latest" mode ([#551](https://github.com/reanahub/reana-workflow-controller/issues/551)) ([af74d0b](https://github.com/reanahub/reana-workflow-controller/commit/af74d0b887d02109ce96c91ef8fdf99e4eb4ff34))
+* **python:** bump all required packages as of 2024-03-04 ([#574](https://github.com/reanahub/reana-workflow-controller/issues/574)) ([1373f4c](https://github.com/reanahub/reana-workflow-controller/commit/1373f4c3ea9480cc7ccb05ab12fc62a029e1f792))
+* **python:** bump shared REANA packages as of 2024-03-04 ([#574](https://github.com/reanahub/reana-workflow-controller/issues/574)) ([e31d903](https://github.com/reanahub/reana-workflow-controller/commit/e31d9038280a68ff84595caa64f010a4f25fc63a))
+
+
+### Features
+
+* **manager:** call shutdown endpoint before workflow stop ([#559](https://github.com/reanahub/reana-workflow-controller/issues/559)) ([719fa37](https://github.com/reanahub/reana-workflow-controller/commit/719fa370839dd29ce8071b2d1e203ff37c5ff4f1))
+* **manager:** increase termination period of run-batch pods ([#572](https://github.com/reanahub/reana-workflow-controller/issues/572)) ([f05096a](https://github.com/reanahub/reana-workflow-controller/commit/f05096ac7d5c6e7a535772966ccbbb2e07a325ef))
+* **manager:** pass custom env variables to job controller ([#571](https://github.com/reanahub/reana-workflow-controller/issues/571)) ([646f071](https://github.com/reanahub/reana-workflow-controller/commit/646f071feb61c7b901cc8979b02bc846a3f0a343))
+* **manager:** pass custom env variables to workflow engines ([#571](https://github.com/reanahub/reana-workflow-controller/issues/571)) ([cb9369b](https://github.com/reanahub/reana-workflow-controller/commit/cb9369bb3ca6beb70d0693fef277df1958121169))
+
+
+### Bug fixes
+
+* **manager:** graceful shutdown of job-controller ([#559](https://github.com/reanahub/reana-workflow-controller/issues/559)) ([817b019](https://github.com/reanahub/reana-workflow-controller/commit/817b019b3745862436e99570c10c6d8ea35533f4))
+* **manager:** use valid group name when calling `groupadd` ([#566](https://github.com/reanahub/reana-workflow-controller/issues/566)) ([73a9929](https://github.com/reanahub/reana-workflow-controller/commit/73a9929a742e18a482824c2ca9a7c52f1f46227e)), closes [#561](https://github.com/reanahub/reana-workflow-controller/issues/561)
+* **stop:** store engine logs of stopped workflow ([#563](https://github.com/reanahub/reana-workflow-controller/issues/563)) ([199c163](https://github.com/reanahub/reana-workflow-controller/commit/199c16313d97932f80080585a0c617b6b0e3a78d)), closes [#560](https://github.com/reanahub/reana-workflow-controller/issues/560)
+
+
+### Code refactoring
+
+* **consumer:** do not update status of jobs ([#559](https://github.com/reanahub/reana-workflow-controller/issues/559)) ([5992034](https://github.com/reanahub/reana-workflow-controller/commit/599203403576784f6efabd158df7282431265cdc))
+* **docs:** move from reST to Markdown ([#567](https://github.com/reanahub/reana-workflow-controller/issues/567)) ([4fbdb74](https://github.com/reanahub/reana-workflow-controller/commit/4fbdb74a5351155b7e0ac4ac97114a8fa3ec60f5))
+
+
+### Code style
+
+* **black:** format with black v24 ([#564](https://github.com/reanahub/reana-workflow-controller/issues/564)) ([2329437](https://github.com/reanahub/reana-workflow-controller/commit/23294373b384e19280c00f3116100816e7277e40))
+
+
+### Continuous integration
+
+* **commitlint:** addition of commit message linter ([#555](https://github.com/reanahub/reana-workflow-controller/issues/555)) ([b9df20a](https://github.com/reanahub/reana-workflow-controller/commit/b9df20a78d36b6fb664fc69127ace5d9cdd73830))
+* **commitlint:** allow release commit style ([#575](https://github.com/reanahub/reana-workflow-controller/issues/575)) ([b013d49](https://github.com/reanahub/reana-workflow-controller/commit/b013d49e61b372b9ac4f8a9f1e7ceafae64295f1))
+* **commitlint:** check for the presence of concrete PR number ([#562](https://github.com/reanahub/reana-workflow-controller/issues/562)) ([4b8f539](https://github.com/reanahub/reana-workflow-controller/commit/4b8f53909d281dcd2445833544c4107c8ebd1d81))
+* **pytest:** move to PostgreSQL 14.10 ([#568](https://github.com/reanahub/reana-workflow-controller/issues/568)) ([9b6bfa0](https://github.com/reanahub/reana-workflow-controller/commit/9b6bfa0b5057d849f8667ee0642765150e2b52d9))
+* **release-please:** initial configuration ([#555](https://github.com/reanahub/reana-workflow-controller/issues/555)) ([672083d](https://github.com/reanahub/reana-workflow-controller/commit/672083de4c943a1c32b0a093542919b72102b491))
+* **release-please:** update version in Dockerfile/OpenAPI specs ([#558](https://github.com/reanahub/reana-workflow-controller/issues/558)) ([4be8086](https://github.com/reanahub/reana-workflow-controller/commit/4be8086874b1eb7e355a75ef0e79467b0a9db875))
+* **shellcheck:** fix exit code propagation ([#562](https://github.com/reanahub/reana-workflow-controller/issues/562)) ([c5d4982](https://github.com/reanahub/reana-workflow-controller/commit/c5d498299f8524f016f4e8c33c9ac0e90b644cb7))
+
+
+### Documentation
+
+* **authors:** complete list of contributors ([#570](https://github.com/reanahub/reana-workflow-controller/issues/570)) ([08ab9a3](https://github.com/reanahub/reana-workflow-controller/commit/08ab9a3358ee8b027a62e1a528f7e135a676b55a))
+
 ## 0.9.2 (2023-12-12)
 
 - Adds automated multi-platform container image building for amd64 and arm64 architectures.
@@ -184,4 +235,3 @@
 ## 0.1.0 (2018-01-30)
 
 - Initial public release.
-
