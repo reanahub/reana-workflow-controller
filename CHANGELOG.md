@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.95.0) (2024-03-18)
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#579](https://github.com/reanahub/reana-workflow-controller/issues/579)) ([57a0246](https://github.com/reanahub/reana-workflow-controller/commit/57a0246ceedef2a724c98b3993b79e688e2d1ac2))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9ebbf2a](https://github.com/reanahub/reana-workflow-controller/commit/9ebbf2a3b7f0dbebaa23a0fbb26516920fe31759))
+
 ## [0.9.3](https://github.com/reanahub/reana-workflow-controller/compare/0.9.2...0.9.3) (2024-03-04)
 
 
