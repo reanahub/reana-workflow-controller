@@ -138,7 +138,7 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
     try:
         user_uuid = request.args["user"]
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
 
         steps = None
         if request.is_json:
@@ -278,7 +278,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
 
     try:
         user_uuid = request.args["user"]
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
         workflow_logs = build_workflow_logs(workflow)
 
         return (

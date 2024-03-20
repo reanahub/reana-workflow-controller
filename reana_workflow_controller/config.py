@@ -216,3 +216,5 @@ REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD = int(
 
 The job controller needs to clean up all the running jobs before the end of the grace period.
 """
+
+MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000

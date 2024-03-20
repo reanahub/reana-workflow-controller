@@ -7,8 +7,8 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller utility tests."""
 
-import os
 import json
+import os
 import stat
 import uuid
 from contextlib import nullcontext as does_not_raise
@@ -18,12 +18,12 @@ from typing import ContextManager
 import mock
 import pytest
 from reana_db.models import (
+    InteractiveSession,
+    InteractiveSessionType,
     Job,
     JobCache,
     RunStatus,
     Workflow,
-    InteractiveSession,
-    InteractiveSessionType,
 )
 from reana_db.utils import (
     get_disk_usage_or_zero,
@@ -53,9 +53,7 @@ from reana_workflow_controller.rest.utils import (
         pytest.param(RunStatus.running, marks=pytest.mark.xfail(strict=True)),
     ],
 )
-def test_delete_workflow(
-    app, session, default_user, sample_yadage_workflow_in_db, status
-):
+def test_delete_workflow(app, session, user0, sample_yadage_workflow_in_db, status):
     """Test deletion of a workflow in all possible statuses."""
     sample_yadage_workflow_in_db.status = status
     session.add(sample_yadage_workflow_in_db)
@@ -65,16 +63,14 @@ def test_delete_workflow(
     assert sample_yadage_workflow_in_db.status == RunStatus.deleted
 
 
-def test_delete_all_workflow_runs(
-    app, session, default_user, yadage_workflow_with_name
-):
+def test_delete_all_workflow_runs(app, session, user0, yadage_workflow_with_name):
     """Test deletion of all runs of a given workflow."""
     # add 5 workflows in the database with the same name
     for i in range(5):
         workflow = Workflow(
             id_=uuid.uuid4(),
             name=yadage_workflow_with_name["name"],
-            owner_id=default_user.id_,
+            owner_id=user0.id_,
             reana_specification=yadage_workflow_with_name["reana_specification"],
             operational_options={},
             type_=yadage_workflow_with_name["reana_specification"]["workflow"]["type"],
@@ -138,7 +134,7 @@ def test_workspace_deletion(
     mock_update_workflow_quota,
     app,
     session,
-    default_user,
+    user0,
     sample_yadage_workflow_in_db,
     workspace,
 ):
@@ -206,7 +202,7 @@ def test_workspace_deletion(
 
 
 def test_deletion_of_workspace_of_an_already_deleted_workflow(
-    app, session, default_user, sample_yadage_workflow_in_db
+    app, session, user0, sample_yadage_workflow_in_db
 ):
     """Test workspace deletion of an already deleted workflow."""
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
@@ -272,7 +268,7 @@ def test_list_recursive_wildcard(tmp_shared_volume_path):
 
 
 def test_workspace_permissions(
-    app, session, default_user, sample_yadage_workflow_in_db, tmp_shared_volume_path
+    app, session, user0, sample_yadage_workflow_in_db, tmp_shared_volume_path
 ):
     """Test workspace dir permissions."""
     create_workflow_workspace(sample_yadage_workflow_in_db.workspace_path)
