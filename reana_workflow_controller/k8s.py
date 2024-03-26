@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -26,6 +26,7 @@ from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
     REANA_INGRESS_ANNOTATIONS,
+    REANA_INGRESS_CLASS_NAME,
 )
 
 
@@ -105,6 +106,8 @@ class InteractiveDeploymentK8sBuilder(object):
         spec = client.V1IngressSpec(
             rules=[client.V1IngressRule(http=ingress_rule_value)]
         )
+        if REANA_INGRESS_CLASS_NAME:
+            spec.ingress_class_name = REANA_INGRESS_CLASS_NAME
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
             kind="Ingress",
