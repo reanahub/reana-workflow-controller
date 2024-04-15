@@ -11,7 +11,7 @@ import logging
 import os
 
 from flask import current_app
-from kubernetes import client
+from kubernetes import client, config
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
@@ -490,14 +490,23 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workspace_mount, workspace_volume = get_workspace_volume(
             self.workflow.workspace_path
         )
+        
+        # Set label only if kueue is True
+        KUEUE_DEPLOYED = True
+        labels = {
+            "reana_workflow_mode": "batch",
+            "reana-run-batch-workflow-uuid": str(self.workflow.id_),
+            "kueue.x-k8s.io/queue-name": (
+                "batch-queue-batch" if KUEUE_DEPLOYED else None
+            ),  
+        }
+
+        # Filter out None values (labels should not include None)
+        labels = {k: v for k, v in labels.items() if v is not None}
 
         workflow_metadata = client.V1ObjectMeta(
             name=name,
-            labels={
-                "reana_workflow_mode": "batch",
-                "reana-run-batch-workflow-uuid": str(self.workflow.id_),
-                "kueue.x-k8s.io/queue-name": "batch-queue-batch",           # Submit Workflow Job with Kueue
-            },
+            labels=labels,
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
 
