@@ -491,16 +491,6 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             self.workflow.workspace_path
         )
         
-        # Set label only if kueue is True
-        # KUEUE_DEPLOYED = True
-        # KUEUE_DEPLOYED = subprocess.run(
-        #     "helm get values kueue -n kueue-system",
-        #     shell=True,
-        #     capture_output=True,
-        #     text=True,
-        # )
-        # KUEUE_DEPLOYED = yaml.safe_load(KUEUE_DEPLOYED.stdout).get("kueueEnabled", False)
-        
         labels = {
             "reana_workflow_mode": "batch",
             "reana-run-batch-workflow-uuid": str(self.workflow.id_),
