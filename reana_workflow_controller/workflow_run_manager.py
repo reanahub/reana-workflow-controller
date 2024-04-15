@@ -9,7 +9,6 @@ import base64
 import json
 import logging
 import os
-
 from flask import current_app
 from kubernetes import client, config
 from kubernetes.client.models.v1_delete_options import V1DeleteOptions
@@ -68,6 +67,7 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS,
+    USE_KUEUE,
 )
 
 
@@ -492,12 +492,20 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         
         # Set label only if kueue is True
-        KUEUE_DEPLOYED = True
+        # KUEUE_DEPLOYED = True
+        # KUEUE_DEPLOYED = subprocess.run(
+        #     "helm get values kueue -n kueue-system",
+        #     shell=True,
+        #     capture_output=True,
+        #     text=True,
+        # )
+        # KUEUE_DEPLOYED = yaml.safe_load(KUEUE_DEPLOYED.stdout).get("kueueEnabled", False)
+        
         labels = {
             "reana_workflow_mode": "batch",
             "reana-run-batch-workflow-uuid": str(self.workflow.id_),
             "kueue.x-k8s.io/queue-name": (
-                "batch-queue-batch" if KUEUE_DEPLOYED else None
+                "batch-queue-batch" if USE_KUEUE else None
             ),  
         }
 

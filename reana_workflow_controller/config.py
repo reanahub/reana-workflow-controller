@@ -172,3 +172,5 @@ ALIVE_STATUSES = [
     RunStatus.pending,
 ]
 """Alive workflow statuses."""
+
+USE_KUEUE = bool(os.getenv("USE_KUEUE", "false"))
