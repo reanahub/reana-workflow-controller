@@ -154,10 +154,60 @@ DEBUG_ENV_VARS = (
 )
 """Common to all workflow engines environment variables for debug mode."""
 
-JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = (
-    "docker.io/jupyter/scipy-notebook:notebook-6.4.5"
+
+def _parse_interactive_sessions_environments(env_var):
+    config = {}
+    for type_ in env_var:
+        recommended = []
+        env_recommended = env_var[type_].get("recommended") or []
+        for recommended_item in env_recommended:
+            image = recommended_item.get("image")
+            if not image:
+                continue
+            name = recommended_item.get("name") or image
+            recommended.append({"name": name, "image": image})
+
+        config[type_] = {
+            "allow_custom": env_var[type_].get("allow_custom", False),
+            "recommended": recommended,
+        }
+    return config
+
+
+REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS = _parse_interactive_sessions_environments(
+    json.loads(os.getenv("REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS", "{}"))
 )
-"""Default image for Jupyter based interactive session deployments."""
+"""Allowed and recommended environments to be used for interactive sessions.
+
+This is a dictionary where keys are the type of the interactive session.
+For each session type, a list of recommended Docker images are provided (`recommended`)
+and whether custom images are allowed (`allow_custom`).
+
+Example:
+{
+    "jupyter": {
+        "recommended": [
+            {
+                "name": "Jupyter SciPy Notebook 6.4.5",
+                "image": "docker.io/jupyter/scipy-notebook:notebook-6.4.5"
+            }
+        ],
+        "allow_custom": true
+    }
+}
+"""
+
+REANA_INTERACTIVE_SESSIONS_RECOMMENDED_IMAGES = {
+    type_: {recommended["image"] for recommended in config["recommended"]}
+    for type_, config in REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS.items()
+}
+"""Set of recommended images for each interactive session type."""
+
+REANA_INTERACTIVE_SESSIONS_DEFAULT_IMAGES = {
+    type_: next(iter(config["recommended"]), {}).get("image")
+    for type_, config in REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS.items()
+}
+"""Default image for each interactive session type, can be `None`."""
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT = 8888
 """Default port for Jupyter based interactive session deployments."""
@@ -222,3 +272,6 @@ REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD = int(
 
 The job controller needs to clean up all the running jobs before the end of the grace period.
 """
+
+CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"]
+"""Prefixes that can be removed from container image references to generate valid image aliases."""

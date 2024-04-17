@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -25,6 +25,11 @@ from reana_db.models import (
 )
 from sqlalchemy_utils import create_database, database_exists, drop_database
 
+from reana_workflow_controller.config import (
+    REANA_INTERACTIVE_SESSIONS_DEFAULT_IMAGES,
+    REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+    REANA_INTERACTIVE_SESSIONS_RECOMMENDED_IMAGES,
+)
 from reana_workflow_controller.factory import create_app
 
 
@@ -124,3 +129,26 @@ def sample_serial_workflow_with_retention_rule(session, sample_serial_workflow_i
     session.query(WorkspaceRetentionAuditLog).delete()
     session.delete(rule)
     session.commit()
+
+
+@pytest.fixture()
+def interactive_session_environments(monkeypatch):
+    monkeypatch.setitem(
+        REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+        "jupyter",
+        {
+            "recommended": [
+                {"image": "docker_image_1", "name": "image name 1"},
+                {"image": "docker_image_2", "name": "image name 2"},
+            ],
+            "allow_custom": False,
+        },
+    )
+    monkeypatch.setitem(
+        REANA_INTERACTIVE_SESSIONS_DEFAULT_IMAGES, "jupyter", "docker_image_1"
+    )
+    monkeypatch.setitem(
+        REANA_INTERACTIVE_SESSIONS_RECOMMENDED_IMAGES,
+        "jupyter",
+        {"docker_image_1", "docker_image_2"},
+    )

@@ -24,7 +24,6 @@ from reana_commons.k8s.volumes import (
 )
 
 from reana_workflow_controller.config import (  # isort:skip
-    JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE,
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
     REANA_INGRESS_ANNOTATIONS,
     REANA_INGRESS_CLASS_NAME,
@@ -249,11 +248,11 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_name,
     workspace,
     access_path,
+    image,
     access_token=None,
     cvmfs_repos=None,
     owner_id=None,
     workflow_id=None,
-    image=None,
     expose_secrets=True,
 ):
     """Build the Kubernetes specification for a Jupyter NB interactive session.
@@ -270,16 +269,15 @@ def build_interactive_jupyter_deployment_k8s_objects(
         /me Traefik won't send the request to the interactive session
         (``/1234/me``) but to the root path (``/me``) giving most probably
         a ``404``.
+    :param image: Jupyter Notebook image to use, i.e.
+        ``jupyter/tensorflow-notebook`` to enable ``tensorflow``.
     :param cvmfs_mounts: List of CVMFS repos to make available.
     :param owner_id: Owner of the interactive session.
     :param workflow_id: UUID of the workflow to which the interactive
         session belongs to.
-    :param image: Jupyter Notebook image to use, i.e.
-        ``jupyter/tensorflow-notebook`` to enable ``tensorflow``.
     :param expose_secrets: If true, mount the "file" secrets and set the
         "env" secrets in jupyter's pod.
     """
-    image = image or JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE
     cvmfs_repos = cvmfs_repos or []
     port = JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT
     deployment_builder = InteractiveDeploymentK8sBuilder(

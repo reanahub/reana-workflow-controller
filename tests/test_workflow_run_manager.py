@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -23,8 +23,19 @@ from reana_db.models import (
     Job,
 )
 
+from reana_workflow_controller.config import (
+    REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+)
 from reana_workflow_controller.errors import REANAInteractiveSessionError
-from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
+from reana_workflow_controller.workflow_run_manager import (
+    KubernetesWorkflowRunManager,
+    _container_image_aliases,
+)
+
+
+@pytest.fixture(autouse=True)
+def interactive_session_environments_autouse(interactive_session_environments):
+    pass
 
 
 def test_start_interactive_session(sample_serial_workflow_in_db):
@@ -154,6 +165,74 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
             assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
             assert not workflow.sessions.first()
+
+
+def test_container_image_aliases():
+    """Test generation of docker image aliases."""
+    image = "foo/bar"
+    aliases = _container_image_aliases(image)
+    assert "docker.io/foo/bar" in aliases
+    assert "foo/bar" in aliases
+
+    image = "docker.io/library/ubuntu:24.04"
+    aliases = _container_image_aliases(image)
+    assert "ubuntu:24.04" in aliases
+    assert "library/ubuntu:24.04" in aliases
+    assert "docker.io/library/ubuntu:24.04" in aliases
+
+    image = "library/ubuntu:24.04"
+    aliases = _container_image_aliases(image)
+    assert "ubuntu:24.04" in aliases
+    assert "library/ubuntu:24.04" in aliases
+    assert "docker.io/library/ubuntu:24.04" in aliases
+
+
+def test_interactive_session_not_allowed_image(sample_serial_workflow_in_db):
+    """Test interactive workflow run deployment with not allowed image."""
+    with patch.multiple(
+        "reana_workflow_controller.k8s",
+        current_k8s_appsv1_api_client=DEFAULT,
+        current_k8s_corev1_api_client=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
+    ):
+        with pytest.raises(
+            REANAInteractiveSessionError,
+            match=r".*this_image_is_not_allowed.*not allow.*",
+        ):
+            kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+            if len(InteractiveSessionType):
+                kwrm.start_interactive_session(
+                    InteractiveSessionType(0).name, image="this_image_is_not_allowed"
+                )
+
+
+def test_interactive_session_custom_image(sample_serial_workflow_in_db, monkeypatch):
+    """Test interactive workflow run deployment with custom image."""
+    monkeypatch.setitem(
+        REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS["jupyter"], "allow_custom", True
+    )
+    with patch.multiple(
+        "reana_workflow_controller.k8s",
+        current_k8s_appsv1_api_client=DEFAULT,
+        current_k8s_corev1_api_client=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
+    ) as mocks:
+        kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+        if len(InteractiveSessionType):
+            kwrm.start_interactive_session(
+                InteractiveSessionType(0).name,
+                image="this is my custom image",
+                expose_secrets=False,
+            )
+        mocks[
+            "current_k8s_appsv1_api_client"
+        ].create_namespaced_deployment.assert_called_once()
+        mocks[
+            "current_k8s_corev1_api_client"
+        ].create_namespaced_service.assert_called_once()
+        mocks[
+            "current_k8s_networking_api_client"
+        ].create_namespaced_ingress.assert_called_once()
 
 
 def test_create_job_spec_kerberos(

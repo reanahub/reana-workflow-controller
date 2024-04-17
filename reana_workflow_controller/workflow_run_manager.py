@@ -10,6 +10,7 @@ import copy
 import json
 import logging
 import os
+from typing import List, Optional
 
 from flask import current_app
 from kubernetes import client
@@ -59,10 +60,14 @@ from reana_workflow_controller.k8s import (
 )
 
 from reana_workflow_controller.config import (  # isort:skip
+    CONTAINER_IMAGE_ALIAS_PREFIXES,
     IMAGE_PULL_SECRETS,
     JOB_CONTROLLER_CONTAINER_PORT,
     JOB_CONTROLLER_ENV_VARS,
     JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+    REANA_INTERACTIVE_SESSIONS_DEFAULT_IMAGES,
+    REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+    REANA_INTERACTIVE_SESSIONS_RECOMMENDED_IMAGES,
     REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
@@ -79,6 +84,66 @@ from reana_workflow_controller.config import (  # isort:skip
     WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS,
     WORKFLOW_ENGINE_YADAGE_ENV_VARS,
 )
+
+
+def _container_image_aliases(
+    image: str, prefixes=CONTAINER_IMAGE_ALIAS_PREFIXES
+) -> List[str]:
+    """Return possible aliases for a docker image reference.
+
+    Aliases are obtained by adding/removing default prefixes like "docker.io/".
+    Some of the returned aliases might not be valid docker image references,
+    in particular when adding default prefixes to references that are already
+    fully qualified.
+
+    Example: the returned aliases for `docker.io/library/ubuntu:24.04` are:
+      - `docker.io/library/ubuntu:24.04`
+      - `library/ubuntu:24.04`
+      - `ubuntu:24.04`
+      - `library/docker.io/library/ubuntu:24.04` (not valid)
+    """
+    aliases = [image]
+    for prefix in prefixes:
+        if image.startswith(prefix):
+            # remove prefix
+            aliases.append(image[len(prefix) :])
+        else:
+            # add prefix
+            aliases.append(prefix + image)
+    return aliases
+
+
+def _validate_interactive_session_image(type_: str, user_image: Optional[str]) -> str:
+    if type_ not in REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS:
+        raise REANAInteractiveSessionError(
+            f"Missing environment configuration for {type_}."
+        )
+
+    config = REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS[type_]
+    # recommended_images can be empty
+    recommended_images = REANA_INTERACTIVE_SESSIONS_RECOMMENDED_IMAGES[type_]
+    # default_image can be `None`
+    default_image = REANA_INTERACTIVE_SESSIONS_DEFAULT_IMAGES[type_]
+    image = user_image or default_image
+
+    if not image:
+        raise REANAInteractiveSessionError("Container image must be specified.")
+
+    if not config["allow_custom"]:
+        # check if one of the aliases is in the recommended list
+        aliases = _container_image_aliases(image)
+        # normally only one alias should match, unless multiple aliases of the same
+        # image are present in the recommended list
+        allowed_alias = next(
+            (alias for alias in aliases if alias in recommended_images), None
+        )
+        if not allowed_alias:
+            raise REANAInteractiveSessionError(
+                f"Custom container image {image} is not allowed."
+            )
+        return allowed_alias
+    else:
+        return image
 
 
 class WorkflowRunManager:
@@ -316,22 +381,26 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             logging.error(msg, exc_info=True)
             raise e
 
-    def start_interactive_session(self, interactive_session_type, **kwargs):
+    def start_interactive_session(self, interactive_session_type, image=None, **kwargs):
         """Start an interactive workflow run.
 
         :param interactive_session_type: One of the available interactive
             session types.
+        :param image: Docker image to use for the interactive session.
         :return: Relative path to access the interactive session.
         """
+        if interactive_session_type not in InteractiveSessionType.__members__:
+            raise REANAInteractiveSessionError(
+                f"Interactive type {interactive_session_type} does not exist."
+            )
+
+        validated_image = _validate_interactive_session_image(
+            interactive_session_type, image
+        )
+
         action_completed = True
         kubernetes_objects = None
         try:
-            if interactive_session_type not in InteractiveSessionType.__members__:
-                raise REANAInteractiveSessionError(
-                    "Interactive type {} does not exist.".format(
-                        interactive_session_type
-                    )
-                )
             access_path = self._generate_interactive_workflow_path()
             workflow_run_name = self._workflow_run_name_generator("session")
             kubernetes_objects = build_interactive_k8s_objects[
@@ -340,6 +409,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 workflow_run_name,
                 self.workflow.workspace_path,
                 access_path,
+                validated_image,
                 access_token=self.workflow.get_owner_access_token(),
                 cvmfs_repos=self.retrieve_required_cvmfs_repos(),
                 owner_id=self.workflow.owner_id,

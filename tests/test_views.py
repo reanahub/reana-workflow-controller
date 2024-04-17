@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -1477,7 +1477,9 @@ def test_get_workspace_diff(
         assert "# File" in response_data["workspace_listing"]
 
 
-def test_create_interactive_session(app, default_user, sample_serial_workflow_in_db):
+def test_create_interactive_session(
+    app, default_user, sample_serial_workflow_in_db, interactive_session_environments
+):
     """Test create interactive session."""
     wrm = WorkflowRunManager(sample_serial_workflow_in_db)
     expected_data = {"path": wrm._generate_interactive_workflow_path()}
@@ -1502,7 +1504,7 @@ def test_create_interactive_session(app, default_user, sample_serial_workflow_in
 
 
 def test_create_interactive_session_unknown_type(
-    app, default_user, sample_serial_workflow_in_db
+    app, default_user, sample_serial_workflow_in_db, interactive_session_environments
 ):
     """Test create interactive session for unknown interactive type."""
     with app.test_client() as client:
@@ -1511,7 +1513,7 @@ def test_create_interactive_session_unknown_type(
             url_for(
                 "workflows_session.open_interactive_session",
                 workflow_id_or_name=sample_serial_workflow_in_db.id_,
-                interactive_session_type="terminl",
+                interactive_session_type="terminal",
             ),
             query_string={"user": default_user.id_},
         )
@@ -1519,10 +1521,10 @@ def test_create_interactive_session_unknown_type(
 
 
 def test_create_interactive_session_custom_image(
-    app, default_user, sample_serial_workflow_in_db
+    app, default_user, sample_serial_workflow_in_db, interactive_session_environments
 ):
     """Create an interactive session with custom image."""
-    custom_image = "test/image"
+    custom_image = "docker_image_2"
     interactive_session_configuration = {"image": custom_image}
     with app.test_client() as client:
         # create workflow
