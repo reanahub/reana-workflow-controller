@@ -173,4 +173,4 @@ ALIVE_STATUSES = [
 ]
 """Alive workflow statuses."""
 
-USE_KUEUE = bool(os.getenv("USE_KUEUE", "false"))
+USE_KUEUE = bool(os.getenv("KUEUE_ENABLED", "False"))

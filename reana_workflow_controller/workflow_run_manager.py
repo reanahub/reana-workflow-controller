@@ -490,13 +490,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workspace_mount, workspace_volume = get_workspace_volume(
             self.workflow.workspace_path
         )
-        
+
         labels = {
             "reana_workflow_mode": "batch",
             "reana-run-batch-workflow-uuid": str(self.workflow.id_),
-            "kueue.x-k8s.io/queue-name": (
-                "batch-queue-batch" if USE_KUEUE else None
-            ),  
+            "kueue.x-k8s.io/queue-name": ("batch-queue-batch" if USE_KUEUE else None),
         }
 
         # Filter out None values (labels should not include None)
@@ -600,6 +598,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {"name": "USER", "value": user},  # Required by HTCondor
                 {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
                 {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
+                {"name": "USE_KUEUE", "value": str(USE_KUEUE)},
                 {
                     "name": "REANA_SQLALCHEMY_DATABASE_URI",
                     "value": SQLALCHEMY_DATABASE_URI,
