@@ -19,8 +19,6 @@ from reana_db.models import (
     RunStatus,
     InteractiveSession,
     InteractiveSessionType,
-    JobStatus,
-    Job,
 )
 
 from reana_workflow_controller.config import (

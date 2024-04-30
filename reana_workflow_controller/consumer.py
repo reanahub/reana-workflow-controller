@@ -23,7 +23,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_batchv1_api_client,
     current_k8s_corev1_api_client,
 )
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.utils import (
     calculate_file_access_time,
     calculate_hash_of_dir,
@@ -180,8 +180,16 @@ def _update_commit_status(workflow, status):
         state = "canceled"
     else:
         state = "running"
-    secret_store = REANAUserSecretsStore(workflow.owner_id)
-    gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
+
+    user_secrets = UserSecretsStore.fetch(workflow.owner_id)
+    gitlab_access_token_secret = user_secrets.get_secret("gitlab_access_token")
+    if not gitlab_access_token_secret:
+        logging.error(
+            f"Skipping updating commit status for workflow {workflow.id_}: GitLab access token not found."
+        )
+        return
+    gitlab_access_token = gitlab_access_token_secret.value_str
+
     target_url = f"https://{REANA_HOSTNAME}/api/workflows/{workflow.id_}/logs"
     workflow_name = urlparse.quote_plus(workflow.git_repo)
     system_name = "reana"
@@ -190,7 +198,13 @@ def _update_commit_status(workflow, status):
         f"{workflow.git_ref}?access_token={gitlab_access_token}&state={state}&"
         f"target_url={target_url}&name={system_name}"
     )
-    requests.post(commit_status_url)
+
+    res = requests.post(commit_status_url)
+    if res.status_code >= 400:
+        logging.error(
+            f"Failed to update commit status for workflow {workflow.id_}: "
+            f"status code {res.status_code}, content {res.text}"
+        )
 
 
 def _update_run_progress(workflow_uuid, msg):

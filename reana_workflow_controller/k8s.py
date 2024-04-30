@@ -17,7 +17,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_corev1_api_client,
     current_k8s_networking_api_client,
 )
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
     get_workspace_volume,
@@ -228,16 +228,16 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_user_secrets(self):
         """Mount the "file" secrets and set the "env" secrets in the container."""
-        secrets_store = REANAUserSecretsStore(self.owner_id)
+        user_secrets = UserSecretsStore.fetch(self.owner_id)
 
         # mount file secrets
-        secrets_volume = secrets_store.get_file_secrets_volume_as_k8s_specs()
-        secrets_volume_mount = secrets_store.get_secrets_volume_mount_as_k8s_spec()
+        secrets_volume = user_secrets.get_file_secrets_volume_as_k8s_specs()
+        secrets_volume_mount = user_secrets.get_secrets_volume_mount_as_k8s_spec()
         self._pod_spec.volumes.append(secrets_volume)
         self._session_container.volume_mounts.append(secrets_volume_mount)
 
         # set environment secrets
-        self._session_container.env += secrets_store.get_env_secrets_as_k8s_spec()
+        self._session_container.env += user_secrets.get_env_secrets_as_k8s_spec()
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""

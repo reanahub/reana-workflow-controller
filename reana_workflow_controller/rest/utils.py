@@ -33,7 +33,7 @@ from git import Repo
 from kubernetes.client.rest import ApiException
 from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_UMASK, WORKFLOW_TIME_FORMAT
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.utils import (
     get_workflow_status_change_verb,
     remove_upper_level_references,
@@ -367,8 +367,11 @@ def create_workflow_workspace(
     os.umask(REANA_WORKFLOW_UMASK)
     os.makedirs(path, exist_ok=True)
     if git_url and git_ref:
-        secret_store = REANAUserSecretsStore(user_id)
-        gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
+        user_secrets = UserSecretsStore.fetch(user_id)
+        gitlab_access_token_secret = user_secrets.get_secret("gitlab_access_token")
+        if not gitlab_access_token_secret:
+            raise Exception("GitLab access token not found.")
+        gitlab_access_token = gitlab_access_token_secret.value_str
         url = "https://oauth2:{0}@{1}/{2}.git".format(
             gitlab_access_token, REANA_GITLAB_HOST, git_url
         )

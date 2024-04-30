@@ -37,7 +37,7 @@ from reana_commons.config import (
 )
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.kerberos import get_kerberos_k8s_config
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     create_cvmfs_persistent_volume_claim,
     get_workspace_volume,
@@ -572,12 +572,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
 
-        secrets_store = REANAUserSecretsStore(owner_id)
-
+        user_secrets = UserSecretsStore.fetch(owner_id)
         kerberos = None
         if self.requires_kerberos():
             kerberos = get_kerberos_k8s_config(
-                secrets_store,
+                user_secrets,
                 kubernetes_uid=WORKFLOW_RUNTIME_USER_UID,
             )
 
@@ -634,9 +633,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             workflow_engine_container.volume_mounts += kerberos.volume_mounts
             workflow_engine_container.env += kerberos.env
 
-        job_controller_env_secrets = secrets_store.get_env_secrets_as_k8s_spec()
+        job_controller_env_secrets = user_secrets.get_env_secrets_as_k8s_spec()
 
-        user = secrets_store.get_secret_value("CERN_USER") or WORKFLOW_RUNTIME_USER_NAME
+        user_secret = user_secrets.get_secret("CERN_USER")
+        user = user_secret.value_str if user_secret else WORKFLOW_RUNTIME_USER_NAME
 
         job_controller_container = client.V1Container(
             name=current_app.config["JOB_CONTROLLER_NAME"],
@@ -723,7 +723,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 },
             )
 
-        secrets_volume_mount = secrets_store.get_secrets_volume_mount_as_k8s_spec()
+        secrets_volume_mount = user_secrets.get_secrets_volume_mount_as_k8s_spec()
         job_controller_container.volume_mounts = [workspace_mount, secrets_volume_mount]
 
         job_controller_container.ports = [
@@ -741,7 +741,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
         volumes = [
             workspace_volume,
-            secrets_store.get_file_secrets_volume_as_k8s_specs(),
+            user_secrets.get_file_secrets_volume_as_k8s_specs(),
         ]
 
         if kerberos:
