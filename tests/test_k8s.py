@@ -5,26 +5,24 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 from unittest.mock import Mock, patch
+from uuid import uuid4
+
 from reana_workflow_controller.k8s import InteractiveDeploymentK8sBuilder
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore, UserSecrets, Secret
 
 
 def test_interactive_deployment_k8s_builder_user_secrets(monkeypatch):
     """Expose user secrets in interactive sessions"""
-    monkeypatch.setattr(
-        REANAUserSecretsStore,
-        "get_file_secrets_volume_as_k8s_specs",
-        lambda _: {"name": "secrets-volume"},
+    user_id = uuid4()
+    user_secrets = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="k8s-secret",
+        secrets=[Secret(name="third_env", type_="env", value="3")],
     )
     monkeypatch.setattr(
-        REANAUserSecretsStore,
-        "get_secrets_volume_mount_as_k8s_spec",
-        lambda _: {"name": "secrets-volume-mount"},
-    )
-    monkeypatch.setattr(
-        REANAUserSecretsStore,
-        "get_env_secrets_as_k8s_spec",
-        lambda _: [{"name": "third_env", "value": "3"}],
+        UserSecretsStore,
+        "fetch",
+        lambda _: user_secrets,
     )
 
     builder = InteractiveDeploymentK8sBuilder(
@@ -42,6 +40,6 @@ def test_interactive_deployment_k8s_builder_user_secrets(monkeypatch):
     deployment = objs["deployment"]
     pod = deployment.spec.template.spec
     assert len(pod.containers) == 1
-    assert {"name": "secrets-volume"} in pod.volumes
-    assert {"name": "secrets-volume-mount"} in pod.containers[0].volume_mounts
-    assert {"name": "third_env", "value": "3"} in pod.containers[0].env
+    assert any(v["name"] == "k8s-secret" for v in pod.volumes)
+    assert any(vm["name"] == "k8s-secret" for vm in pod.containers[0].volume_mounts)
+    assert any(e["name"] == "third_env" for e in pod.containers[0].env)
