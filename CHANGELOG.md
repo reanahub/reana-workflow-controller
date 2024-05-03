@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.95.0) (2024-05-03)
+
+
+### Features
+
+* **k8s:** set custom ingressClassName for interactive sessions ([#581](https://github.com/reanahub/reana-workflow-controller/issues/581)) ([13d1c5d](https://github.com/reanahub/reana-workflow-controller/commit/13d1c5d6e5253998b56f2658d560835a79fe5252))
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#579](https://github.com/reanahub/reana-workflow-controller/issues/579)) ([57a0246](https://github.com/reanahub/reana-workflow-controller/commit/57a0246ceedef2a724c98b3993b79e688e2d1ac2))
+
+
+### Documentation
+
+* **openapi:** amend response description for file deletion ([#573](https://github.com/reanahub/reana-workflow-controller/issues/573)) ([1d027ff](https://github.com/reanahub/reana-workflow-controller/commit/1d027ffeafc437fc9e0c2a4193a9e2585231ab2a))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9ebbf2a](https://github.com/reanahub/reana-workflow-controller/commit/9ebbf2a3b7f0dbebaa23a0fbb26516920fe31759))
+
 ## [0.9.3](https://github.com/reanahub/reana-workflow-controller/compare/0.9.2...0.9.3) (2024-03-04)
 
 
