@@ -1155,8 +1155,6 @@ def test_start_workflow_db_failure(
     app,
     session,
     default_user,
-    user_secrets,
-    corev1_api_client_with_user_secrets,
     sample_serial_workflow_in_db,
 ):
     """Test starting workflow with a DB failure."""
@@ -1193,8 +1191,6 @@ def test_start_workflow_kubernetes_failure(
     app,
     session,
     default_user,
-    user_secrets,
-    corev1_api_client_with_user_secrets,
     sample_serial_workflow_in_db,
 ):
     """Test starting workflow with a Kubernetes failure when creating jobs."""
