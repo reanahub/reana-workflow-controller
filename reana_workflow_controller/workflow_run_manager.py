@@ -494,7 +494,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         labels = {
             "reana_workflow_mode": "batch",
             "reana-run-batch-workflow-uuid": str(self.workflow.id_),
-            "kueue.x-k8s.io/queue-name": ("batch-queue-batch" if USE_KUEUE else None),
+            "kueue.x-k8s.io/queue-name": ("local-queue-batch" if USE_KUEUE else None),
         }
 
         # Filter out None values (labels should not include None)

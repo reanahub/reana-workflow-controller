@@ -13,7 +13,7 @@ import json
 
 from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
 from reana_db.models import JobStatus, RunStatus
-
+from distutils.util import strtobool
 from reana_workflow_controller.version import __version__
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -173,4 +173,4 @@ ALIVE_STATUSES = [
 ]
 """Alive workflow statuses."""
 
-USE_KUEUE = bool(os.getenv("KUEUE_ENABLED", "False"))
+USE_KUEUE = bool(strtobool(os.getenv("KUEUE_ENABLED", "False")))
