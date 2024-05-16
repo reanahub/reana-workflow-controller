@@ -22,6 +22,9 @@ def _env_vars_dict_to_k8s_list(env_vars):
     return [{"name": name, "value": str(value)} for name, value in env_vars.items()]
 
 
+SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
+"""Secret key used for the application user sessions."""
+
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
 
