@@ -11,7 +11,11 @@
 import os
 import json
 
-from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
+from reana_commons.config import (
+    MQ_CONNECTION_STRING,
+    REANA_COMPONENT_PREFIX,
+    SHARED_VOLUME_PATH,
+)
 from reana_db.models import JobStatus, RunStatus
 
 from reana_workflow_controller.version import __version__
@@ -122,7 +126,8 @@ https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-a
 """
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
-    {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH}
+    {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH},
+    {"name": "RABBIT_MQ", "value": MQ_CONNECTION_STRING},
 ]
 """Common to all workflow engines environment variables."""
 
