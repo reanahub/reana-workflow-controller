@@ -11,6 +11,9 @@
 import json
 
 from flask import Blueprint, jsonify, request
+from webargs import fields
+from webargs.flaskparser import use_kwargs
+
 
 from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_commons.errors import REANASecretDoesNotExist
@@ -314,7 +317,28 @@ def get_workflow_status(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["PUT"])
-def set_workflow_status(workflow_id_or_name):  # noqa
+@use_kwargs(
+    {
+        # parameters for "start"
+        "input_parameters": fields.Dict(),
+        "operational_options": fields.Dict(),
+        "restart": fields.Boolean(),
+        # parameters for "deleted"
+        "all_runs": fields.Boolean(),
+        "workspace": fields.Boolean(),
+    },
+    location="json",
+)
+@use_kwargs(
+    {
+        "user": fields.Str(required=True),
+        "status": fields.Str(required=True),
+    },
+    location="query",
+)
+def set_workflow_status(
+    workflow_id_or_name: str, user: str, status: str, **parameters: dict
+):  # noqa
     r"""Set workflow status.
 
     ---
@@ -348,21 +372,36 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         - name: parameters
           in: body
           description: >-
-            Optional. Additional input parameters and operational options for
-            workflow execution. Possible parameters are `CACHE=on/off`, passed
-            to disable caching of results in serial workflows,
-            `all_runs=True/False` deletes all runs of a given workflow
-            if status is set to deleted and `workspace=True/False` which deletes
-            the workspace of a workflow.
+            Optional. Additional parameters to customise the workflow status change.
           required: false
           schema:
             type: object
             properties:
-              CACHE:
-                type: string
+              operational_options:
+                description: >-
+                  Optional. Additional operational options for workflow execution.
+                  Only allowed when status is `start`.
+                type: object
+              input_parameters:
+                description: >-
+                  Optional. Additional input parameters that override the ones
+                  from the workflow specification. Only allowed when status is `start`.
+                type: object
+              restart:
+                description: >-
+                  Optional. If true, the workflow is a restart of an earlier workflow execution.
+                  Only allowed when status is `start`.
+                type: boolean
               all_runs:
+                description: >-
+                  Optional. If true, delete all runs of the workflow.
+                  Only allowed when status is `deleted`.
                 type: boolean
               workspace:
+                description: >-
+                  Optional, but must be set to true if provided.
+                  If true, delete also the workspace of the workflow.
+                  Only allowed when status is `deleted`.
                 type: boolean
       responses:
         200:
@@ -456,24 +495,11 @@ def set_workflow_status(workflow_id_or_name):  # noqa
     """
 
     try:
-        user_uuid = request.args["user"]
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        status = request.args.get("status")
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user)
         if not (status in STATUSES):
-            return (
-                jsonify(
-                    {
-                        "message": "Status {0} is not one of: {1}".format(
-                            status, ", ".join(STATUSES)
-                        )
-                    }
-                ),
-                400,
-            )
+            error_msg = f"Status {status} is not one of: {', '.join(STATUSES)}"
+            return jsonify({"message": error_msg}), 400
 
-        parameters = {}
-        if request.is_json:
-            parameters = request.json
         if status == START:
             start_workflow(workflow, parameters)
             return (
@@ -489,8 +515,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
                 200,
             )
         elif status == DELETED:
-            all_runs = True if request.json.get("all_runs") else False
-            workspace = True if request.json.get("workspace", True) else False
+            all_runs = parameters.get("all_runs", False)
+            workspace = parameters.get("workspace", True)
             if not workspace:
                 return (
                     jsonify(
