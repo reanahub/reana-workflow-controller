@@ -27,6 +27,7 @@ from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
     REANA_INGRESS_ANNOTATIONS,
     REANA_INGRESS_CLASS_NAME,
+    REANA_INGRESS_HOST,
 )
 
 
@@ -104,7 +105,9 @@ class InteractiveDeploymentK8sBuilder(object):
             ]
         )
         spec = client.V1IngressSpec(
-            rules=[client.V1IngressRule(http=ingress_rule_value)]
+            rules=[
+                client.V1IngressRule(http=ingress_rule_value, host=REANA_INGRESS_HOST)
+            ]
         )
         if REANA_INGRESS_CLASS_NAME:
             spec.ingress_class_name = REANA_INGRESS_CLASS_NAME
