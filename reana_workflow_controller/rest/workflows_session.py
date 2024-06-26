@@ -10,6 +10,9 @@
 
 
 from flask import Blueprint, jsonify, request
+from webargs import fields
+from webargs.flaskparser import use_kwargs
+
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_db.models import WorkflowSession, InteractiveSessionType, RunStatus
 
@@ -20,10 +23,14 @@ blueprint = Blueprint("workflows_session", __name__)
 
 
 @blueprint.route(
-    "/workflows/<workflow_id_or_name>/open/" "<interactive_session_type>",
+    "/workflows/<workflow_id_or_name>/open/<interactive_session_type>",
     methods=["POST"],
 )
-def open_interactive_session(workflow_id_or_name, interactive_session_type):  # noqa
+@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs({"image": fields.Str()}, location="json")
+def open_interactive_session(
+    workflow_id_or_name, interactive_session_type, user, **kwargs
+):  # noqa
     r"""Start an interactive session inside the workflow workspace.
 
     ---
@@ -109,45 +116,27 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
     """
     try:
         if interactive_session_type not in InteractiveSessionType.__members__:
-            return (
-                jsonify(
-                    {
-                        "message": "Interactive session type {0} not found, try "
-                        "with one of: {1}".format(
-                            interactive_session_type,
-                            [e.name for e in InteractiveSessionType],
-                        )
-                    }
-                ),
-                404,
+            error_msg = (
+                f"Interactive session type {interactive_session_type} not found, "
+                f"try with one of: {[e.name for e in InteractiveSessionType]}"
             )
-        interactive_session_configuration = request.json if request.is_json else {}
-        user_uuid = request.args["user"]
-        workflow = None
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+            return jsonify({"message": error_msg}), 404
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid=user)
 
         if workflow.sessions.first() is not None:
-            return (
-                jsonify({"message": "Interactive session is already open"}),
-                404,
-            )
+            return jsonify({"message": "Interactive session is already open"}), 404
 
         if workflow.status == RunStatus.deleted:
-            return (
-                jsonify(
-                    {
-                        "message": "Interactive session can't be opened from a deleted workflow"
-                    }
-                ),
-                404,
-            )
+            error_msg = "Interactive session can't be opened from a deleted workflow"
+            return jsonify({"message": error_msg}), 404
 
         kwrm = KubernetesWorkflowRunManager(workflow)
         access_path = kwrm.start_interactive_session(
             interactive_session_type,
-            image=interactive_session_configuration.get("image", None),
+            image=kwargs.get("image"),
         )
-        return jsonify({"path": "{}".format(access_path)}), 200
+        return jsonify({"path": str(access_path)}), 200
 
     except (KeyError, ValueError) as e:
         status_code = 400 if workflow else 404

@@ -324,6 +324,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         :return: Relative path to access the interactive session.
         """
         action_completed = True
+        kubernetes_objects = None
         try:
             if interactive_session_type not in InteractiveSessionType.__members__:
                 raise REANAInteractiveSessionError(
