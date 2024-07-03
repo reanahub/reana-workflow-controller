@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.4](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.9.4) (2024-07-03)
+
+
+### Features
+
+* **helm:** allow cluster administrator to configure ingress host ([#588](https://github.com/reanahub/reana-workflow-controller/issues/588)) ([a7c9c85](https://github.com/reanahub/reana-workflow-controller/commit/a7c9c851277f3ca191c073fdc6c6d5d4149a95e8))
+* **sessions:** expose user secrets in interactive sessions ([#591](https://github.com/reanahub/reana-workflow-controller/issues/591)) ([784efee](https://github.com/reanahub/reana-workflow-controller/commit/784efee4be8b4a9785d03d3d05b00f3da2b455c2))
+
+
+### Bug fixes
+
+* **set_workflow_status:** validate endpoint arguments ([#589](https://github.com/reanahub/reana-workflow-controller/issues/589)) ([5945d7f](https://github.com/reanahub/reana-workflow-controller/commit/5945d7fca095531b3601e551c527457f9413643c))
+
 ## [0.9.3](https://github.com/reanahub/reana-workflow-controller/compare/0.9.2...0.9.3) (2024-03-04)
 
 
