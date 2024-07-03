@@ -1488,6 +1488,7 @@ def test_create_interactive_session(app, default_user, sample_serial_workflow_in
             current_k8s_corev1_api_client=mock.DEFAULT,
             current_k8s_networking_api_client=mock.DEFAULT,
             current_k8s_appsv1_api_client=mock.DEFAULT,
+            REANAUserSecretsStore=mock.DEFAULT,
         ):
             res = client.post(
                 url_for(
@@ -1530,6 +1531,7 @@ def test_create_interactive_session_custom_image(
             current_k8s_corev1_api_client=mock.DEFAULT,
             current_k8s_networking_api_client=mock.DEFAULT,
             current_k8s_appsv1_api_client=mock.DEFAULT,
+            REANAUserSecretsStore=mock.DEFAULT,
         ) as mocks:
             client.post(
                 url_for(

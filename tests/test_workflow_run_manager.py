@@ -37,7 +37,9 @@ def test_start_interactive_session(sample_serial_workflow_in_db):
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
         if len(InteractiveSessionType):
-            kwrm.start_interactive_session(InteractiveSessionType(0).name)
+            kwrm.start_interactive_session(
+                InteractiveSessionType(0).name, expose_secrets=False
+            )
         mocks[
             "current_k8s_appsv1_api_client"
         ].create_namespaced_deployment.assert_called_once()
@@ -66,7 +68,9 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
         ):
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
             if len(InteractiveSessionType):
-                kwrm.start_interactive_session(InteractiveSessionType(0).name)
+                kwrm.start_interactive_session(
+                    InteractiveSessionType(0).name, expose_secrets=False
+                )
 
 
 def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
@@ -92,7 +96,9 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
         try:
             kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
             if len(InteractiveSessionType):
-                kwrm.start_interactive_session(InteractiveSessionType(0).name)
+                kwrm.start_interactive_session(
+                    InteractiveSessionType(0).name, expose_secrets=False
+                )
         except REANAInteractiveSessionError:
             mocks[
                 "current_k8s_corev1_api_client"
@@ -137,7 +143,9 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
     ):
         kwrm = KubernetesWorkflowRunManager(workflow)
         if len(InteractiveSessionType):
-            kwrm.start_interactive_session(InteractiveSessionType(0).name)
+            kwrm.start_interactive_session(
+                InteractiveSessionType(0).name, expose_secrets=False
+            )
 
             int_session = InteractiveSession.query.filter_by(
                 owner_id=workflow.owner_id,

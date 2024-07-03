@@ -200,6 +200,9 @@ REANA_INGRESS_ANNOTATIONS = json.loads(os.getenv("REANA_INGRESS_ANNOTATIONS", "{
 REANA_INGRESS_CLASS_NAME = os.getenv("REANA_INGRESS_CLASS_NAME")
 """REANA Ingress class name defined by the administrator to be used for interactive sessions."""
 
+REANA_INGRESS_HOST = os.getenv("REANA_INGRESS_HOST", "")
+"""REANA Ingress host defined by the administrator."""
+
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
 

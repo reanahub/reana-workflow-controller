@@ -17,6 +17,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_corev1_api_client,
     current_k8s_networking_api_client,
 )
+from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
     get_workspace_volume,
@@ -27,6 +28,7 @@ from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
     REANA_INGRESS_ANNOTATIONS,
     REANA_INGRESS_CLASS_NAME,
+    REANA_INGRESS_HOST,
 )
 
 
@@ -77,6 +79,19 @@ class InteractiveDeploymentK8sBuilder(object):
             name=deployment_name,
             labels={"reana_workflow_mode": "session"},
         )
+        self._session_container = client.V1Container(
+            name=self.deployment_name, image=self.image, env=[], volume_mounts=[]
+        )
+        self._pod_spec = client.V1PodSpec(
+            containers=[self._session_container],
+            volumes=[],
+            node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
+            # Disable service discovery with env variables, so that the environment is
+            # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
+            enable_service_links=False,
+            automount_service_account_token=False,
+        )
+
         self.kubernetes_objects = {
             "ingress": self._build_ingress(),
             "service": self._build_service(metadata),
@@ -104,7 +119,9 @@ class InteractiveDeploymentK8sBuilder(object):
             ]
         )
         spec = client.V1IngressSpec(
-            rules=[client.V1IngressRule(http=ingress_rule_value)]
+            rules=[
+                client.V1IngressRule(http=ingress_rule_value, host=REANA_INGRESS_HOST)
+            ]
         )
         if REANA_INGRESS_CLASS_NAME:
             spec.ingress_class_name = REANA_INGRESS_CLASS_NAME
@@ -149,15 +166,6 @@ class InteractiveDeploymentK8sBuilder(object):
         :param metadata: Common Kubernetes metadata for the interactive
             deployment.
         """
-        container = client.V1Container(name=self.deployment_name, image=self.image)
-        pod_spec = client.V1PodSpec(
-            containers=[container],
-            node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
-            # Disable service discovery with env variables, so that the environment is
-            # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
-            enable_service_links=False,
-            automount_service_account_token=False,
-        )
         labels = {
             "app": self.deployment_name,
             "reana_workflow_mode": "session",
@@ -166,7 +174,7 @@ class InteractiveDeploymentK8sBuilder(object):
         }
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels=labels),
-            spec=pod_spec,
+            spec=self._pod_spec,
         )
         spec = client.V1DeploymentSpec(
             selector=client.V1LabelSelector(match_labels=labels),
@@ -184,23 +192,17 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_command(self, command):
         """Add a command to the deployment."""
-        self.kubernetes_objects["deployment"].spec.template.spec.containers[
-            0
-        ].command = command
+        self._session_container.command = command
 
     def add_command_arguments(self, args):
         """Add command line arguments in addition to the command."""
-        self.kubernetes_objects["deployment"].spec.template.spec.containers[
-            0
-        ].args = args
+        self._session_container.args = args
 
     def add_reana_shared_storage(self):
         """Add the REANA shared file system volume mount to the deployment."""
         volume_mount, volume = get_workspace_volume(self.workspace)
-        self.kubernetes_objects["deployment"].spec.template.spec.containers[
-            0
-        ].volume_mounts = [volume_mount]
-        self.kubernetes_objects["deployment"].spec.template.spec.volumes = [volume]
+        self._session_container.volume_mounts.append(volume_mount)
+        self._pod_spec.volumes.append(volume)
 
     def add_cvmfs_repo_mounts(self, cvmfs_repos):
         """Add mounts for the provided CVMFS repositories to the deployment.
@@ -208,12 +210,8 @@ class InteractiveDeploymentK8sBuilder(object):
         :param cvmfs_mounts: List of CVMFS repos to make available.
         """
         cvmfs_volume_mounts, cvmfs_volumes = get_k8s_cvmfs_volumes(cvmfs_repos)
-        self.kubernetes_objects["deployment"].spec.template.spec.volumes.extend(
-            cvmfs_volumes
-        )
-        self.kubernetes_objects["deployment"].spec.template.spec.containers[
-            0
-        ].volume_mounts.extend(cvmfs_volume_mounts)
+        self._pod_spec.volumes.extend(cvmfs_volumes)
+        self._session_container.volume_mounts.extend(cvmfs_volume_mounts)
 
     def add_environment_variable(self, name, value):
         """Add an environment variable.
@@ -222,24 +220,25 @@ class InteractiveDeploymentK8sBuilder(object):
         :param value: Environment variable value.
         """
         env_var = client.V1EnvVar(name, str(value))
-        if isinstance(
-            self.kubernetes_objects["deployment"].spec.template.spec.containers[0].env,
-            list,
-        ):
-            self.kubernetes_objects["deployment"].spec.template.spec.containers[
-                0
-            ].env.append(env_var)
-        else:
-            self.kubernetes_objects["deployment"].spec.template.spec.containers[
-                0
-            ].env = [env_var]
+        self._session_container.env.append(env_var)
 
     def add_run_with_root_permissions(self):
         """Run interactive session with root."""
         security_context = client.V1SecurityContext(run_as_user=0)
-        self.kubernetes_objects["deployment"].spec.template.spec.containers[
-            0
-        ].security_context = security_context
+        self._session_container.security_context = security_context
+
+    def add_user_secrets(self):
+        """Mount the "file" secrets and set the "env" secrets in the container."""
+        secrets_store = REANAUserSecretsStore(self.owner_id)
+
+        # mount file secrets
+        secrets_volume = secrets_store.get_file_secrets_volume_as_k8s_specs()
+        secrets_volume_mount = secrets_store.get_secrets_volume_mount_as_k8s_spec()
+        self._pod_spec.volumes.append(secrets_volume)
+        self._session_container.volume_mounts.append(secrets_volume_mount)
+
+        # set environment secrets
+        self._session_container.env += secrets_store.get_env_secrets_as_k8s_spec()
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
@@ -255,6 +254,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
     owner_id=None,
     workflow_id=None,
     image=None,
+    expose_secrets=True,
 ):
     """Build the Kubernetes specification for a Jupyter NB interactive session.
 
@@ -276,6 +276,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
         session belongs to.
     :param image: Jupyter Notebook image to use, i.e.
         ``jupyter/tensorflow-notebook`` to enable ``tensorflow``.
+    :param expose_secrets: If true, mount the "file" secrets and set the
+        "env" secrets in jupyter's pod.
     """
     image = image or JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE
     cvmfs_repos = cvmfs_repos or []
@@ -297,6 +299,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_builder.add_reana_shared_storage()
     if cvmfs_repos:
         deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
+    if expose_secrets:
+        deployment_builder.add_user_secrets()
     deployment_builder.add_environment_variable("NB_GID", 0)
     # Changes umask so all files generated by the Jupyter Notebook can be
     # modified by the root group users.
