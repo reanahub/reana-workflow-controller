@@ -44,15 +44,15 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    "Flask>=2.1.1,<2.2.0",
-    "Werkzeug>=2.1.0,<3.0.0",
+    "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base/reana-server
+    "Werkzeug>=2.1.0,<2.3.0",  # same upper pin as invenio-base
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
-    "marshmallow>2.13.0,<=2.20.1",
+    "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.95.0a2,<0.96.0",
-    "reana-db>=0.95.0a2,<0.96.0",
-    "requests==2.25.0",
+    "reana-commons[kubernetes]>=0.95.0a3,<0.96.0",
+    "reana-db>=0.95.0a3,<0.96.0",
+    "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
     "uWSGI>=2.0.17",
@@ -98,7 +98,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
