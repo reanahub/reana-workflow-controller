@@ -45,10 +45,6 @@ for key, reqs in extras_require.items():
         continue
     extras_require["all"].extend(reqs)
 
-setup_requires = [
-    "pytest-runner>=2.7",
-]
-
 install_requires = [
     "Flask>=2.1.1,<2.2.0",
     "Werkzeug>=2.1.0,<3.0.0",
@@ -97,7 +93,6 @@ setup(
     python_requires=">=3.8",
     extras_require=extras_require,
     install_requires=install_requires,
-    setup_requires=setup_requires,
     tests_require=tests_require,
     classifiers=[
         "Development Status :: 3 - Alpha",
