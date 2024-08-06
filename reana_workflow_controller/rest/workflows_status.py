@@ -9,6 +9,7 @@
 """REANA Workflow Controller status REST API."""
 
 import json
+import logging
 
 from flask import Blueprint, jsonify, request
 
@@ -30,6 +31,7 @@ from reana_workflow_controller.rest.utils import (
     stop_workflow,
     use_paginate_args,
 )
+from reana_workflow_controller.consumer import _get_workflow_log
 
 START = "start"
 STOP = "stop"
@@ -150,8 +152,12 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                 "engine_specific": None,
             }
         else:
+            _get_workflow_log(workflow)
+
+            ll = [l.log for l in workflow.log]
+            logstr = "\n".join(ll)
             workflow_logs = {
-                "workflow_logs": workflow.logs,
+                "workflow_logs": logstr,
                 "job_logs": build_workflow_logs(workflow, paginate=paginate),
                 "engine_specific": workflow.engine_specific,
             }

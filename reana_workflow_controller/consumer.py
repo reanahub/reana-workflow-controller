@@ -31,7 +31,7 @@ from reana_commons.utils import (
     build_unique_component_name,
 )
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, RunStatus
+from reana_db.models import Job, JobCache, Workflow, RunStatus, WorkflowLog
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -84,6 +84,7 @@ class JobStatusConsumer(BaseConsumer):
         try:
             message.ack()
             body_dict = json.loads(body)
+            logging.info(body_dict)
             workflow_uuid = body_dict.get("workflow_uuid")
             workflow = (
                 Session.query(Workflow)
@@ -102,7 +103,8 @@ class JobStatusConsumer(BaseConsumer):
 
                 if workflow.can_transition_to(next_status):
                     logs = body_dict.get("logs") or ""
-                    _update_workflow_status(workflow, next_status, logs)
+                    pod_name = body_dict.get("pod_name")
+                    _update_workflow_status(workflow, next_status, logs, pod_name=pod_name)
                     if "message" in body_dict and body_dict.get("message"):
                         msg = body_dict["message"]
                         if "progress" in msg:
@@ -110,6 +112,8 @@ class JobStatusConsumer(BaseConsumer):
                         # Caching: calculate input hash and store in JobCache
                         if "caching_info" in msg:
                             _update_job_cache(msg)
+                        if "pod_name" in msg:
+                            _update_workflow_pod_name(workflow, msg["pod_name"])
                     Session.commit()
                 else:
                     logging.error(
@@ -140,10 +144,10 @@ class JobStatusConsumer(BaseConsumer):
             )
 
 
-def _update_workflow_status(workflow, status, logs):
+def _update_workflow_status(workflow, status, logs, pod_name=None):
     """Update workflow status in DB."""
     if workflow.status != status:
-        Workflow.update_workflow_status(Session, workflow.id_, status, logs, None)
+        Workflow.update_workflow_status(Session, workflow.id_, status, logs, None, pod_name)
         if workflow.git_ref:
             _update_commit_status(workflow, status)
 
@@ -154,6 +158,7 @@ def _update_workflow_status(workflow, status, logs):
             try:
                 workflow_engine_logs = _get_workflow_engine_pod_logs(workflow)
                 workflow.logs += workflow_engine_logs + "\n"
+                _get_workflow_log(workflow)
             except ApiException as e:
                 logging.exception(
                     f"Could not fetch workflow engine pod logs for workflow {workflow.id_}. "
@@ -170,6 +175,11 @@ def _update_workflow_status(workflow, status, logs):
                         f"Error: {e}"
                     )
 
+
+def _update_workflow_pod_name(workflow, pod_name):
+    """Update workflow pod name in DB."""
+    workflow.pod_name = pod_name
+    Session.add(workflow)
 
 def _update_commit_status(workflow, status):
     if status == RunStatus.finished:
@@ -291,3 +301,32 @@ def _get_workflow_engine_pod_logs(workflow: Workflow) -> str:
     # There might not be any pod returned by `list_namespaced_pod`, for example
     # when a workflow fails to be scheduled
     return ""
+
+def _get_workflow_log(workflow):
+    logs = ""
+    dd = 1000000
+    if len(workflow.log) != 0:
+        dd = int((datetime.now() - datetime.fromtimestamp(workflow.log[-1].time.timestamp())).total_seconds())
+    logging.info(dd)
+    try:
+        n = workflow.pod_name
+        if n is not None:
+            logging.info("Log: wf {0} pod name {1}".format(workflow.id_, n))
+            logs = current_k8s_corev1_api_client.read_namespaced_pod_log(
+                    namespace="default",
+                    name=workflow.pod_name,
+                    since_seconds=dd,
+                    timestamps = True,
+                    container="workflow-engine",
+            )
+    except Exception as e:
+        logging.error(f"Error from Kubernetes API while getting job logs: {e}")
+
+    for l in logs.splitlines():
+        tt = l.split(" ", 1)
+        log = WorkflowLog()
+        log.workflow_id = workflow.id_
+        log.time = tt[0]
+        log.log = tt[1]
+        Session.add(log)
+    Session.commit()

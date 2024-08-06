@@ -522,7 +522,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             name=current_app.config["WORKFLOW_ENGINE_NAME"],
             image=image,
             image_pull_policy="IfNotPresent",
-            env=[],
+            env=[{"name": "WORKFLOW_POD_NAME", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}}],
             volume_mounts=[],
             command=["/bin/bash", "-c"],
             args=command,
