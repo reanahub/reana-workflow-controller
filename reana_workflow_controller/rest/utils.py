@@ -234,14 +234,16 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                     .all()
                 )
             for workflow in to_be_deleted:
+                # 1. Stop open interactive sessions
                 int_session = workflow.sessions.first()
                 if int_session:
                     kwrm = KubernetesWorkflowRunManager(workflow)
                     kwrm.stop_interactive_session(int_session.id_)
 
                 if workspace:
+                    # 2. delete the workspace
                     remove_workflow_workspace(workflow.workspace_path)
-
+                    # 3. update the disk usage of the user
                     disk_resource = get_default_quota_resource(ResourceType.disk.name)
                     workflow_disk_resource = WorkflowResource.query.filter(
                         WorkflowResource.workflow_id == workflow.id_,
@@ -265,6 +267,11 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                             bytes_to_sum=-disk_usage,
                             override_policy_checks=True,
                         )
+
+                    # 4. disable retention rules, as the workspace was deleted
+                    workflow.inactivate_workspace_retention_rules()
+
+                # 5. set the workflow as deleted in the database
                 _mark_workflow_as_deleted_in_db(workflow)
                 remove_workflow_jobs_from_cache(workflow)
 
