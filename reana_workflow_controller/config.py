@@ -11,6 +11,7 @@
 import os
 import json
 
+from distutils.util import strtobool
 from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
 from reana_db.models import JobStatus, RunStatus
 
@@ -286,6 +287,63 @@ REANA_INGRESS_HOST = os.getenv("REANA_INGRESS_HOST", "")
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
 
+DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
+"""Whether Dask is enabled in the cluster or not"""
+
+REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "16Gi"
+)
+"""Maximum memory limit for Dask clusters."""
+
+REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS = int(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS", 2)
+)
+"""Number of workers in Dask cluster by default """
+
+REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "2Gi"
+)
+"""Memory for one Dask worker by default."""
+
+REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY", "8Gi"
+)
+"""Maximum memory for one Dask worker."""
+
+VOMSPROXY_CONTAINER_IMAGE = os.getenv(
+    "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.3.0"
+)
+"""Default docker image of VOMSPROXY sidecar container."""
+
+VOMSPROXY_CONTAINER_NAME = "voms-proxy"
+"""Name of VOMSPROXY sidecar container."""
+
+VOMSPROXY_CERT_CACHE_LOCATION = "/vomsproxy_cache/"
+"""Directory of voms-proxy certificate cache.
+
+This directory is shared between job & VOMSPROXY container."""
+
+VOMSPROXY_CERT_CACHE_FILENAME = "x509up_proxy"
+"""Name of the voms-proxy certificate cache file."""
+
+RUCIO_CONTAINER_IMAGE = os.getenv(
+    "RUCIO_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-rucio:1.1.1"
+)
+"""Default docker image of RUCIO sidecar container."""
+
+RUCIO_CONTAINER_NAME = "reana-auth-rucio"
+"""Name of RUCIO sidecar container."""
+
+RUCIO_CACHE_LOCATION = "/rucio_cache/"
+"""Directory of Rucio cache.
+
+This directory is shared between job & Rucio container."""
+
+RUCIO_CFG_CACHE_FILENAME = "rucio.cfg"
+"""Name of the RUCIO configuration cache file."""
+
+RUCIO_CERN_BUNDLE_CACHE_FILENAME = "CERN-bundle.pem"
+"""Name of the CERN Bundle cache file."""
 
 ALIVE_STATUSES = [
     RunStatus.created,

@@ -10,11 +10,15 @@
 
 from __future__ import absolute_import, print_function
 
+import logging
 import os
 import shutil
 import uuid
+import yaml
 
+from flask import current_app
 import pytest
+from mock import patch
 from reana_db.models import (
     Base,
     Job,
@@ -23,7 +27,10 @@ from reana_db.models import (
     WorkspaceRetentionAuditLog,
     WorkspaceRetentionRule,
 )
+from reana_commons.k8s.secrets import UserSecretsStore, UserSecrets, Secret
+
 from sqlalchemy_utils import create_database, database_exists, drop_database
+from sqlalchemy.orm.attributes import flag_modified
 
 from reana_workflow_controller.config import (
     REANA_INTERACTIVE_SESSIONS_DEFAULT_IMAGES,
@@ -31,6 +38,7 @@ from reana_workflow_controller.config import (
     REANA_INTERACTIVE_SESSIONS_RECOMMENDED_IMAGES,
 )
 from reana_workflow_controller.factory import create_app
+from reana_workflow_controller.dask import DaskResourceManager
 
 
 @pytest.fixture(scope="module")
@@ -152,3 +160,64 @@ def interactive_session_environments(monkeypatch):
         "jupyter",
         {"docker_image_1", "docker_image_2"},
     )
+
+
+@pytest.fixture()
+def sample_serial_workflow_in_db_with_dask(session, sample_serial_workflow_in_db):
+    """Sample workflow with Dask resource."""
+    workflow = sample_serial_workflow_in_db
+    new_reana_spec = workflow.reana_specification.copy()
+    new_reana_spec["workflow"]["resources"] = {
+        "dask": {
+            "image": "coffeateam/coffea-dask-almalinux8",
+            "memory": "10M",
+        }
+    }
+    workflow.reana_specification = new_reana_spec
+    flag_modified(workflow, "reana_specification")
+
+    session.add(workflow)
+    session.commit()
+
+    yield workflow
+
+
+@pytest.fixture
+def mock_user_secrets(monkeypatch):
+    user_id = uuid.uuid4()
+    user_secrets = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="k8s-secret",
+        secrets=[Secret(name="third_env", type_="env", value="3")],
+    )
+    monkeypatch.setattr(
+        UserSecretsStore,
+        "fetch",
+        lambda _: user_secrets,
+    )
+    return user_secrets
+
+
+@pytest.fixture
+def dask_resource_manager(sample_serial_workflow_in_db_with_dask, mock_user_secrets):
+    """Fixture to create a DaskResourceManager instance."""
+    manager = DaskResourceManager(
+        cluster_name="test-cluster",
+        workflow_spec=sample_serial_workflow_in_db_with_dask.reana_specification[
+            "workflow"
+        ],
+        workflow_workspace="/path/to/workspace",
+        user_id="user-123",
+        num_of_workers=2,
+        single_worker_memory="256Mi",
+    )
+    return manager
+
+
+@pytest.fixture
+def mock_k8s_client():
+    with patch(
+        "reana_workflow_controller.dask.current_k8s_custom_objects_api_client"
+    ) as mock_client:
+        mock_client.create_namespaced_custom_object.return_value = None
+        yield mock_client

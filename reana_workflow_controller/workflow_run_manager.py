@@ -52,6 +52,8 @@ from reana_db.models import Job, JobStatus, InteractiveSession, InteractiveSessi
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 
+from reana_workflow_controller.dask import DaskResourceManager, requires_dask
+
 from reana_workflow_controller.k8s import (
     build_interactive_k8s_objects,
     delete_k8s_ingress_object,
@@ -83,6 +85,8 @@ from reana_workflow_controller.config import (  # isort:skip
     WORKFLOW_ENGINE_SERIAL_ENV_VARS,
     WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS,
     WORKFLOW_ENGINE_YADAGE_ENV_VARS,
+    REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
 )
 
 
@@ -369,13 +373,37 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
 
         try:
-            # Create PVC needed for CVMFS repos
-            if self.retrieve_required_cvmfs_repos():
-                create_cvmfs_persistent_volume_claim()
+            # Create the dask cluster and required resources
+            if requires_dask(self.workflow):
+                DaskResourceManager(
+                    cluster_name=f"reana-run-dask-{self.workflow.id_}",
+                    workflow_spec=self.workflow.reana_specification["workflow"],
+                    workflow_workspace=self.workflow.workspace_path,
+                    user_id=self.workflow.owner_id,
+                    num_of_workers=self.workflow.reana_specification["workflow"]
+                    .get("resources", {})
+                    .get("dask", {})
+                    .get(
+                        "number_of_workers",
+                        REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
+                    ),
+                    single_worker_memory=self.workflow.reana_specification["workflow"]
+                    .get("resources", {})
+                    .get("dask", {})
+                    .get(
+                        "single_worker_memory",
+                        REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+                    ),
+                ).create_dask_resources()
 
             current_k8s_batchv1_api_client.create_namespaced_job(
                 namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
             )
+
+            # Create PVC needed for CVMFS repos
+            if self.retrieve_required_cvmfs_repos():
+                create_cvmfs_persistent_volume_claim()
+
         except ApiException as e:
             msg = "Workflow engine/job controller pod " "creation failed {}".format(e)
             logging.error(msg, exc_info=True)
@@ -596,6 +624,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             command=["/bin/bash", "-c"],
             args=command,
         )
+
         workflow_engine_env_vars.extend(
             [
                 {
@@ -723,6 +752,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL",
                     "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
+                },
+            )
+        if requires_dask(self.workflow):
+            job_controller_container.env.append(
+                {
+                    "name": "DASK_SCHEDULER_URI",
+                    "value": f"reana-run-dask-{self.workflow.id_}-scheduler.default.svc.cluster.local:8786",
                 },
             )
 

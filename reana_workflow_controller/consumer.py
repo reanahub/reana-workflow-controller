@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -22,6 +22,8 @@ from reana_commons.consumer import BaseConsumer
 from reana_commons.k8s.api_client import (
     current_k8s_batchv1_api_client,
     current_k8s_corev1_api_client,
+    current_k8s_custom_objects_api_client,
+    current_k8s_networking_api_client,
 )
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.utils import (
@@ -43,6 +45,9 @@ from reana_workflow_controller.config import (
     REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
+from reana_workflow_controller.k8s import delete_dask_dashboard_ingress
+
+from reana_workflow_controller.dask import requires_dask
 
 try:
     from urllib import parse as urlparse
@@ -160,6 +165,9 @@ def _update_workflow_status(workflow, status, logs):
                     f"Error: {e}"
                 )
                 workflow.logs += "Workflow engine logs could not be retrieved.\n"
+
+            if requires_dask(workflow):
+                _delete_dask_cluster(workflow)
 
             if RunStatus.should_cleanup_job(status):
                 try:
@@ -305,3 +313,25 @@ def _get_workflow_engine_pod_logs(workflow: Workflow) -> str:
     # There might not be any pod returned by `list_namespaced_pod`, for example
     # when a workflow fails to be scheduled
     return ""
+
+
+def _delete_dask_cluster(workflow: Workflow) -> None:
+    """Delete the Dask cluster resources."""
+    current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+        group="kubernetes.dask.org",
+        version="v1",
+        plural="daskclusters",
+        namespace="default",
+        name=f"reana-run-dask-{workflow.id_}",
+    )
+
+    current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+        group="kubernetes.dask.org",
+        version="v1",
+        plural="daskautoscalers",
+        namespace="default",
+        name=f"dask-autoscaler-reana-run-dask-{workflow.id_}",
+    )
+    delete_dask_dashboard_ingress(
+        f"dask-dashboard-ingress-reana-run-dask-{workflow.id_}", workflow.id_
+    )
