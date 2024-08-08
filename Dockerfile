@@ -7,6 +7,9 @@
 # Use Ubuntu LTS base image
 FROM docker.io/library/ubuntu:24.04
 
+# Configure shell options
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Use default answers in installation commands
 ENV DEBIAN_FRONTEND=noninteractive
 
