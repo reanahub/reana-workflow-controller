@@ -58,6 +58,8 @@ install_requires = [
     "uWSGI>=2.0.17",
     "uwsgitop>=0.10",
     "webargs>=6.1.0,<7.0.0",
+    "dask[complete]==2024.8.0",
+    "distributed==2024.8.0",
 ]
 
 packages = find_packages()

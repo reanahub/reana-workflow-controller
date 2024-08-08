@@ -13,6 +13,8 @@ from __future__ import absolute_import
 import json
 import logging
 import uuid
+import dask.distributed as dd
+from dask.distributed import Client
 from datetime import datetime
 
 import requests
@@ -154,6 +156,15 @@ def _update_workflow_status(workflow, status, logs):
             try:
                 workflow_engine_logs = _get_workflow_engine_pod_logs(workflow)
                 workflow.logs += workflow_engine_logs + "\n"
+                dask_client = dd.Client("tcp://dask-scheduler.default.svc.cluster.local:8786")
+                dask_log = ""
+                for k, l in dask_client.get_worker_logs().items():
+                    dask_log += "worker: " + k + "\n"
+                    for lvl, e in l:
+                        dask_log += e + "\n"
+                for k, l in dask_client.get_scheduler_logs():
+                    dask_log += l + "\n"
+                workflow.logs += dask_log + "\n"
             except ApiException as e:
                 logging.exception(
                     f"Could not fetch workflow engine pod logs for workflow {workflow.id_}. "
