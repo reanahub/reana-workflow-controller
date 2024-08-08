@@ -52,6 +52,8 @@ from reana_db.models import Job, JobStatus, InteractiveSession, InteractiveSessi
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 
+from reana_workflow_controller.dask import DaskResourceManager, requires_dask
+
 from reana_workflow_controller.k8s import (
     build_interactive_k8s_objects,
     delete_k8s_ingress_object,
@@ -373,6 +375,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             if self.retrieve_required_cvmfs_repos():
                 create_cvmfs_persistent_volume_claim()
 
+            # Create the dask cluster and required resources
+
+            if requires_dask(self.workflow):
+                DaskResourceManager(
+                    cluster_name=f"reana-run-dask-{self.workflow.id_}",
+                    workflow_spec=self.workflow.reana_specification["workflow"],
+                    workflow_workspace=self.workflow.workspace_path,
+                    user_id=self.workflow.owner_id,
+                ).create_dask_resources()
+
             current_k8s_batchv1_api_client.create_namespaced_job(
                 namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
             )
@@ -596,6 +608,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             command=["/bin/bash", "-c"],
             args=command,
         )
+
         workflow_engine_env_vars.extend(
             [
                 {
@@ -723,6 +736,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL",
                     "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
+                },
+            )
+        if requires_dask(self.workflow):
+            job_controller_container.env.append(
+                {
+                    "name": "DASK_SCHEDULER_URI",
+                    "value": f"reana-run-dask-{self.workflow.id_}-scheduler.default.svc.cluster.local:8786",
                 },
             )
 

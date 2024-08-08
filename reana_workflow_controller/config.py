@@ -256,6 +256,40 @@ REANA_INGRESS_HOST = os.getenv("REANA_INGRESS_HOST", "")
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
 
+VOMSPROXY_CONTAINER_IMAGE = os.getenv(
+    "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.2.0"
+)
+"""Default docker image of VOMSPROXY sidecar container."""
+
+VOMSPROXY_CONTAINER_NAME = "voms-proxy"
+"""Name of VOMSPROXY sidecar container."""
+
+VOMSPROXY_CERT_CACHE_LOCATION = "/vomsproxy_cache/"
+"""Directory of voms-proxy certificate cache.
+
+This directory is shared between job & VOMSPROXY container."""
+
+VOMSPROXY_CERT_CACHE_FILENAME = "x509up_proxy"
+"""Name of the voms-proxy certificate cache file."""
+
+RUCIO_CONTAINER_IMAGE = os.getenv(
+    "RUCIO_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-rucio:1.1.1"
+)
+"""Default docker image of RUCIO sidecar container."""
+
+RUCIO_CONTAINER_NAME = "reana-auth-rucio"
+"""Name of RUCIO sidecar container."""
+
+RUCIO_CACHE_LOCATION = "/rucio_cache/"
+"""Directory of Rucio cache.
+
+This directory is shared between job & Rucio container."""
+
+RUCIO_CFG_CACHE_FILENAME = "rucio.cfg"
+"""Name of the RUCIO configuration cache file."""
+
+RUCIO_CERN_BUNDLE_CACHE_FILENAME = "CERN-bundle.pem"
+"""Name of the CERN Bundle cache file."""
 
 ALIVE_STATUSES = [
     RunStatus.created,
