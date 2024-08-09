@@ -658,8 +658,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             ),
         )
 
-        job_controller_env_vars = copy.deepcopy(JOB_CONTROLLER_ENV_VARS)
-        job_controller_env_vars.extend(
+        job_controller_container.env.extend(
             [
                 {"name": "REANA_USER_ID", "value": owner_id},
                 {"name": "CERN_USER", "value": user},
@@ -670,6 +669,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "name": "REANA_SQLALCHEMY_DATABASE_URI",
                     "value": SQLALCHEMY_DATABASE_URI,
                 },
+                # reduce the number of open database connections kept in the pool
+                {"name": "SQLALCHEMY_POOL_SIZE", "value": "1"},
                 {"name": "REANA_STORAGE_BACKEND", "value": REANA_STORAGE_BACKEND},
                 {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
                 {
@@ -713,7 +714,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
             ]
         )
-        job_controller_container.env.extend(job_controller_env_vars)
+        # env vars coming from Helm values are added after the ones from r-w-controller
+        # so that the former can override the latter in case of necessity
+        job_controller_container.env.extend(copy.deepcopy(JOB_CONTROLLER_ENV_VARS))
         job_controller_container.env.extend(job_controller_env_secrets)
         if REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL:
             job_controller_container.env.append(
