@@ -1155,8 +1155,6 @@ def test_start_workflow_db_failure(
     app,
     session,
     default_user,
-    user_secrets,
-    corev1_api_client_with_user_secrets,
     sample_serial_workflow_in_db,
 ):
     """Test starting workflow with a DB failure."""
@@ -1193,8 +1191,6 @@ def test_start_workflow_kubernetes_failure(
     app,
     session,
     default_user,
-    user_secrets,
-    corev1_api_client_with_user_secrets,
     sample_serial_workflow_in_db,
 ):
     """Test starting workflow with a Kubernetes failure when creating jobs."""
@@ -1490,7 +1486,7 @@ def test_create_interactive_session(
             current_k8s_corev1_api_client=mock.DEFAULT,
             current_k8s_networking_api_client=mock.DEFAULT,
             current_k8s_appsv1_api_client=mock.DEFAULT,
-            REANAUserSecretsStore=mock.DEFAULT,
+            UserSecretsStore=mock.DEFAULT,
         ):
             res = client.post(
                 url_for(
@@ -1533,7 +1529,7 @@ def test_create_interactive_session_custom_image(
             current_k8s_corev1_api_client=mock.DEFAULT,
             current_k8s_networking_api_client=mock.DEFAULT,
             current_k8s_appsv1_api_client=mock.DEFAULT,
-            REANAUserSecretsStore=mock.DEFAULT,
+            UserSecretsStore=mock.DEFAULT,
         ) as mocks:
             client.post(
                 url_for(

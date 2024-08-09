@@ -17,7 +17,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_corev1_api_client,
     current_k8s_networking_api_client,
 )
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
     get_workspace_volume,
@@ -228,7 +228,7 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_user_secrets(self):
         """Mount the "file" secrets and set the "env" secrets in the container."""
-        secrets_store = REANAUserSecretsStore(self.owner_id)
+        secrets_store = UserSecretsStore.fetch(self.owner_id)
 
         # mount file secrets
         secrets_volume = secrets_store.get_file_secrets_volume_as_k8s_specs()
