@@ -221,7 +221,9 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_run_with_root_permissions(self):
         """Run interactive session with root."""
-        security_context = client.V1SecurityContext(run_as_user=0)
+        security_context = client.V1SecurityContext(
+            run_as_user=0, allow_privilege_escalation=False
+        )
         self._session_container.security_context = security_context
 
     def add_user_secrets(self):
