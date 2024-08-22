@@ -33,10 +33,15 @@ def handle_args_validation_error(error: UnprocessableEntity):
     exception = getattr(error, "exc", None)
     if isinstance(exception, ValidationError):
         validation_messages = []
-        for field, messages in exception.normalized_messages().items():
-            validation_messages.append(
-                "Field '{}': {}".format(field, ", ".join(messages))
-            )
+        # this is slightly different from r-server error handler due to different
+        # versions of webargs/marshmallow
+        # the format of normalized_messages() is:
+        # {"json": {"field name": ["error 1", "error 2"]}}
+        for field_messages in exception.normalized_messages().values():
+            for field, messages in field_messages.items():
+                validation_messages.append(
+                    "Field '{}': {}".format(field, ", ".join(messages))
+                )
         error_message = ". ".join(validation_messages)
 
     return jsonify({"message": error_message}), 400

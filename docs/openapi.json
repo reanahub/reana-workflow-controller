@@ -98,14 +98,14 @@
             "type": "boolean"
           },
           {
-            "description": "Optional argument to list workflows shared by the specified user(s).",
+            "description": "Optional argument to list workflows shared by the specified user.",
             "in": "query",
             "name": "shared_by",
             "required": false,
             "type": "string"
           },
           {
-            "description": "Optional argument to list workflows shared with the specified user(s).",
+            "description": "Optional argument to list workflows shared with the specified user.",
             "in": "query",
             "name": "shared_with",
             "required": false,
@@ -195,7 +195,10 @@
                         "type": "object"
                       },
                       "shared_with": {
-                        "type": "string"
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
                       },
                       "size": {
                         "properties": {
@@ -1133,7 +1136,7 @@
           {
             "description": "Required. UUID of workflow owner.",
             "in": "query",
-            "name": "user_id",
+            "name": "user",
             "required": true,
             "type": "string"
           },
@@ -1184,38 +1187,6 @@
                   "type": "string"
                 },
                 "workflow_name": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "401": {
-            "description": "Request failed. User not signed in.",
-            "examples": {
-              "application/json": {
-                "message": "User not signed in."
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "403": {
-            "description": "Request failed. Credentials are invalid or revoked.",
-            "examples": {
-              "application/json": {
-                "message": "Token not valid."
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
                   "type": "string"
                 }
               },
@@ -1500,7 +1471,7 @@
           {
             "description": "Required. UUID of workflow owner.",
             "in": "query",
-            "name": "user_id",
+            "name": "user",
             "required": true,
             "type": "string"
           },
@@ -1551,20 +1522,11 @@
             "description": "Request failed. The incoming data specification seems malformed.",
             "examples": {
               "application/json": {
-                "errors": [
-                  "Missing data for required field."
-                ],
                 "message": "Malformed request."
               }
             },
             "schema": {
               "properties": {
-                "errors": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "message": {
                   "type": "string"
                 }
@@ -1576,9 +1538,7 @@
             "description": "Request failed. User is not allowed to unshare the workflow.",
             "examples": {
               "application/json": {
-                "errors": [
-                  "User is not allowed to unshare the workflow."
-                ]
+                "message": "User is not allowed to unshare the workflow."
               }
             },
             "schema": {
@@ -1594,20 +1554,11 @@
             "description": "Request failed. Workflow does not exist or user does not exist.",
             "examples": {
               "application/json": {
-                "errors": [
-                  "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
-                ],
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
               }
             },
             "schema": {
               "properties": {
-                "errors": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "message": {
                   "type": "string"
                 }
@@ -1619,20 +1570,11 @@
             "description": "Request failed. The workflow is not shared with the user.",
             "examples": {
               "application/json": {
-                "errors": [
-                  "The workflow is not shared with the user."
-                ],
                 "message": "The workflow is not shared with the user."
               }
             },
             "schema": {
               "properties": {
-                "errors": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "message": {
                   "type": "string"
                 }
@@ -1644,20 +1586,11 @@
             "description": "Request failed. Internal controller error.",
             "examples": {
               "application/json": {
-                "errors": [
-                  "Internal controller error."
-                ],
                 "message": "Internal controller error."
               }
             },
             "schema": {
               "properties": {
-                "errors": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "message": {
                   "type": "string"
                 }

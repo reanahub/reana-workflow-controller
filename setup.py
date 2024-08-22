@@ -33,7 +33,7 @@ extras_require = {
         "sphinxcontrib-redoc>=1.5.1",
     ],
     "tests": [
-        "pytest-reana>=0.95.0a2,<0.96.0",
+        "pytest-reana>=0.95.0a4,<0.96.0",
     ],
 }
 
@@ -51,7 +51,7 @@ install_requires = [
     "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
     "packaging>=18.0",
     "reana-commons[kubernetes] @ git+https://github.com/reanahub/reana-commons.git@0.95.0a4",
-    "reana-db>=0.95.0a3,<0.96.0",
+    "reana-db>=0.95.0a4,<0.96.0",
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",

@@ -71,8 +71,8 @@ def test_get_workflows(app, session, user0, cwl_workflow_with_name):
                 "progress": response_data[0]["progress"],
                 "size": {"raw": -1, "human_readable": ""},
                 "launcher_url": None,
-                "owner_email": "-",
-                "shared_with": "-",
+                "owner_email": user0.email,
+                "shared_with": [],
             }
         ]
 
@@ -176,8 +176,8 @@ def test_get_workflows_shared(
         response_data = json.loads(res.get_data(as_text=True))["items"]
         assert len(response_data) == 1
         assert response_data[0]["id"] == str(workflow.id_)
-        assert response_data[0]["shared_with"] == user2.email
-        assert response_data[0]["owner_email"] == "-"
+        assert response_data[0]["shared_with"] == [user2.email]
+        assert response_data[0]["owner_email"] == user1.email
 
 
 def test_get_workflows_shared_by(
@@ -245,7 +245,7 @@ def test_get_workflows_shared_with(
         response_data = json.loads(res.get_data(as_text=True))["items"]
         assert len(response_data) == 1
         assert response_data[0]["id"] == str(workflow.id_)
-        assert response_data[0]["shared_with"] == user2.email
+        assert response_data[0]["shared_with"] == [user2.email]
 
 
 def test_get_workflows_shared_by_and_shared_with(
@@ -261,7 +261,7 @@ def test_get_workflows_shared_by_and_shared_with(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_share_with": user2.email,
             },
         )
@@ -812,7 +812,7 @@ def test_get_workflow_status_unauthorized(
             content_type="application/json",
             data=json.dumps(cwl_workflow_with_name),
         )
-        assert res.status_code == 500
+        assert res.status_code == 404
 
 
 def test_get_workflow_status_unknown_workflow(app, user0, cwl_workflow_with_name):
@@ -1027,7 +1027,7 @@ def test_set_workflow_status_unauthorized(
             query_string={"user": random_user_uuid, "status": payload},
             content_type="application/json",
         )
-        assert res.status_code == 500
+        assert res.status_code == 404
 
 
 def test_set_workflow_status_unknown_workflow(
@@ -1230,7 +1230,7 @@ def test_get_workflow_logs_unauthorized(
             query_string={"user": random_user_uuid},
             content_type="application/json",
         )
-        assert res.status_code == 500
+        assert res.status_code == 404
 
 
 def test_start_input_parameters(
@@ -1785,7 +1785,7 @@ def test_get_workflow_retention_rules_invalid_user(app, sample_serial_workflow_i
             ),
             query_string={"user": uuid.uuid4()},
         )
-        assert res.status_code == 500
+        assert res.status_code == 404
 
 
 def test_share_workflow(
@@ -1937,7 +1937,7 @@ def test_share_workflow_with_invalid_date_format(
     workflow = sample_serial_workflow_in_db_owned_by_user1
     share_details = {
         "user_email_to_share_with": user2.email,
-        "valid_until": "2023/12/31",  # Invalid format
+        "valid_until": "invalid date",  # Invalid format
     }
     with app.test_client() as client:
         res = client.post(
@@ -1955,7 +1955,7 @@ def test_share_workflow_with_invalid_date_format(
         response_data = res.get_json()
         assert (
             response_data["message"]
-            == "Date format is not valid (Invalid isoformat string: '2023/12/31'). Please use YYYY-MM-DD format."
+            == "Field 'valid_until': Date format is not valid. Please use YYYY-MM-DD format."
         )
 
 
@@ -2108,7 +2108,7 @@ def test_share_workflow_with_long_message(
         response_data = res.get_json()
         assert (
             response_data["message"]
-            == "Message is too long. Please keep it under 5000 characters."
+            == "Field 'message': Message is too long. Please keep it under 5000 characters."
         )
 
 
@@ -2185,7 +2185,7 @@ def test_unshare_workflow(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2209,7 +2209,7 @@ def test_unshare_workflow_not_shared(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2233,7 +2233,7 @@ def test_unshare_workflow_with_self(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user1.email,
             },
         )
@@ -2268,15 +2268,15 @@ def test_unshare_workflow_with_invalid_email(
                     workflow_id_or_name=str(workflow.id_),
                 ),
                 query_string={
-                    "user_id": str(user1.id_),
+                    "user": str(user1.id_),
                     "user_email_to_unshare_with": invalid_email,
                 },
             )
-            assert res.status_code == 400
+            assert res.status_code == 404
             response_data = res.get_json()
             assert (
                 response_data["message"]
-                == f"User email '{invalid_email}' is not valid."
+                == f"User with email '{invalid_email}' does not exist."
             )
 
 
@@ -2306,7 +2306,7 @@ def test_unshare_workflow_with_valid_email_but_unexisting_user(
                     workflow_id_or_name=str(workflow.id_),
                 ),
                 query_string={
-                    "user_id": str(user1.id_),
+                    "user": str(user1.id_),
                     "user_email_to_unshare_with": valid_email,
                 },
             )
@@ -2328,7 +2328,7 @@ def test_unshare_non_existent_workflow(app, user1, user2):
                 workflow_id_or_name=non_existent_workflow_id,
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2353,7 +2353,7 @@ def test_unshare_workflow_already_unshared(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2393,7 +2393,7 @@ def test_unshare_multiple_workflows(
                 workflow_id_or_name=str(workflow1.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2423,7 +2423,7 @@ def test_unshare_multiple_workflows(
                 workflow_id_or_name=str(workflow2.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2466,7 +2466,7 @@ def test_unshare_workflow_with_message_and_valid_until(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_unshare_with": user2.email,
             },
         )
@@ -2501,7 +2501,7 @@ def test_get_workflow_share_status(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
                 "user_email_to_check": user2.email,
             },
         )
@@ -2523,7 +2523,7 @@ def test_get_workflow_share_status_not_shared(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
             },
         )
         assert res.status_code == 200
@@ -2553,7 +2553,7 @@ def test_get_workflow_share_status_valid_until_not_set(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
             },
         )
         assert res.status_code == 200
@@ -2590,7 +2590,7 @@ def test_get_workflow_share_status_valid_until_set(
                 workflow_id_or_name=str(workflow.id_),
             ),
             query_string={
-                "user_id": str(user1.id_),
+                "user": str(user1.id_),
             },
         )
         assert res.status_code == 200
