@@ -166,11 +166,12 @@ def _update_workflow_status(workflow, status, logs):
                 )
                 workflow.logs += "Workflow engine logs could not be retrieved.\n"
 
+            if requires_dask(workflow):
+                _delete_dask_cluster(workflow)
+
             if RunStatus.should_cleanup_job(status):
                 try:
                     _delete_workflow_job(workflow)
-                    if requires_dask(workflow):
-                        _delete_dask_cluster(workflow)
                 except ApiException as e:
                     logging.error(
                         f"Could not clean up workflow job for workflow {workflow.id_}. "
