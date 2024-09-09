@@ -85,6 +85,7 @@ from reana_workflow_controller.config import (  # isort:skip
     WORKFLOW_ENGINE_SERIAL_ENV_VARS,
     WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS,
     WORKFLOW_ENGINE_YADAGE_ENV_VARS,
+    DASK_ENABLED,
 )
 
 
@@ -371,13 +372,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         )
 
         try:
-            # Create PVC needed for CVMFS repos
-            if self.retrieve_required_cvmfs_repos():
-                create_cvmfs_persistent_volume_claim()
-
             # Create the dask cluster and required resources
-
             if requires_dask(self.workflow):
+                if not DASK_ENABLED:
+                    raise RuntimeError(
+                        "Dask workflows are not supported in this cluster"
+                    )
+
                 DaskResourceManager(
                     cluster_name=f"reana-run-dask-{self.workflow.id_}",
                     workflow_spec=self.workflow.reana_specification["workflow"],
@@ -388,6 +389,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             current_k8s_batchv1_api_client.create_namespaced_job(
                 namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
             )
+
+            # Create PVC needed for CVMFS repos
+            if self.retrieve_required_cvmfs_repos():
+                create_cvmfs_persistent_volume_claim()
+
         except ApiException as e:
             msg = "Workflow engine/job controller pod " "creation failed {}".format(e)
             logging.error(msg, exc_info=True)

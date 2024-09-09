@@ -28,6 +28,7 @@ from reana_commons.k8s.volumes import (
     get_reana_shared_volume,
 )
 
+from reana_workflow_controller.config import TRAEFIK_ENABLED
 from reana_workflow_controller.k8s import create_dask_dashboard_ingress
 
 
@@ -96,7 +97,8 @@ class DaskResourceManager:
         self._prepare_cluster()
         self._create_dask_cluster()
         self._create_dask_autoscaler()
-        create_dask_dashboard_ingress(self.cluster_name, self.workflow_id)
+        if TRAEFIK_ENABLED:
+            create_dask_dashboard_ingress(self.cluster_name, self.workflow_id)
 
     def _prepare_cluster(self):
         """Prepare Dask cluster body by adding necessary image-pull secrets, volumes, volume mounts, init containers and sidecar containers."""

@@ -43,6 +43,7 @@ from reana_workflow_controller.config import (
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
     REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT,
+    TRAEFIK_ENABLED,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 from reana_workflow_controller.k8s import delete_dask_dashboard_ingress
@@ -332,7 +333,7 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
         namespace="default",
         name=f"dask-autoscaler-reana-run-dask-{workflow.id_}",
     )
-
-    delete_dask_dashboard_ingress(
-        f"dask-dashboard-ingress-reana-run-dask-{workflow.id_}", workflow.id_
-    )
+    if TRAEFIK_ENABLED:
+        delete_dask_dashboard_ingress(
+            f"dask-dashboard-ingress-reana-run-dask-{workflow.id_}", workflow.id_
+        )
