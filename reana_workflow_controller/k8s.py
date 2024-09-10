@@ -405,7 +405,7 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
     """Create K8S Ingress object for Dask dashboard."""
     # Define the middleware spec
     middleware_spec = {
-        "apiVersion": "traefik.containo.us/v1alpha1",
+        "apiVersion": "traefik.io/v1alpha1",
         "kind": "Middleware",
         "metadata": {"name": f"replacepath-{workflow_id}", "namespace": "default"},
         "spec": {
@@ -453,7 +453,7 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
 
     # Create middleware for ingress
     current_k8s_custom_objects_api_client.create_namespaced_custom_object(
-        group="traefik.containo.us",
+        group="traefik.io",
         version="v1alpha1",
         namespace="default",
         plural="middlewares",
