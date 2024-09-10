@@ -257,9 +257,6 @@ REANA_INGRESS_HOST = os.getenv("REANA_INGRESS_HOST", "")
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
 
-TRAEFIK_ENABLED = strtobool(os.getenv("TRAEFIK_ENABLED", "true"))
-"""Whether traefik is enabled in the cluster or not"""
-
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
 """Whether dask is enabled in the cluster or not"""
 
