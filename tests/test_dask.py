@@ -30,6 +30,35 @@ def test_requires_dask(workflow_fixture, expected_result, request):
     ), f"Expected requires_dask to return {expected_result} for {workflow_fixture}"
 
 
+@pytest.mark.parametrize(
+    "cores, memory, single_worker_cores, single_worker_memory, expected_workers",
+    [
+        (8, "16G", 2, "4G", 4),
+        (16, "16G", 4, "8G", 2),
+        (16, "32G", 4, "4G", 4),
+        (4.5, "9G", 1.5, "3G", 3),
+        (12.5, "10G", 4, "2G", 3),
+        (16, "8G", 4, "2G", 4),
+    ],
+)
+def test_calculate_max_allowed_workers(
+    dask_resource_manager,
+    cores,
+    memory,
+    single_worker_cores,
+    single_worker_memory,
+    expected_workers,
+):
+    # Set the DaskResourceManager instance attributes
+    dask_resource_manager.cores = cores
+    dask_resource_manager.memory = memory
+    dask_resource_manager.single_worker_cores = single_worker_cores
+    dask_resource_manager.single_worker_memory = single_worker_memory
+
+    # Call the method and check the result
+    assert dask_resource_manager.calculate_max_allowed_workers() == expected_workers
+
+
 def test_create_dask_cluster(mock_k8s_client, dask_resource_manager):
     # Arrange
     dask_resource_manager.cluster_body = {"mock": "cluster_body"}

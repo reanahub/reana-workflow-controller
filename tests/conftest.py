@@ -207,11 +207,15 @@ def dask_resource_manager(sample_serial_workflow_in_db_with_dask, mock_user_secr
     """Fixture to create a DaskResourceManager instance."""
     manager = DaskResourceManager(
         cluster_name="test-cluster",
+        cores=3,
+        memory="2G",
         workflow_spec=sample_serial_workflow_in_db_with_dask.reana_specification[
             "workflow"
         ],
         workflow_workspace="/path/to/workspace",
         user_id="user-123",
+        single_worker_cores=0.5,
+        single_worker_memory="256Mi",
     )
     return manager
 

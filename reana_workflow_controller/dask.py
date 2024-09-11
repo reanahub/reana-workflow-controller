@@ -27,6 +27,7 @@ from reana_commons.k8s.volumes import (
     get_workspace_volume,
     get_reana_shared_volume,
 )
+from reana_commons.job_utils import kubernetes_memory_to_bytes
 
 from reana_workflow_controller.k8s import create_dask_dashboard_ingress
 
@@ -40,6 +41,10 @@ class DaskResourceManager:
         workflow_spec,
         workflow_workspace,
         user_id,
+        cores,
+        memory,
+        single_worker_cores,
+        single_worker_memory,
     ):
         """Instantiate dask resource manager.
 
@@ -53,6 +58,10 @@ class DaskResourceManager:
         :type user_id: str
         """
         self.cluster_name = cluster_name
+        self.cores = cores
+        self.memory = memory
+        self.single_worker_cores = single_worker_cores
+        self.single_worker_memory = single_worker_memory
         self.autoscaler_name = f"dask-autoscaler-{cluster_name}"
         self.workflow_spec = workflow_spec
         self.workflow_workspace = workflow_workspace
@@ -131,6 +140,17 @@ class DaskResourceManager:
         self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["args"][
             0
         ] = f'cd {self.workflow_workspace} && {self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["args"][0]}'
+
+        # Set resource limits for workers
+        self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["resources"] = {
+            "limits": {
+                "memory": f"{self.single_worker_memory}",
+                "cpu": str(self.single_worker_cores),
+            }
+        }
+
+        # Set max limit on autoscaler
+        self.autoscaler_body["spec"]["maximum"] = self.calculate_max_allowed_workers()
 
         # Add DASK SCHEDULER URI env variable
         self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["env"].append(
@@ -477,6 +497,18 @@ class DaskResourceManager:
                 "An error occurred while trying to create a dask autoscaler."
             )
             raise
+
+    def calculate_max_allowed_workers(self):
+        """Calculate the max number of workers for dask autoscaler."""
+        total_memory_in_bytes = kubernetes_memory_to_bytes(self.memory)
+        single_worker_memory_in_bytes = kubernetes_memory_to_bytes(
+            self.single_worker_memory
+        )
+
+        max_workers_by_cores = self.cores // self.single_worker_cores
+        max_workers_by_memory = total_memory_in_bytes // single_worker_memory_in_bytes
+
+        return int(min(max_workers_by_cores, max_workers_by_memory))
 
 
 def requires_dask(workflow):

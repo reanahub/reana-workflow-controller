@@ -260,8 +260,29 @@ IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
 """Whether dask is enabled in the cluster or not"""
 
+REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT = float(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT", 4)
+)
+"""Default cores limit for dask clusters."""
+
+REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT = os.getenv(
+    "REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT", "4Gi"
+)
+"""Default memory limit for dask clusters."""
+
+REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES = float(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES", 0.5)
+)
+"""Number of cores for one dask worker by default."""
+
+REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "512Mi"
+)
+"""Memory for one dask worker by default."""
+
+
 VOMSPROXY_CONTAINER_IMAGE = os.getenv(
-    "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.2.0"
+    "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.3.0"
 )
 """Default docker image of VOMSPROXY sidecar container."""
 
