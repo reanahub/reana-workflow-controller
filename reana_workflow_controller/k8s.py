@@ -471,7 +471,7 @@ def delete_dask_dashboard_ingress(cluster_name, workflow_id):
         name=cluster_name, namespace="default", body=client.V1DeleteOptions()
     )
     current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
-        group="traefik.containo.us",
+        group="traefik.io",
         version="v1alpha1",
         namespace="default",
         plural="middlewares",
