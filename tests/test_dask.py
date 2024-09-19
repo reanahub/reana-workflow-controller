@@ -441,10 +441,6 @@ def test_prepare_cluster(dask_resource_manager):
             dask_resource_manager.cluster_body["metadata"]["name"]
             == dask_resource_manager.cluster_name
         )
-        assert (
-            dask_resource_manager.autoscaler_body["metadata"]["name"]
-            == dask_resource_manager.autoscaler_name
-        )
 
         assert {
             "name": "DASK_SCHEDULER_URI",
@@ -487,11 +483,6 @@ def test_prepare_cluster(dask_resource_manager):
         assert {"name": "secrets-volume"} in dask_resource_manager.cluster_body["spec"][
             "worker"
         ]["spec"]["volumes"]
-
-        assert (
-            dask_resource_manager.autoscaler_body["spec"]["cluster"]
-            == dask_resource_manager.cluster_name
-        )
 
         assert (
             dask_resource_manager.cluster_body["spec"]["scheduler"]["service"][
