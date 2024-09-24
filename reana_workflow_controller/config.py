@@ -258,28 +258,27 @@ IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
 
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
-"""Whether dask is enabled in the cluster or not"""
+"""Whether Dask is enabled in the cluster or not"""
 
-REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT = float(
-    os.getenv("REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT", 4)
+REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "16Gi"
 )
-"""Default cores limit for dask clusters."""
+"""Maximum memory limit for Dask clusters."""
 
-REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT = os.getenv(
-    "REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT", "4Gi"
+REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS = int(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS", 2)
 )
-"""Default memory limit for dask clusters."""
-
-REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES = float(
-    os.getenv("REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES", 0.5)
-)
-"""Number of cores for one dask worker by default."""
+"""Number of workers in Dask cluster by default """
 
 REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
-    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "512Mi"
+    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "2Gi"
 )
-"""Memory for one dask worker by default."""
+"""Memory for one Dask worker by default."""
 
+REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY", "8Gi"
+)
+"""Maximum memory for one Dask worker."""
 
 VOMSPROXY_CONTAINER_IMAGE = os.getenv(
     "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.3.0"

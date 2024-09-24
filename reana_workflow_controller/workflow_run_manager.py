@@ -85,10 +85,8 @@ from reana_workflow_controller.config import (  # isort:skip
     WORKFLOW_ENGINE_SERIAL_ENV_VARS,
     WORKFLOW_ENGINE_SNAKEMAKE_ENV_VARS,
     WORKFLOW_ENGINE_YADAGE_ENV_VARS,
-    REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT,
-    REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT,
+    REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
-    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES,
 )
 
 
@@ -377,26 +375,17 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         try:
             # Create the dask cluster and required resources
             if requires_dask(self.workflow):
-
                 DaskResourceManager(
                     cluster_name=f"reana-run-dask-{self.workflow.id_}",
                     workflow_spec=self.workflow.reana_specification["workflow"],
                     workflow_workspace=self.workflow.workspace_path,
                     user_id=self.workflow.owner_id,
-                    cores=self.workflow.reana_specification["workflow"]
-                    .get("resources", {})
-                    .get("dask", {})
-                    .get("cores", REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT),
-                    memory=self.workflow.reana_specification["workflow"]
-                    .get("resources", {})
-                    .get("dask", {})
-                    .get("memory", REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT),
-                    single_worker_cores=self.workflow.reana_specification["workflow"]
+                    num_of_workers=self.workflow.reana_specification["workflow"]
                     .get("resources", {})
                     .get("dask", {})
                     .get(
-                        "single_worker_cores",
-                        REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES,
+                        "number_of_workers",
+                        REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
                     ),
                     single_worker_memory=self.workflow.reana_specification["workflow"]
                     .get("resources", {})
