@@ -1,0 +1,4 @@
+apiVersion: kubernetes.dask.org/v1
+kind: DaskAutoscaler
+spec:
+  minimum: 0

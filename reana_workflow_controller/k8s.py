@@ -16,6 +16,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
     current_k8s_corev1_api_client,
     current_k8s_networking_api_client,
+    current_k8s_custom_objects_api_client,
 )
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
@@ -398,3 +399,81 @@ def delete_k8s_ingress_object(ingress_name, namespace):
             "Exception when calling ExtensionsV1beta1->"
             "Api->delete_namespaced_ingress: {}\n".format(k8s_api_exception)
         )
+
+
+def create_dask_dashboard_ingress(cluster_name, workflow_id):
+    """Create K8S Ingress object for Dask dashboard."""
+    # Define the middleware spec
+    middleware_spec = {
+        "apiVersion": "traefik.io/v1alpha1",
+        "kind": "Middleware",
+        "metadata": {"name": f"replacepath-{workflow_id}", "namespace": "default"},
+        "spec": {
+            "replacePathRegex": {
+                "regex": f"/{workflow_id}/dashboard/*",
+                "replacement": "/$1",
+            }
+        },
+    }
+
+    ingress = client.V1Ingress(
+        api_version="networking.k8s.io/v1",
+        kind="Ingress",
+        metadata=client.V1ObjectMeta(
+            name=f"dask-dashboard-ingress-{cluster_name}",
+            annotations={
+                **REANA_INGRESS_ANNOTATIONS,
+                "traefik.ingress.kubernetes.io/router.middlewares": f"default-replacepath-{workflow_id}@kubernetescrd",
+            },
+        ),
+        spec=client.V1IngressSpec(
+            rules=[
+                client.V1IngressRule(
+                    host=REANA_INGRESS_HOST,
+                    http=client.V1HTTPIngressRuleValue(
+                        paths=[
+                            client.V1HTTPIngressPath(
+                                path=f"/{workflow_id}/dashboard",
+                                path_type="Prefix",
+                                backend=client.V1IngressBackend(
+                                    service=client.V1IngressServiceBackend(
+                                        name=f"{cluster_name}-scheduler",
+                                        port=client.V1ServiceBackendPort(number=8787),
+                                    )
+                                ),
+                            )
+                        ]
+                    ),
+                )
+            ]
+        ),
+    )
+    if REANA_INGRESS_CLASS_NAME:
+        ingress.spec.ingress_class_name = REANA_INGRESS_CLASS_NAME
+
+    # Create middleware for ingress
+    current_k8s_custom_objects_api_client.create_namespaced_custom_object(
+        group="traefik.io",
+        version="v1alpha1",
+        namespace="default",
+        plural="middlewares",
+        body=middleware_spec,
+    )
+    # Create the ingress resource
+    current_k8s_networking_api_client.create_namespaced_ingress(
+        namespace="default", body=ingress
+    )
+
+
+def delete_dask_dashboard_ingress(cluster_name, workflow_id):
+    """Delete K8S Ingress Object for Dask dashboard."""
+    current_k8s_networking_api_client.delete_namespaced_ingress(
+        name=cluster_name, namespace="default", body=client.V1DeleteOptions()
+    )
+    current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+        group="traefik.io",
+        version="v1alpha1",
+        namespace="default",
+        plural="middlewares",
+        name=f"replacepath-{workflow_id}",
+    )
