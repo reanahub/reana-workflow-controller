@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -16,6 +16,7 @@ from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_commons.errors import REANASecretDoesNotExist
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
+from reana_workflow_controller.config import REANA_OPENSEARCH_ENABLED
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
     REANAWorkflowControllerError,
@@ -100,6 +101,8 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                 type: string
               user:
                 type: string
+              live_logs_enabled:
+                type: boolean
           examples:
             application/json:
               {
@@ -112,7 +115,8 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                            },
                           'engine_specific': object,
                          }",
-                "user": "00000000-0000-0000-0000-000000000000"
+                "user": "00000000-0000-0000-0000-000000000000",
+                "live_logs_enabled": false
               }
         400:
           description: >-
@@ -150,8 +154,20 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                 "engine_specific": None,
             }
         else:
+            from reana_workflow_controller.opensearch import (
+                build_opensearch_log_fetcher,
+            )
+
+            open_search_log_fetcher = build_opensearch_log_fetcher()
+
+            logs = (
+                open_search_log_fetcher.fetch_workflow_logs(workflow.id_)
+                if open_search_log_fetcher
+                else None
+            )
+
             workflow_logs = {
-                "workflow_logs": workflow.logs,
+                "workflow_logs": logs or workflow.logs,
                 "job_logs": build_workflow_logs(workflow, paginate=paginate),
                 "engine_specific": workflow.engine_specific,
             }
@@ -162,6 +178,7 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                     "workflow_name": get_workflow_name(workflow),
                     "logs": json.dumps(workflow_logs),
                     "user": user_uuid,
+                    "live_logs_enabled": REANA_OPENSEARCH_ENABLED,
                 }
             ),
             200,

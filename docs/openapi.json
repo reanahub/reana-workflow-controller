@@ -687,6 +687,7 @@
             "description": "Request succeeded. Info about workflow, including the status is returned.",
             "examples": {
               "application/json": {
+                "live_logs_enabled": false,
                 "logs": "{'workflow_logs': string, 'job_logs': { '256b25f4-4cfb-4684-b7a8-73872ef455a2': string, '256b25f4-4cfb-4684-b7a8-73872ef455a3': string, }, 'engine_specific': object, }",
                 "user": "00000000-0000-0000-0000-000000000000",
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
@@ -695,6 +696,9 @@
             },
             "schema": {
               "properties": {
+                "live_logs_enabled": {
+                  "type": "boolean"
+                },
                 "logs": {
                   "type": "string"
                 },

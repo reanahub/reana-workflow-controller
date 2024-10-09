@@ -49,6 +49,7 @@ install_requires = [
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
     "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
+    "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
     "reana-commons[kubernetes] @ git+https://github.com/reanahub/reana-commons.git@0.95.0a4",
     "reana-db>=0.95.0a4,<0.96.0",
