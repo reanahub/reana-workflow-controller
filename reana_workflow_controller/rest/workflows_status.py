@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -150,8 +150,20 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
                 "engine_specific": None,
             }
         else:
+            from reana_workflow_controller.opensearch import (
+                build_opensearch_log_fetcher,
+            )
+
+            open_search_log_fetcher = build_opensearch_log_fetcher()
+
+            logs = (
+                open_search_log_fetcher.fetch_workflow_logs(workflow.id_)
+                if open_search_log_fetcher
+                else None
+            )
+
             workflow_logs = {
-                "workflow_logs": workflow.logs,
+                "workflow_logs": logs or workflow.logs,
                 "job_logs": build_workflow_logs(workflow, paginate=paginate),
                 "engine_specific": workflow.engine_specific,
             }

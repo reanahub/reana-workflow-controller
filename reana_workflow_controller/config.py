@@ -154,6 +154,36 @@ DEBUG_ENV_VARS = (
 )
 """Common to all workflow engines environment variables for debug mode."""
 
+REANA_OPENSEARCH_ENABLED = (
+    os.getenv("REANA_OPENSEARCH_ENABLED", "false").lower() == "true"
+)
+"""OpenSearch enabled flag."""
+
+REANA_OPENSEARCH_HOST = os.getenv(
+    "REANA_OPENSEARCH_HOST", "opensearch-cluster-master.default.svc.cluster.local"
+)
+"""OpenSearch host."""
+
+REANA_OPENSEARCH_PORT = os.getenv("REANA_OPENSEARCH_PORT", "9200")
+"""OpenSearch port."""
+
+REANA_OPENSEARCH_URL_PREFIX = os.getenv("REANA_OPENSEARCH_URL_PREFIX", "")
+"""OpenSearch URL prefix."""
+
+REANA_OPENSEARCH_USER = os.getenv("REANA_OPENSEARCH_USER", "admin")
+"""OpenSearch user."""
+
+REANA_OPENSEARCH_PASSWORD = os.getenv("REANA_OPENSEARCH_PASSWORD", "admin")
+"""OpenSearch password."""
+
+REANA_OPENSEARCH_USE_SSL = (
+    os.getenv("REANA_OPENSEARCH_USE_SSL", "false").lower() == "true"
+)
+"""OpenSearch SSL flag."""
+
+REANA_OPENSEARCH_CA_CERTS = os.getenv("REANA_OPENSEARCH_CA_CERTS")
+"""OpenSearch CA certificates."""
+
 
 def _parse_interactive_sessions_environments(env_var):
     config = {}
