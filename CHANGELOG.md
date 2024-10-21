@@ -1,5 +1,78 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.95.0) (2024-10-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **python:** drop support for Python 3.6 and 3.7
+
+### Build
+
+* **docker:** pin setuptools to v70 ([#593](https://github.com/reanahub/reana-workflow-controller/issues/593)) ([ba50def](https://github.com/reanahub/reana-workflow-controller/commit/ba50defd8a94633d70947d6a7d41d858c2419889))
+* **docker:** upgrade to Ubuntu 24.04 and Python 3.12 ([#592](https://github.com/reanahub/reana-workflow-controller/issues/592)) ([b4fe472](https://github.com/reanahub/reana-workflow-controller/commit/b4fe47285482757d819d4b292d15f336c226c0c1))
+* **python:** add minimal `pyproject.toml` ([#593](https://github.com/reanahub/reana-workflow-controller/issues/593)) ([90623e4](https://github.com/reanahub/reana-workflow-controller/commit/90623e4e4f3f36e84098ef870be21973842b9c90))
+* **python:** drop support for Python 3.6 and 3.7 ([#586](https://github.com/reanahub/reana-workflow-controller/issues/586)) ([8ae9ee4](https://github.com/reanahub/reana-workflow-controller/commit/8ae9ee4a9a1e316c241c531e6fc1d6d58cbbef70))
+* **python:** remove deprecated `pytest-runner` ([#593](https://github.com/reanahub/reana-workflow-controller/issues/593)) ([d663604](https://github.com/reanahub/reana-workflow-controller/commit/d663604f6f4844a36d0dafc5fa9cda06a3b6fce9))
+* **python:** use optional deps instead of `tests_require` ([#593](https://github.com/reanahub/reana-workflow-controller/issues/593)) ([9786f91](https://github.com/reanahub/reana-workflow-controller/commit/9786f9140c2165af12e7c25661f73a29400f65d2))
+
+
+### Features
+
+* **helm:** allow cluster administrator to configure ingress host ([#588](https://github.com/reanahub/reana-workflow-controller/issues/588)) ([f1764ed](https://github.com/reanahub/reana-workflow-controller/commit/f1764ed7101fa9d30516b8687b7e5ef4ae8781fe))
+* **helm:** allow cluster administrator to configure ingress host ([#588](https://github.com/reanahub/reana-workflow-controller/issues/588)) ([a7c9c85](https://github.com/reanahub/reana-workflow-controller/commit/a7c9c851277f3ca191c073fdc6c6d5d4149a95e8))
+* **k8s:** set custom ingressClassName for interactive sessions ([#581](https://github.com/reanahub/reana-workflow-controller/issues/581)) ([13d1c5d](https://github.com/reanahub/reana-workflow-controller/commit/13d1c5d6e5253998b56f2658d560835a79fe5252))
+* **opensearch:** fetch live logs from OpenSearch ([#602](https://github.com/reanahub/reana-workflow-controller/issues/602)) ([ca38c69](https://github.com/reanahub/reana-workflow-controller/commit/ca38c6964716231b8f821c0b70885d6884cc5112))
+* **rest:** add endpoint to get workflow share status ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([63154b5](https://github.com/reanahub/reana-workflow-controller/commit/63154b535ce8520303da9ccdcc873a69bb5ba617))
+* **rest:** add endpoint to share workflows ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([a2ccc64](https://github.com/reanahub/reana-workflow-controller/commit/a2ccc64654a8683d0f859ba6c02b39f4a1147d50))
+* **rest:** add endpoint to unshare workflows ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([3c75a01](https://github.com/reanahub/reana-workflow-controller/commit/3c75a01306e72ad3ca5431af0de822a793cfe000))
+* **rest:** add share-related parameters to `get_workflows` ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([d896539](https://github.com/reanahub/reana-workflow-controller/commit/d8965390a10f4964b4c4e08f928531be3d734609))
+* **rest:** make details available for shared workflows ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([894a99e](https://github.com/reanahub/reana-workflow-controller/commit/894a99ed75f53484aa8d03198c493919c45da6f6))
+* **sessions:** expose user secrets in interactive sessions ([#591](https://github.com/reanahub/reana-workflow-controller/issues/591)) ([f1764ed](https://github.com/reanahub/reana-workflow-controller/commit/f1764ed7101fa9d30516b8687b7e5ef4ae8781fe))
+* **sessions:** expose user secrets in interactive sessions ([#591](https://github.com/reanahub/reana-workflow-controller/issues/591)) ([784efee](https://github.com/reanahub/reana-workflow-controller/commit/784efee4be8b4a9785d03d3d05b00f3da2b455c2))
+* **sessions:** support list of allowed notebook images ([#582](https://github.com/reanahub/reana-workflow-controller/issues/582)) ([3e31e05](https://github.com/reanahub/reana-workflow-controller/commit/3e31e05eac2266b20a2947c67d410284db31e02a)), closes [#569](https://github.com/reanahub/reana-workflow-controller/issues/569)
+
+
+### Bug fixes
+
+* **delete_workflow:** set retention rules as inactive ([#595](https://github.com/reanahub/reana-workflow-controller/issues/595)) ([680e288](https://github.com/reanahub/reana-workflow-controller/commit/680e288d72f936b118cb7639e949c7d8e45ab393))
+* **docker:** explicitly specify shell ([#598](https://github.com/reanahub/reana-workflow-controller/issues/598)) ([fb9923c](https://github.com/reanahub/reana-workflow-controller/commit/fb9923c2f0310695498f9278bc8f4a1a9167bf06)), closes [#596](https://github.com/reanahub/reana-workflow-controller/issues/596)
+* **rest:** clean up workflow sharing code after changes ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([e36c6a2](https://github.com/reanahub/reana-workflow-controller/commit/e36c6a2010f9f4ad15a1cb1bc04d8e19f6c154fa))
+
+
+### Performance improvements
+
+* **manager:** reduce size of job-controller's db connection pool ([#594](https://github.com/reanahub/reana-workflow-controller/issues/594)) ([5ac27ef](https://github.com/reanahub/reana-workflow-controller/commit/5ac27ef0016be2f7049a919062e9cdb0fddf772d))
+
+
+### Code refactoring
+
+* **secrets:** adapt to reana-commons secret-handling changes ([#583](https://github.com/reanahub/reana-workflow-controller/issues/583)) ([d9512fb](https://github.com/reanahub/reana-workflow-controller/commit/d9512fb5078c53a947ad07e6b0bce4ee98651022))
+
+
+### Test suite
+
+* **pytest:** adapt to fixture changes from default_user to user0 ([#552](https://github.com/reanahub/reana-workflow-controller/issues/552)) ([de3c933](https://github.com/reanahub/reana-workflow-controller/commit/de3c933ebc0b364d8783518ec20a60733e2fdab6))
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#579](https://github.com/reanahub/reana-workflow-controller/issues/579)) ([57a0246](https://github.com/reanahub/reana-workflow-controller/commit/57a0246ceedef2a724c98b3993b79e688e2d1ac2))
+* **commitlint:** check PR number presence in merge commits ([#592](https://github.com/reanahub/reana-workflow-controller/issues/592)) ([c68720b](https://github.com/reanahub/reana-workflow-controller/commit/c68720b3db365c59f154d6847536786654476911))
+* **commitlint:** improve checking of merge commits ([#590](https://github.com/reanahub/reana-workflow-controller/issues/590)) ([6e9371d](https://github.com/reanahub/reana-workflow-controller/commit/6e9371deaa290d84f82b2f3fb69531666a26526d))
+* **pytest:** invoke `pytest` directly instead of `setup.py test` ([#593](https://github.com/reanahub/reana-workflow-controller/issues/593)) ([3928366](https://github.com/reanahub/reana-workflow-controller/commit/3928366b84f12cb1f5d1dec2b93cf90ceee7a28f))
+* **sphinx:** set READTHEDOCS variable in Jinja2 HTML context ([#602](https://github.com/reanahub/reana-workflow-controller/issues/602)) ([46ae9cd](https://github.com/reanahub/reana-workflow-controller/commit/46ae9cdea3f6d64e13ae65552e4b462beb4f51e8))
+
+
+### Documentation
+
+* **openapi:** amend response description for file deletion ([#573](https://github.com/reanahub/reana-workflow-controller/issues/573)) ([1d027ff](https://github.com/reanahub/reana-workflow-controller/commit/1d027ffeafc437fc9e0c2a4193a9e2585231ab2a))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9ebbf2a](https://github.com/reanahub/reana-workflow-controller/commit/9ebbf2a3b7f0dbebaa23a0fbb26516920fe31759))
+
 ## [0.9.3](https://github.com/reanahub/reana-workflow-controller/compare/0.9.2...0.9.3) (2024-03-04)
 
 
