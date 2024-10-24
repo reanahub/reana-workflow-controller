@@ -23,9 +23,11 @@ events==0.5               # via opensearch-py
 flask==2.2.5              # via reana-workflow-controller (setup.py)
 fqdn==1.5.1               # via jsonschema
 fs==2.4.16                # via reana-commons
+gherkin-official==29.0.0  # via reana-commons
 gitdb==4.0.11             # via gitpython
 gitpython==3.1.43         # via reana-workflow-controller (setup.py)
 google-auth==2.32.0       # via kubernetes
+greenlet==3.1.1           # via sqlalchemy
 idna==3.7                 # via jsonschema, requests
 importlib-resources==6.4.0  # via swagger-spec-validator
 isoduration==20.11.0      # via jsonschema
@@ -48,6 +50,7 @@ msgpack-python==0.5.6     # via bravado
 oauthlib==3.2.2           # via requests-oauthlib
 opensearch-py==2.7.1      # via reana-workflow-controller (setup.py)
 packaging==24.1           # via reana-workflow-controller (setup.py)
+parse==1.20.2             # via reana-commons
 psycopg2-binary==2.9.9    # via reana-db
 pyasn1==0.6.0             # via pyasn1-modules, rsa
 pyasn1-modules==0.4.0     # via google-auth
@@ -55,7 +58,7 @@ pycparser==2.22           # via cffi
 python-dateutil==2.9.0.post0  # via arrow, bravado, bravado-core, kubernetes, opensearch-py
 pytz==2024.1              # via bravado-core
 pyyaml==6.0.1             # via bravado, bravado-core, kubernetes, reana-commons, swagger-spec-validator
-reana-commons[kubernetes]==0.95.0a3  # via reana-db, reana-workflow-controller (setup.py)
+reana-commons[kubernetes]==0.95.0a5  # via reana-db, reana-workflow-controller (setup.py)
 reana-db==0.95.0a4        # via reana-workflow-controller (setup.py)
 referencing==0.35.1       # via jsonschema, jsonschema-specifications
 requests==2.32.3          # via bravado, bravado-core, kubernetes, opensearch-py, reana-workflow-controller (setup.py), requests-oauthlib
