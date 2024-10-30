@@ -45,7 +45,7 @@ for key, reqs in extras_require.items():
 
 install_requires = [
     "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base/reana-server
-    "Werkzeug>=2.1.0,<2.3.0",  # same upper pin as invenio-base
+    "Werkzeug>=2.1.0,<3.1.0",  # same upper pin as invenio-base
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
     "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
