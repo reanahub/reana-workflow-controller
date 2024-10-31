@@ -290,6 +290,9 @@ IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
 """Whether Dask is enabled in the cluster or not"""
 
+DASK_AUTOSCALER_ENABLED = os.getenv("DASK_AUTOSCALER_ENABLED", "true").lower() == "true"
+"""Whether Dask autoscaler is enabled in the cluster or not"""
+
 REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
     "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "16Gi"
 )

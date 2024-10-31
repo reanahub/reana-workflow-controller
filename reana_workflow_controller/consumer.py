@@ -47,6 +47,7 @@ from reana_workflow_controller.config import (
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 from reana_workflow_controller.k8s import delete_dask_dashboard_ingress
 
+from reana_workflow_controller.config import DASK_AUTOSCALER_ENABLED
 from reana_workflow_controller.dask import requires_dask
 
 try:
@@ -325,13 +326,15 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
         name=f"reana-run-dask-{workflow.id_}",
     )
 
-    current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
-        group="kubernetes.dask.org",
-        version="v1",
-        plural="daskautoscalers",
-        namespace="default",
-        name=f"dask-autoscaler-reana-run-dask-{workflow.id_}",
-    )
+    if DASK_AUTOSCALER_ENABLED:
+        current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+            group="kubernetes.dask.org",
+            version="v1",
+            plural="daskautoscalers",
+            namespace="default",
+            name=f"dask-autoscaler-reana-run-dask-{workflow.id_}",
+        )
+
     delete_dask_dashboard_ingress(
         f"dask-dashboard-ingress-reana-run-dask-{workflow.id_}", workflow.id_
     )
