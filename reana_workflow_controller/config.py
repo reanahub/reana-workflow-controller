@@ -160,9 +160,7 @@ REANA_OPENSEARCH_ENABLED = (
 )
 """OpenSearch enabled flag."""
 
-REANA_OPENSEARCH_HOST = os.getenv(
-    "REANA_OPENSEARCH_HOST", "reana-opensearch-master.default.svc.cluster.local"
-)
+REANA_OPENSEARCH_HOST = os.getenv("REANA_OPENSEARCH_HOST", "reana-opensearch-master")
 """OpenSearch host."""
 
 REANA_OPENSEARCH_PORT = os.getenv("REANA_OPENSEARCH_PORT", "9200")
