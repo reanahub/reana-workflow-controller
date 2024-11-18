@@ -11,6 +11,7 @@ from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     REANA_WORKFLOW_UMASK,
     REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
 )
 from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
@@ -479,3 +480,18 @@ def delete_dask_dashboard_ingress(cluster_name, workflow_id):
         plural="middlewares",
         name=f"replacepath-{workflow_id}",
     )
+
+
+def check_pod_status_by_prefix(
+    pod_name_prefix, namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE
+):
+    """Check if there is a Pod in the given namespace whose name starts with the specified prefix. We assume that there exists 0 or 1 pod with a given prefix."""
+    try:
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(namespace=namespace)
+
+        for pod in pods.items:
+            if pod.metadata.name.startswith(pod_name_prefix):
+                return pod.status.phase
+        return "Not Found"
+    except ApiException as e:
+        return f"Error: {e.reason}"
