@@ -69,6 +69,7 @@ def test_get_workflows(app, session, user0, cwl_workflow_with_name):
                 "user": str(workflow.owner_id),
                 "created": response_data[0]["created"],
                 "progress": response_data[0]["progress"],
+                "services": response_data[0]["services"],
                 "size": {"raw": -1, "human_readable": ""},
                 "launcher_url": None,
                 "owner_email": user0.email,

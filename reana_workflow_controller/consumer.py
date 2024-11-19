@@ -33,7 +33,7 @@ from reana_commons.utils import (
     build_unique_component_name,
 )
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, RunStatus
+from reana_db.models import Job, JobCache, Workflow, RunStatus, Service
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -338,3 +338,12 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
     delete_dask_dashboard_ingress(
         f"dask-dashboard-ingress-reana-run-dask-{workflow.id_}", workflow.id_
     )
+
+    dask_service = (
+        Session.query(Service)
+        .filter_by(name=f"dask-dashboard-{workflow.id_}")
+        .one_or_none()
+    )
+    workflow.services.remove(dask_service)
+    Session.delete(dask_service)
+    Session.object_session(workflow).commit()
