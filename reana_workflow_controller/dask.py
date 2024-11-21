@@ -28,6 +28,7 @@ from reana_commons.k8s.volumes import (
     get_reana_shared_volume,
 )
 from reana_commons.job_utils import kubernetes_memory_to_bytes
+from reana_commons.utils import get_dask_component_name
 
 from reana_workflow_controller.config import DASK_AUTOSCALER_ENABLED
 from reana_workflow_controller.k8s import create_dask_dashboard_ingress
@@ -38,7 +39,7 @@ class DaskResourceManager:
 
     def __init__(
         self,
-        cluster_name,
+        workflow_id,
         workflow_spec,
         workflow_workspace,
         user_id,
@@ -56,10 +57,9 @@ class DaskResourceManager:
         :param user_id: Id of the user
         :type user_id: str
         """
-        self.cluster_name = cluster_name
+        self.cluster_name = get_dask_component_name(workflow_id, "cluster")
         self.num_of_workers = num_of_workers
         self.single_worker_memory = single_worker_memory
-        self.autoscaler_name = f"dask-autoscaler-{cluster_name}"
         self.workflow_spec = workflow_spec
         self.workflow_workspace = workflow_workspace
         self.workflow_id = workflow_workspace.split("/")[-1]
@@ -68,9 +68,7 @@ class DaskResourceManager:
         self.cluster_spec = workflow_spec.get("resources", {}).get("dask", [])
         self.cluster_body = self._load_dask_cluster_template()
         self.cluster_image = self.cluster_spec["image"]
-        self.dask_scheduler_uri = (
-            f"{self.cluster_name}-scheduler.default.svc.cluster.local:8786"
-        )
+        self.dask_scheduler_uri = get_dask_scheduler_uri(workflow_id)
 
         self.secrets_store = UserSecretsStore.fetch(self.user_id)
         self.secret_env_vars = self.secrets_store.get_env_secrets_as_k8s_spec()
@@ -80,7 +78,7 @@ class DaskResourceManager:
         self.kubernetes_uid = WORKFLOW_RUNTIME_USER_UID
 
         if DASK_AUTOSCALER_ENABLED:
-            self.autoscaler_name = f"dask-autoscaler-{cluster_name}"
+            self.autoscaler_name = get_dask_component_name(workflow_id, "autoscaler")
             self.autoscaler_body = self._load_dask_autoscaler_template()
 
     def _load_dask_cluster_template(self):
@@ -116,7 +114,7 @@ class DaskResourceManager:
             self._prepare_autoscaler()
             self._create_dask_autoscaler()
 
-        create_dask_dashboard_ingress(self.cluster_name, self.workflow_id)
+        create_dask_dashboard_ingress(self.workflow_id)
 
     def _prepare_cluster(self):
         """Prepare Dask cluster body by adding necessary image-pull secrets, volumes, volume mounts, init containers and sidecar containers."""
@@ -128,6 +126,8 @@ class DaskResourceManager:
 
         # Add the name of the cluster, used in scheduler service name
         self.cluster_body["metadata"] = {"name": self.cluster_name}
+
+        # self.cluster_body["spec"]["worker"]["spec"]["metadata"] = {"name": "amcik"}
 
         self.cluster_body["spec"]["scheduler"]["service"]["selector"][
             "dask.org/cluster-name"
@@ -517,3 +517,7 @@ def requires_dask(workflow):
     return bool(
         workflow.reana_specification["workflow"].get("resources", {}).get("dask", False)
     )
+
+
+def get_dask_scheduler_uri(workflow_id):
+    return f"reana-dask-{workflow_id}-scheduler.default.svc.cluster.local:8786"
