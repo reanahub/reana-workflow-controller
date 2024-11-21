@@ -24,6 +24,7 @@ from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
     get_workspace_volume,
 )
+from reana_commons.utils import get_dask_component_name
 
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
@@ -404,14 +405,16 @@ def delete_k8s_ingress_object(ingress_name, namespace):
         )
 
 
-def create_dask_dashboard_ingress(cluster_name, workflow_id):
+def create_dask_dashboard_ingress(workflow_id):
     """Create K8S Ingress object for Dask dashboard."""
     # Define the middleware spec
     middleware_spec = {
         "apiVersion": "traefik.io/v1alpha1",
         "kind": "Middleware",
         "metadata": {
-            "name": f"replacepath-{workflow_id}",
+            "name": get_dask_component_name(
+                workflow_id, "dashboard_ingress_middleware"
+            ),
             "namespace": REANA_RUNTIME_KUBERNETES_NAMESPACE,
         },
         "spec": {
@@ -426,10 +429,10 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
         api_version="networking.k8s.io/v1",
         kind="Ingress",
         metadata=client.V1ObjectMeta(
-            name=f"dask-dashboard-ingress-{cluster_name}",
+            name=get_dask_component_name(workflow_id, "dashboard_ingress"),
             annotations={
                 **REANA_INGRESS_ANNOTATIONS,
-                "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-replacepath-{workflow_id}@kubernetescrd",
+                "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-{get_dask_component_name(workflow_id, 'dashboard_ingress_middleware')}@kubernetescrd",
             },
         ),
         spec=client.V1IngressSpec(
@@ -443,7 +446,9 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
                                 path_type="Prefix",
                                 backend=client.V1IngressBackend(
                                     service=client.V1IngressServiceBackend(
-                                        name=f"{cluster_name}-scheduler",
+                                        name=get_dask_component_name(
+                                            workflow_id, "dashboard_service"
+                                        ),
                                         port=client.V1ServiceBackendPort(number=8787),
                                     )
                                 ),
@@ -471,10 +476,10 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
     )
 
 
-def delete_dask_dashboard_ingress(cluster_name, workflow_id):
+def delete_dask_dashboard_ingress(workflow_id):
     """Delete K8S Ingress Object for Dask dashboard."""
     current_k8s_networking_api_client.delete_namespaced_ingress(
-        name=cluster_name,
+        name=get_dask_component_name(workflow_id, "dashboard_ingress"),
         namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         body=client.V1DeleteOptions(),
     )
@@ -483,7 +488,7 @@ def delete_dask_dashboard_ingress(cluster_name, workflow_id):
         version="v1alpha1",
         namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         plural="middlewares",
-        name=f"replacepath-{workflow_id}",
+        name=get_dask_component_name(workflow_id, "dashboard_ingress_middleware"),
     )
 
 

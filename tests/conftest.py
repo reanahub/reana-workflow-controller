@@ -202,7 +202,7 @@ def mock_user_secrets(monkeypatch):
 def dask_resource_manager(sample_serial_workflow_in_db_with_dask, mock_user_secrets):
     """Fixture to create a DaskResourceManager instance."""
     manager = DaskResourceManager(
-        cluster_name="test-cluster",
+        workflow_id="9eef9a08-5629-420d-8e97-29d498d88e20",
         workflow_spec=sample_serial_workflow_in_db_with_dask.reana_specification[
             "workflow"
         ],

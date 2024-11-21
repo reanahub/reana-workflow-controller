@@ -31,6 +31,7 @@ from reana_commons.utils import (
     calculate_hash_of_dir,
     calculate_job_input_hash,
     build_unique_component_name,
+    get_dask_component_name,
 )
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, RunStatus, Service
@@ -322,8 +323,8 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
         group="kubernetes.dask.org",
         version="v1",
         plural="daskclusters",
+        name=get_dask_component_name(workflow.id_, "cluster"),
         namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        name=f"reana-run-dask-{workflow.id_}",
     )
 
     if DASK_AUTOSCALER_ENABLED:
@@ -331,17 +332,15 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
             group="kubernetes.dask.org",
             version="v1",
             plural="daskautoscalers",
+            name=get_dask_component_name(workflow.id_, "autoscaler"),
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-            name=f"dask-autoscaler-reana-run-dask-{workflow.id_}",
         )
 
-    delete_dask_dashboard_ingress(
-        f"dask-dashboard-ingress-reana-run-dask-{workflow.id_}", workflow.id_
-    )
+    delete_dask_dashboard_ingress(workflow.id_)
 
     dask_service = (
         Session.query(Service)
-        .filter_by(name=f"dask-dashboard-{workflow.id_}")
+        .filter_by(name=get_dask_component_name(workflow.id_, "database_model_service"))
         .one_or_none()
     )
     workflow.services.remove(dask_service)

@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from webargs import fields, validate
 from webargs.flaskparser import use_args, use_kwargs
 from reana_commons.config import WORKFLOW_TIME_FORMAT
-from reana_commons.utils import build_unique_component_name
+from reana_commons.utils import build_unique_component_name, get_dask_component_name
 from reana_db.database import Session
 from reana_db.models import (
     RunStatus,
@@ -416,7 +416,7 @@ def get_workflows(args, paginate=None):  # noqa
                 dask_service = workflow.services.first()
                 if dask_service and dask_service.status == ServiceStatus.created:
                     pod_readiness = check_pod_readiness_by_prefix(
-                        pod_name_prefix=f"reana-run-dask-{workflow.id_}"
+                        pod_name_prefix=get_dask_component_name(workflow.id_, "cluster")
                     )
 
                     if pod_readiness == "Ready":
@@ -630,12 +630,12 @@ def create_workflow():  # noqa
         )
         if requires_dask(workflow):
             dask_service = Service(
-                name=f"dask-dashboard-{workflow_uuid}",
+                name=get_dask_component_name(workflow.id_, "database_model_service"),
                 uri=f"https://{REANA_HOSTNAME}/{workflow_uuid}/dashboard/status",
                 type_=ServiceType.dask,
                 status=ServiceStatus.created,
-                owner_id=request.args["user"],
             )
+
             workflow.services.append(dask_service)
 
         Session.add(workflow)

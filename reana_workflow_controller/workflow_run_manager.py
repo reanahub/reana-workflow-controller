@@ -45,6 +45,7 @@ from reana_commons.k8s.volumes import (
 from reana_commons.utils import (
     build_unique_component_name,
     format_cmd,
+    get_dask_component_name,
 )
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
@@ -52,7 +53,10 @@ from reana_db.models import Job, JobStatus, InteractiveSession, InteractiveSessi
 
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 
-from reana_workflow_controller.dask import DaskResourceManager, requires_dask
+from reana_workflow_controller.dask import (
+    DaskResourceManager,
+    requires_dask,
+)
 
 from reana_workflow_controller.k8s import (
     build_interactive_k8s_objects,
@@ -374,9 +378,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         try:
             # Create the dask cluster and required resources
+
             if requires_dask(self.workflow):
                 DaskResourceManager(
-                    cluster_name=f"reana-run-dask-{self.workflow.id_}",
+                    workflow_id=self.workflow.id_,
                     workflow_spec=self.workflow.reana_specification["workflow"],
                     workflow_workspace=self.workflow.workspace_path,
                     user_id=self.workflow.owner_id,
@@ -759,7 +764,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             job_controller_container.env.append(
                 {
                     "name": "DASK_SCHEDULER_URI",
-                    "value": f"reana-run-dask-{self.workflow.id_}-scheduler.{REANA_RUNTIME_KUBERNETES_NAMESPACE}.svc.cluster.local:8786",
+                    "value": get_dask_component_name(
+                        self.workflow.id_,
+                        "dashboard_service_uri",
+                        REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                    ),
                 },
             )
 

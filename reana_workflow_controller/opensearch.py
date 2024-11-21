@@ -11,6 +11,7 @@
 import logging
 from opensearchpy import OpenSearch
 
+from reana_commons.utils import get_dask_component_name
 from reana_workflow_controller.config import (
     REANA_OPENSEARCH_CA_CERTS,
     REANA_OPENSEARCH_HOST,
@@ -188,7 +189,7 @@ class OpenSearchLogFetcher(object):
             id=None,
             index=self.dask_index,
             matches={
-                self.dask_log_matcher: f"reana-run-dask-{workflow_id}",
+                self.dask_log_matcher: get_dask_component_name(workflow_id, "cluster"),
                 "kubernetes.labels.dask.org/component": "scheduler",
             },
         )
@@ -205,7 +206,7 @@ class OpenSearchLogFetcher(object):
             id=None,
             index=self.dask_index,
             matches={
-                self.dask_log_matcher: f"reana-run-dask-{workflow_id}",
+                self.dask_log_matcher: get_dask_component_name(workflow_id, "cluster"),
                 "kubernetes.labels.dask.org/component": "worker",
             },
         )
