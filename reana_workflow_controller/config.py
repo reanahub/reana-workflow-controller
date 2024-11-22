@@ -155,7 +155,7 @@ DEBUG_ENV_VARS = (
 """Common to all workflow engines environment variables for debug mode."""
 
 JUPYTER_INTERACTIVE_SESSION_DEFAULT_IMAGE = (
-    "docker.io/jupyter/scipy-notebook:notebook-6.4.5"
+    "quay.io/jupyter/scipy-notebook:notebook-7.2.2"
 )
 """Default image for Jupyter based interactive session deployments."""
 
