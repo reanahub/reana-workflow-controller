@@ -60,10 +60,12 @@ from webargs.flaskparser import parser
 from werkzeug.exceptions import BadRequest, NotFound
 
 from reana_workflow_controller.config import (
+    DASK_ENABLED,
     PROGRESS_STATUSES,
     REANA_GITLAB_HOST,
     PREVIEWABLE_MIME_TYPE_PREFIXES,
 )
+from reana_workflow_controller.dask import requires_dask
 from reana_workflow_controller.consumer import _update_workflow_status
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
@@ -184,11 +186,46 @@ def build_workflow_logs(workflow, steps=None, paginate=None):
 
         open_search_log_fetcher = build_opensearch_log_fetcher()
 
-        logs = (
-            open_search_log_fetcher.fetch_job_logs(job.backend_job_id)
-            if open_search_log_fetcher
-            else None
-        )
+        logs = None
+
+        if DASK_ENABLED and requires_dask(workflow):
+            logs = (
+                open_search_log_fetcher.fetch_job_logs(job.backend_job_id)
+                + """
+
+                -------------------------------------------------------------------
+                -------------------------------------------------------------------
+                ----------------        DASK SCHEDULER LOGS        ----------------
+                -------------------------------------------------------------------
+                -------------------------------------------------------------------
+
+
+
+                """
+                + open_search_log_fetcher.fetch_dask_scheduler_logs(job.workflow_uuid)
+                + """
+
+                -------------------------------------------------------------------
+                -------------------------------------------------------------------
+                ----------------         DASK WORKER LOGS          ----------------
+                -------------------------------------------------------------------
+                -------------------------------------------------------------------
+
+
+
+
+                """
+                + open_search_log_fetcher.fetch_dask_worker_logs(job.workflow_uuid)
+                if open_search_log_fetcher
+                else None
+            )
+
+        else:
+            logs = (
+                open_search_log_fetcher.fetch_job_logs(job.backend_job_id)
+                if open_search_log_fetcher
+                else None
+            )
 
         item = {
             "workflow_uuid": str(job.workflow_uuid) or "",
