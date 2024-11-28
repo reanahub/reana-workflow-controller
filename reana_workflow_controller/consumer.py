@@ -322,7 +322,7 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
         group="kubernetes.dask.org",
         version="v1",
         plural="daskclusters",
-        namespace="default",
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         name=f"reana-run-dask-{workflow.id_}",
     )
 
@@ -331,7 +331,7 @@ def _delete_dask_cluster(workflow: Workflow) -> None:
             group="kubernetes.dask.org",
             version="v1",
             plural="daskautoscalers",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             name=f"dask-autoscaler-reana-run-dask-{workflow.id_}",
         )
 

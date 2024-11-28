@@ -11,6 +11,7 @@ from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     REANA_WORKFLOW_UMASK,
     REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
 )
 from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
@@ -407,7 +408,10 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
     middleware_spec = {
         "apiVersion": "traefik.io/v1alpha1",
         "kind": "Middleware",
-        "metadata": {"name": f"replacepath-{workflow_id}", "namespace": "default"},
+        "metadata": {
+            "name": f"replacepath-{workflow_id}",
+            "namespace": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        },
         "spec": {
             "replacePathRegex": {
                 "regex": f"/{workflow_id}/dashboard/*",
@@ -423,7 +427,7 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
             name=f"dask-dashboard-ingress-{cluster_name}",
             annotations={
                 **REANA_INGRESS_ANNOTATIONS,
-                "traefik.ingress.kubernetes.io/router.middlewares": f"default-replacepath-{workflow_id}@kubernetescrd",
+                "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-replacepath-{workflow_id}@kubernetescrd",
             },
         ),
         spec=client.V1IngressSpec(
@@ -455,25 +459,27 @@ def create_dask_dashboard_ingress(cluster_name, workflow_id):
     current_k8s_custom_objects_api_client.create_namespaced_custom_object(
         group="traefik.io",
         version="v1alpha1",
-        namespace="default",
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         plural="middlewares",
         body=middleware_spec,
     )
     # Create the ingress resource
     current_k8s_networking_api_client.create_namespaced_ingress(
-        namespace="default", body=ingress
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=ingress
     )
 
 
 def delete_dask_dashboard_ingress(cluster_name, workflow_id):
     """Delete K8S Ingress Object for Dask dashboard."""
     current_k8s_networking_api_client.delete_namespaced_ingress(
-        name=cluster_name, namespace="default", body=client.V1DeleteOptions()
+        name=cluster_name,
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        body=client.V1DeleteOptions(),
     )
     current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
         group="traefik.io",
         version="v1alpha1",
-        namespace="default",
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         plural="middlewares",
         name=f"replacepath-{workflow_id}",
     )
