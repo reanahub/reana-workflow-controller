@@ -17,14 +17,12 @@ from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
     current_k8s_corev1_api_client,
     current_k8s_networking_api_client,
-    current_k8s_custom_objects_api_client,
 )
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
     get_workspace_volume,
 )
-from reana_commons.utils import get_dask_component_name
 
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
@@ -403,93 +401,6 @@ def delete_k8s_ingress_object(ingress_name, namespace):
             "Exception when calling ExtensionsV1beta1->"
             "Api->delete_namespaced_ingress: {}\n".format(k8s_api_exception)
         )
-
-
-def create_dask_dashboard_ingress(workflow_id):
-    """Create K8S Ingress object for Dask dashboard."""
-    # Define the middleware spec
-    middleware_spec = {
-        "apiVersion": "traefik.io/v1alpha1",
-        "kind": "Middleware",
-        "metadata": {
-            "name": get_dask_component_name(
-                workflow_id, "dashboard_ingress_middleware"
-            ),
-            "namespace": REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        },
-        "spec": {
-            "replacePathRegex": {
-                "regex": f"/{workflow_id}/dashboard/*",
-                "replacement": "/$1",
-            }
-        },
-    }
-
-    ingress = client.V1Ingress(
-        api_version="networking.k8s.io/v1",
-        kind="Ingress",
-        metadata=client.V1ObjectMeta(
-            name=get_dask_component_name(workflow_id, "dashboard_ingress"),
-            annotations={
-                **REANA_INGRESS_ANNOTATIONS,
-                "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-{get_dask_component_name(workflow_id, 'dashboard_ingress_middleware')}@kubernetescrd",
-            },
-        ),
-        spec=client.V1IngressSpec(
-            rules=[
-                client.V1IngressRule(
-                    host=REANA_INGRESS_HOST,
-                    http=client.V1HTTPIngressRuleValue(
-                        paths=[
-                            client.V1HTTPIngressPath(
-                                path=f"/{workflow_id}/dashboard",
-                                path_type="Prefix",
-                                backend=client.V1IngressBackend(
-                                    service=client.V1IngressServiceBackend(
-                                        name=get_dask_component_name(
-                                            workflow_id, "dashboard_service"
-                                        ),
-                                        port=client.V1ServiceBackendPort(number=8787),
-                                    )
-                                ),
-                            )
-                        ]
-                    ),
-                )
-            ]
-        ),
-    )
-    if REANA_INGRESS_CLASS_NAME:
-        ingress.spec.ingress_class_name = REANA_INGRESS_CLASS_NAME
-
-    # Create middleware for ingress
-    current_k8s_custom_objects_api_client.create_namespaced_custom_object(
-        group="traefik.io",
-        version="v1alpha1",
-        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        plural="middlewares",
-        body=middleware_spec,
-    )
-    # Create the ingress resource
-    current_k8s_networking_api_client.create_namespaced_ingress(
-        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=ingress
-    )
-
-
-def delete_dask_dashboard_ingress(workflow_id):
-    """Delete K8S Ingress Object for Dask dashboard."""
-    current_k8s_networking_api_client.delete_namespaced_ingress(
-        name=get_dask_component_name(workflow_id, "dashboard_ingress"),
-        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        body=client.V1DeleteOptions(),
-    )
-    current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
-        group="traefik.io",
-        version="v1alpha1",
-        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        plural="middlewares",
-        name=get_dask_component_name(workflow_id, "dashboard_ingress_middleware"),
-    )
 
 
 def check_pod_readiness_by_prefix(

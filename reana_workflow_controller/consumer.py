@@ -22,8 +22,6 @@ from reana_commons.consumer import BaseConsumer
 from reana_commons.k8s.api_client import (
     current_k8s_batchv1_api_client,
     current_k8s_corev1_api_client,
-    current_k8s_custom_objects_api_client,
-    current_k8s_networking_api_client,
 )
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.utils import (
@@ -46,10 +44,8 @@ from reana_workflow_controller.config import (
     REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
-from reana_workflow_controller.k8s import delete_dask_dashboard_ingress
 
-from reana_workflow_controller.config import DASK_AUTOSCALER_ENABLED
-from reana_workflow_controller.dask import requires_dask
+from reana_workflow_controller.dask import requires_dask, delete_dask_cluster
 
 try:
     from urllib import parse as urlparse
@@ -169,7 +165,7 @@ def _update_workflow_status(workflow, status, logs):
                 workflow.logs += "Workflow engine logs could not be retrieved.\n"
 
             if requires_dask(workflow):
-                _delete_dask_cluster(workflow)
+                delete_dask_cluster(workflow.id_, workflow.owner_id)
 
             if RunStatus.should_cleanup_job(status):
                 try:
@@ -315,34 +311,3 @@ def _get_workflow_engine_pod_logs(workflow: Workflow) -> str:
     # There might not be any pod returned by `list_namespaced_pod`, for example
     # when a workflow fails to be scheduled
     return ""
-
-
-def _delete_dask_cluster(workflow: Workflow) -> None:
-    """Delete the Dask cluster resources."""
-    current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
-        group="kubernetes.dask.org",
-        version="v1",
-        plural="daskclusters",
-        name=get_dask_component_name(workflow.id_, "cluster"),
-        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-    )
-
-    if DASK_AUTOSCALER_ENABLED:
-        current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
-            group="kubernetes.dask.org",
-            version="v1",
-            plural="daskautoscalers",
-            name=get_dask_component_name(workflow.id_, "autoscaler"),
-            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-        )
-
-    delete_dask_dashboard_ingress(workflow.id_)
-
-    dask_service = (
-        Session.query(Service)
-        .filter_by(name=get_dask_component_name(workflow.id_, "database_model_service"))
-        .one_or_none()
-    )
-    workflow.services.remove(dask_service)
-    Session.delete(dask_service)
-    Session.object_session(workflow).commit()
