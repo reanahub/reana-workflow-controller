@@ -11,6 +11,9 @@ import yaml
 
 from flask import current_app
 
+from kubernetes import client
+from kubernetes.client.exceptions import ApiException
+
 from reana_commons.config import (
     K8S_CERN_EOS_AVAILABLE,
     K8S_CERN_EOS_MOUNT_CONFIGURATION,
@@ -19,6 +22,7 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_UID,
 )
 from reana_commons.k8s.api_client import (
+    current_k8s_networking_api_client,
     current_k8s_custom_objects_api_client,
 )
 from reana_commons.k8s.kerberos import get_kerberos_k8s_config
@@ -27,10 +31,13 @@ from reana_commons.k8s.volumes import (
     get_workspace_volume,
     get_reana_shared_volume,
 )
-from reana_commons.job_utils import kubernetes_memory_to_bytes
 
-from reana_workflow_controller.config import DASK_AUTOSCALER_ENABLED
-from reana_workflow_controller.k8s import create_dask_dashboard_ingress
+from reana_workflow_controller.config import (
+    DASK_AUTOSCALER_ENABLED,
+    REANA_INGRESS_HOST,
+    REANA_INGRESS_CLASS_NAME,
+    REANA_INGRESS_ANNOTATIONS,
+)
 
 
 class DaskResourceManager:
@@ -109,14 +116,21 @@ class DaskResourceManager:
 
     def create_dask_resources(self):
         """Create necessary Dask resources for the workflow."""
-        self._prepare_cluster()
-        self._create_dask_cluster()
+        try:
+            self._prepare_cluster()
+            self._create_dask_cluster()
 
-        if DASK_AUTOSCALER_ENABLED:
-            self._prepare_autoscaler()
-            self._create_dask_autoscaler()
+            if DASK_AUTOSCALER_ENABLED:
+                self._prepare_autoscaler()
+                self._create_dask_autoscaler()
 
-        create_dask_dashboard_ingress(self.cluster_name, self.workflow_id)
+            create_dask_dashboard_ingress(self.cluster_name, self.workflow_id)
+
+        except Exception as e:
+            logging.error(
+                f"An error occured while trying to create dask cluster, now deleting the cluster... Error message:\n{e}"
+            )
+            delete_dask_cluster(self.workflow_id)
 
     def _prepare_cluster(self):
         """Prepare Dask cluster body by adding necessary image-pull secrets, volumes, volume mounts, init containers and sidecar containers."""
@@ -489,11 +503,11 @@ class DaskResourceManager:
                 namespace="default",
                 body=self.cluster_body,
             )
-        except Exception:
+        except Exception as e:
             logging.exception(
                 "An error occurred while trying to create a Dask cluster."
             )
-            raise
+            raise e
 
     def _create_dask_autoscaler(self):
         """Create Dask autoscaler resource."""
@@ -517,3 +531,150 @@ def requires_dask(workflow):
     return bool(
         workflow.reana_specification["workflow"].get("resources", {}).get("dask", False)
     )
+
+
+def delete_dask_cluster(workflow_id) -> None:
+    """Delete the Dask cluster resources."""
+    errors = []  # Collect errors during deletion attempts
+
+    try:
+        current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+            group="kubernetes.dask.org",
+            version="v1",
+            plural="daskclusters",
+            namespace="default",
+            name=f"reana-run-dask-{workflow_id}",
+        )
+        logging.info(f"Dask cluster for workflow {workflow_id} deleted successfully.")
+    except Exception as e:
+        errors.append(f"Error deleting Dask cluster for workflow {workflow_id}: {e}")
+
+    if DASK_AUTOSCALER_ENABLED:
+        try:
+            current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+                group="kubernetes.dask.org",
+                version="v1",
+                plural="daskautoscalers",
+                namespace="default",
+                name=f"dask-autoscaler-reana-run-dask-{workflow_id}",
+            )
+            logging.info(
+                f"Dask autoscaler for workflow {workflow_id} deleted successfully."
+            )
+        except Exception as e:
+            errors.append(
+                f"Error deleting Dask autoscaler for workflow {workflow_id}: {e}"
+            )
+
+    try:
+        delete_dask_dashboard_ingress(
+            f"dask-dashboard-ingress-reana-run-dask-{workflow_id}", workflow_id
+        )
+        logging.info(
+            f"Dask dashboard ingress for workflow {workflow_id} deleted successfully."
+        )
+    except Exception as e:
+        errors.append(
+            f"Error deleting Dask dashboard ingress for workflow {workflow_id}: {e}"
+        )
+
+    # Raise collected errors if any
+    if errors:
+        logging.error("Errors occurred during resource deletion:\n" + "\n".join(errors))
+        raise RuntimeError(
+            "Errors occurred during resource deletion:\n" + "\n".join(errors)
+        )
+
+
+def create_dask_dashboard_ingress(cluster_name, workflow_id):
+    """Create K8S Ingress object for Dask dashboard."""
+    # Define the middleware spec
+    middleware_spec = {
+        "apiVersion": "traefik.io/v1alpha1",
+        "kind": "Middleware",
+        "metadata": {"name": f"replacepath-{workflow_id}", "namespace": "default"},
+        "spec": {
+            "replacePathRegex": {
+                "regex": f"/{workflow_id}/dashboard/*",
+                "replacement": "/$1",
+            }
+        },
+    }
+
+    ingress = client.V1Ingress(
+        api_version="networking.k8s.io/v1",
+        kind="Ingress",
+        metadata=client.V1ObjectMeta(
+            name=f"dask-dashboard-ingress-{cluster_name}",
+            annotations={
+                **REANA_INGRESS_ANNOTATIONS,
+                "traefik.ingress.kubernetes.io/router.middlewares": f"default-replacepath-{workflow_id}@kubernetescrd",
+            },
+        ),
+        spec=client.V1IngressSpec(
+            rules=[
+                client.V1IngressRule(
+                    host=REANA_INGRESS_HOST,
+                    http=client.V1HTTPIngressRuleValue(
+                        paths=[
+                            client.V1HTTPIngressPath(
+                                path=f"/{workflow_id}/dashboard",
+                                path_type="Prefix",
+                                backend=client.V1IngressBackend(
+                                    service=client.V1IngressServiceBackend(
+                                        name=f"{cluster_name}-scheduler",
+                                        port=client.V1ServiceBackendPort(number=8787),
+                                    )
+                                ),
+                            )
+                        ]
+                    ),
+                )
+            ]
+        ),
+    )
+    if REANA_INGRESS_CLASS_NAME:
+        ingress.spec.ingress_class_name = REANA_INGRESS_CLASS_NAME
+
+    # Create middleware for ingress
+    current_k8s_custom_objects_api_client.create_namespaced_custom_object(
+        group="traefik.io",
+        version="v1alpha1",
+        namespace="default",
+        plural="middlewares",
+        body=middleware_spec,
+    )
+    # Create the ingress resource
+    current_k8s_networking_api_client.create_namespaced_ingress(
+        namespace="default", body=ingress
+    )
+
+
+def delete_dask_dashboard_ingress(cluster_name, workflow_id):
+    """Delete K8S Ingress Object for Dask dashboard."""
+    errors = []  # Collect errors during deletion attempts
+    try:
+        current_k8s_networking_api_client.delete_namespaced_ingress(
+            name=cluster_name, namespace="default", body=client.V1DeleteOptions()
+        )
+    except Exception as e:
+        errors.append(
+            f"Error deleting Dask dashboard ingress for workflow {workflow_id}: {e}"
+        )
+
+    try:
+        current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
+            group="traefik.io",
+            version="v1alpha1",
+            namespace="default",
+            plural="middlewares",
+            name=f"replacepath-{workflow_id}",
+        )
+    except Exception as e:
+        errors.append(
+            f"Error deleting Dask dashboard ingress middleware for workflow {workflow_id}: {e}"
+        )
+
+    # Raise collected errors if any
+    if errors:
+        raise RuntimeError("\n".join(errors))
