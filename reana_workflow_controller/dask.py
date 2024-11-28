@@ -17,6 +17,7 @@ from reana_commons.config import (
     KRB5_STATUS_FILE_LOCATION,
     REANA_JOB_HOSTPATH_MOUNTS,
     WORKFLOW_RUNTIME_USER_UID,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
 )
 from reana_commons.k8s.api_client import (
     current_k8s_custom_objects_api_client,
@@ -68,9 +69,7 @@ class DaskResourceManager:
         self.cluster_spec = workflow_spec.get("resources", {}).get("dask", [])
         self.cluster_body = self._load_dask_cluster_template()
         self.cluster_image = self.cluster_spec["image"]
-        self.dask_scheduler_uri = (
-            f"{self.cluster_name}-scheduler.default.svc.cluster.local:8786"
-        )
+        self.dask_scheduler_uri = f"{self.cluster_name}-scheduler.{REANA_RUNTIME_KUBERNETES_NAMESPACE}.svc.cluster.local:8786"
 
         self.secrets_store = UserSecretsStore.fetch(self.user_id)
         self.secret_env_vars = self.secrets_store.get_env_secrets_as_k8s_spec()
@@ -486,7 +485,7 @@ class DaskResourceManager:
                 group="kubernetes.dask.org",
                 version="v1",
                 plural="daskclusters",
-                namespace="default",
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
                 body=self.cluster_body,
             )
         except Exception:
@@ -502,7 +501,7 @@ class DaskResourceManager:
                 group="kubernetes.dask.org",
                 version="v1",
                 plural="daskautoscalers",
-                namespace="default",
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
                 body=self.autoscaler_body,
             )
         except Exception:

@@ -759,7 +759,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             job_controller_container.env.append(
                 {
                     "name": "DASK_SCHEDULER_URI",
-                    "value": f"reana-run-dask-{self.workflow.id_}-scheduler.default.svc.cluster.local:8786",
+                    "value": f"reana-run-dask-{self.workflow.id_}-scheduler.{REANA_RUNTIME_KUBERNETES_NAMESPACE}.svc.cluster.local:8786",
                 },
             )
 
