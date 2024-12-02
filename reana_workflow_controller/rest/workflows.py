@@ -22,8 +22,17 @@ from sqlalchemy.exc import IntegrityError
 from webargs import fields, validate
 from webargs.flaskparser import use_args, use_kwargs
 from reana_commons.config import WORKFLOW_TIME_FORMAT
+from reana_commons.utils import build_unique_component_name
 from reana_db.database import Session
-from reana_db.models import RunStatus, User, UserWorkflow, Workflow, WorkflowResource
+from reana_db.models import (
+    RunStatus,
+    User,
+    UserWorkflow,
+    Workflow,
+    WorkflowResource,
+    Service,
+    ServiceType,
+)
 from reana_db.utils import (
     _get_workflow_by_uuid,
     _get_workflow_with_uuid_or_name,
@@ -31,6 +40,7 @@ from reana_db.utils import (
     get_default_quota_resource,
 )
 from reana_workflow_controller.config import (
+    REANA_HOSTNAME,
     DEFAULT_NAME_FOR_WORKFLOWS,
     MAX_WORKFLOW_SHARING_MESSAGE_LENGTH,
 )
@@ -47,6 +57,9 @@ from reana_workflow_controller.rest.utils import (
     is_uuid_v4,
     use_paginate_args,
 )
+
+from reana_workflow_controller.k8s import check_pod_by_prefix
+from reana_workflow_controller.dask import requires_dask
 
 START = "start"
 STOP = "stop"
@@ -393,12 +406,49 @@ def get_workflows(args, paginate=None):  # noqa
                 "owner_email": owner_email,
                 "shared_with": shared_with,
             }
+
+            if requires_dask(workflow):
+
+                dask_service = workflow.services.first()
+                if dask_service and dask_service.status == RunStatus.created:
+                    pod_status = check_pod_by_prefix(
+                        pod_name_prefix=f"reana-run-dask-{workflow.id_}"
+                    )
+                    if pod_status == "Running":
+                        dask_service.status = RunStatus.running
+                        db_session = Session.object_session(dask_service)
+                        db_session.commit()
+
+            services = workflow.services.all()
+            services_serialized = [
+                {
+                    "name": service.name,
+                    "type": service.type_.name,
+                    "status": service.status.name,
+                }
+                for service in services
+            ]
+            workflow_response["services"] = services_serialized
+
             if type_ == "interactive" or verbose:
                 int_session = workflow.sessions.first()
                 if int_session:
                     workflow_response["session_type"] = int_session.type_.name
                     workflow_response["session_uri"] = int_session.path
+                    int_session_pod_name_prefix = build_unique_component_name(
+                        "run-session", int_session.workflow[0].id_
+                    )
+                    if int_session.status == RunStatus.created:
+                        pod_status = check_pod_by_prefix(
+                            pod_name_prefix=int_session_pod_name_prefix
+                        )
+                        if pod_status == "Running":
+                            int_session.status = RunStatus.running
+                            db_session = Session.object_session(int_session)
+                            db_session.commit()
+
                     workflow_response["session_status"] = int_session.status.name
+
                 # Skip workflow if type is interactive and there is no session
                 elif type_ == "interactive":
                     continue
@@ -573,8 +623,19 @@ def create_workflow():  # noqa
             ),
             launcher_url=request.json.get("launcher_url"),
         )
+        if requires_dask(workflow):
+            dask_service = Service(
+                name=f"dask-service-{workflow_uuid}",
+                uri=f"{REANA_HOSTNAME}{workflow_uuid}/dashboard/status",
+                type_=ServiceType.dask,
+                status=RunStatus.created,
+                owner_id=request.args["user"],
+            )
+            workflow.services.append(dask_service)
+
         Session.add(workflow)
         Session.object_session(workflow).commit()
+
         retention_rules = request.json.get("retention_rules", [])
         if retention_rules:
             workflow.set_workspace_retention_rules(retention_rules)
