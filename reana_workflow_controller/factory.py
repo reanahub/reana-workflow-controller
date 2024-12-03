@@ -55,7 +55,6 @@ def create_app(config_mapping=None):
     if config_mapping:
         app.config.from_mapping(config_mapping)
 
-    app.secret_key = "super secret key"
     # Register API routes
     from reana_workflow_controller.rest import (
         workflows_session,
