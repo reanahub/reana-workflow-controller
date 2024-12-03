@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.4](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.9.4) (2024-11-29)
+
+
+### Build
+
+* **docker:** pin setuptools 70 ([#601](https://github.com/reanahub/reana-workflow-controller/issues/601)) ([be6a388](https://github.com/reanahub/reana-workflow-controller/commit/be6a3885f4f2e84ca77c7e09a89e5f2f06185452))
+* **python:** bump shared REANA packages as of 2024-11-28 ([#620](https://github.com/reanahub/reana-workflow-controller/issues/620)) ([179fa89](https://github.com/reanahub/reana-workflow-controller/commit/179fa89ccc4a5e77fca9efa403f4ad2003b40db3))
+
+
+### Features
+
+* **config:** upgrade to Jupyter SciPy 7.2.2 notebook ([#614](https://github.com/reanahub/reana-workflow-controller/issues/614)) ([72f0c4c](https://github.com/reanahub/reana-workflow-controller/commit/72f0c4c69759c8abf1d67c735232e5b6c033d504))
+* **helm:** allow cluster administrator to configure ingress host ([#588](https://github.com/reanahub/reana-workflow-controller/issues/588)) ([a7c9c85](https://github.com/reanahub/reana-workflow-controller/commit/a7c9c851277f3ca191c073fdc6c6d5d4149a95e8))
+* **sessions:** expose user secrets in interactive sessions ([#591](https://github.com/reanahub/reana-workflow-controller/issues/591)) ([784efee](https://github.com/reanahub/reana-workflow-controller/commit/784efee4be8b4a9785d03d3d05b00f3da2b455c2))
+
+
+### Bug fixes
+
+* **config:** read secret key from env ([#615](https://github.com/reanahub/reana-workflow-controller/issues/615)) ([7df1279](https://github.com/reanahub/reana-workflow-controller/commit/7df1279f45e0981a06c3af705873c4d1d797404d))
+* **manager:** avoid privilege escalation in Kubernetes jobs ([#615](https://github.com/reanahub/reana-workflow-controller/issues/615)) ([24563e5](https://github.com/reanahub/reana-workflow-controller/commit/24563e568044e29d4399f78d8c081d144f116761))
+* **manager:** pass RabbitMQ connection details to workflow engine ([#615](https://github.com/reanahub/reana-workflow-controller/issues/615)) ([cf4ee73](https://github.com/reanahub/reana-workflow-controller/commit/cf4ee734788da33f15a80e1fc1f0b3233ea5a007))
+* **set_workflow_status:** validate endpoint arguments ([#589](https://github.com/reanahub/reana-workflow-controller/issues/589)) ([5945d7f](https://github.com/reanahub/reana-workflow-controller/commit/5945d7fca095531b3601e551c527457f9413643c))
+
 ## [0.9.3](https://github.com/reanahub/reana-workflow-controller/compare/0.9.2...0.9.3) (2024-03-04)
 
 

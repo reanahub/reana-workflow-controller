@@ -79,9 +79,8 @@ def start_workflow(workflow, parameters):
 
     def _start_workflow_db(workflow, parameters):
         workflow.status = RunStatus.pending
-        if parameters:
-            workflow.input_parameters = parameters.get("input_parameters")
-            workflow.operational_options = parameters.get("operational_options")
+        workflow.input_parameters = parameters.get("input_parameters", {})
+        workflow.operational_options = parameters.get("operational_options", {})
         current_db_sessions.add(workflow)
         current_db_sessions.commit()
 
@@ -95,15 +94,15 @@ def start_workflow(workflow, parameters):
         verb=get_workflow_status_change_verb(workflow.status.name),
         status=str(workflow.status.name),
     )
-    if "restart" in parameters.keys():
-        if parameters["restart"]:
-            if workflow.status not in [
-                RunStatus.failed,
-                RunStatus.finished,
-                RunStatus.queued,
-                RunStatus.pending,
-            ]:
-                raise REANAWorkflowControllerError(failure_message)
+
+    if parameters.get("restart"):
+        if workflow.status not in [
+            RunStatus.failed,
+            RunStatus.finished,
+            RunStatus.queued,
+            RunStatus.pending,
+        ]:
+            raise REANAWorkflowControllerError(failure_message)
     elif workflow.status not in [RunStatus.created, RunStatus.queued]:
         if workflow.status == RunStatus.deleted:
             raise REANAWorkflowStatusError(failure_message)

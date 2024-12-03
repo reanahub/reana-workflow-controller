@@ -12,7 +12,11 @@ import os
 import json
 
 from distutils.util import strtobool
-from reana_commons.config import REANA_COMPONENT_PREFIX, SHARED_VOLUME_PATH
+from reana_commons.config import (
+    MQ_CONNECTION_STRING,
+    REANA_COMPONENT_PREFIX,
+    SHARED_VOLUME_PATH,
+)
 from reana_db.models import JobStatus, RunStatus
 
 from reana_workflow_controller.version import __version__
@@ -22,6 +26,9 @@ def _env_vars_dict_to_k8s_list(env_vars):
     """Convert env vars stored as a dictionary into a k8s-compatible list."""
     return [{"name": name, "value": str(value)} for name, value in env_vars.items()]
 
+
+SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
+"""Secret key used for the application user sessions."""
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
@@ -120,7 +127,8 @@ https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-a
 """
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
-    {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH}
+    {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH},
+    {"name": "RABBIT_MQ", "value": MQ_CONNECTION_STRING},
 ]
 """Common to all workflow engines environment variables."""
 
@@ -217,8 +225,8 @@ Example:
     "jupyter": {
         "recommended": [
             {
-                "name": "Jupyter SciPy Notebook 6.4.5",
-                "image": "docker.io/jupyter/scipy-notebook:notebook-6.4.5"
+                "name": "Jupyter SciPy Notebook 7.2.2",
+                "image": "docker.io/jupyter/scipy-notebook:notebook-7.2.2"
             }
         ],
         "allow_custom": true

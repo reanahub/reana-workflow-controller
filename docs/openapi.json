@@ -1356,19 +1356,30 @@
             "type": "string"
           },
           {
-            "description": "Optional. Additional input parameters and operational options for workflow execution. Possible parameters are `CACHE=on/off`, passed to disable caching of results in serial workflows, `all_runs=True/False` deletes all runs of a given workflow if status is set to deleted and `workspace=True/False` which deletes the workspace of a workflow.",
+            "description": "Optional. Additional parameters to customise the workflow status change.",
             "in": "body",
             "name": "parameters",
             "required": false,
             "schema": {
               "properties": {
-                "CACHE": {
-                  "type": "string"
-                },
                 "all_runs": {
+                  "description": "Optional. If true, delete all runs of the workflow. Only allowed when status is `deleted`.",
+                  "type": "boolean"
+                },
+                "input_parameters": {
+                  "description": "Optional. Additional input parameters that override the ones from the workflow specification. Only allowed when status is `start`.",
+                  "type": "object"
+                },
+                "operational_options": {
+                  "description": "Optional. Additional operational options for workflow execution. Only allowed when status is `start`.",
+                  "type": "object"
+                },
+                "restart": {
+                  "description": "Optional. If true, the workflow is a restart of an earlier workflow execution. Only allowed when status is `start`.",
                   "type": "boolean"
                 },
                 "workspace": {
+                  "description": "Optional, but must be set to true if provided. If true, delete also the workspace of the workflow. Only allowed when status is `deleted`.",
                   "type": "boolean"
                 }
               },

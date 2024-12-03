@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -51,7 +51,7 @@ install_requires = [
     "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
     "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.95.0a5,<0.96.0",
+    "reana-commons[kubernetes]>=0.95.0a6,<0.96.0",
     "reana-db>=0.95.0a4,<0.96.0",
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",

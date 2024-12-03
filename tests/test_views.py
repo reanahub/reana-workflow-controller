@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -1051,9 +1051,9 @@ def test_set_workflow_status_unknown_workflow(
             url_for(
                 "statuses.set_workflow_status", workflow_id_or_name=random_workflow_uuid
             ),
-            query_string={"user": user0.id_},
+            query_string={"user": user0.id_, "status": payload},
             content_type="application/json",
-            data=json.dumps(payload),
+            data=json.dumps({}),
         )
         assert res.status_code == 404
 
@@ -1382,6 +1382,51 @@ def test_start_input_parameters(
                     Workflow.id_ == workflow_created_uuid
                 ).first()
                 assert workflow.input_parameters == parameters["input_parameters"]
+
+
+def test_start_no_input_parameters(
+    app,
+    session,
+    user0,
+    user_secrets,
+    corev1_api_client_with_user_secrets,
+    sample_serial_workflow_in_db,
+):
+    """Test start workflow with inupt parameters."""
+    workflow = sample_serial_workflow_in_db
+    workflow_uuid = str(sample_serial_workflow_in_db.id_)
+
+    with app.test_client() as client:
+        # create workflow
+        workflow.status = RunStatus.created
+        session.add(workflow)
+        session.commit()
+
+        payload = START
+        parameters = {"operational_options": {}}
+        with mock.patch(
+            "reana_workflow_controller.workflow_run_manager."
+            "current_k8s_batchv1_api_client"
+        ):
+            # provide user secret store
+            with mock.patch(
+                "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+                corev1_api_client_with_user_secrets(user_secrets),
+            ):
+                # set workflow status to START and pass parameters
+                res = client.put(
+                    url_for(
+                        "statuses.set_workflow_status",
+                        workflow_id_or_name=workflow_uuid,
+                    ),
+                    query_string={"user": user0.id_, "status": "start"},
+                    content_type="application/json",
+                    data=json.dumps(parameters),
+                )
+        json_response = json.loads(res.data.decode())
+        assert json_response["status"] == status_dict[payload].name
+        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        assert workflow.input_parameters == dict()
 
 
 def test_start_workflow_db_failure(
