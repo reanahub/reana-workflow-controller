@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2020, 2021, 2022, 2023, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -59,7 +59,10 @@ from reana_workflow_controller.rest.utils import (
     use_paginate_args,
 )
 
-from reana_workflow_controller.k8s import check_pod_status_by_prefix
+from reana_workflow_controller.k8s import (
+    check_pod_status_by_prefix,
+    check_pod_readiness_by_prefix,
+)
 from reana_workflow_controller.dask import requires_dask
 
 START = "start"
@@ -412,11 +415,11 @@ def get_workflows(args, paginate=None):  # noqa
 
                 dask_service = workflow.services.first()
                 if dask_service and dask_service.status == ServiceStatus.created:
-                    pod_status = check_pod_status_by_prefix(
+                    pod_readiness = check_pod_readiness_by_prefix(
                         pod_name_prefix=f"reana-run-dask-{workflow.id_}"
                     )
 
-                    if pod_status == "Running":
+                    if pod_readiness == "Ready":
                         dask_service.status = ServiceStatus.running
                         db_session = Session.object_session(dask_service)
                         db_session.commit()

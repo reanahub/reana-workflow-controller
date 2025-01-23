@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2024 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -487,10 +487,32 @@ def delete_dask_dashboard_ingress(cluster_name, workflow_id):
     )
 
 
+def check_pod_readiness_by_prefix(
+    pod_name_prefix, namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE
+):
+    """Check the readiness of a Pod in the given namespace whose name starts with the specified prefix. We assume that there exists 0 or 1 pod with a given prefix."""
+    try:
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(namespace=namespace)
+
+        for pod in pods.items:
+            if pod.metadata.name.startswith(pod_name_prefix):
+                # Check the pod's readiness condition
+                if pod.status.conditions:
+                    for condition in pod.status.conditions:
+                        if condition.type == "Ready":
+                            return (
+                                "Ready" if condition.status == "True" else "Not Ready"
+                            )
+                return "Not Ready"
+        return "Not Found"
+    except ApiException as e:
+        return f"Error: {e.reason}"
+
+
 def check_pod_status_by_prefix(
     pod_name_prefix, namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE
 ):
-    """Check if there is a Pod in the given namespace whose name starts with the specified prefix. We assume that there exists 0 or 1 pod with a given prefix."""
+    """Check the pod status of a Pod in the given namespace whose name starts with the specified prefix. We assume that there exists 0 or 1 pod with a given prefix."""
     try:
         pods = current_k8s_corev1_api_client.list_namespaced_pod(namespace=namespace)
 
