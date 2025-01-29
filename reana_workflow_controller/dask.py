@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2024 CERN.
+# Copyright (C) 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -24,6 +24,7 @@ from reana_commons.config import (
     REANA_JOB_HOSTPATH_MOUNTS,
     WORKFLOW_RUNTIME_USER_UID,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
 )
 from reana_commons.k8s.api_client import (
     current_k8s_networking_api_client,
@@ -73,8 +74,8 @@ class DaskResourceManager:
         self.single_worker_memory = single_worker_memory
         self.workflow_spec = workflow_spec
         self.workflow_workspace = workflow_workspace
-        self.workflow_id = workflow_workspace.split("/")[-1]
-        self.user_id = user_id
+        self.workflow_id = str(workflow_id)
+        self.user_id = str(user_id)
 
         self.cluster_spec = workflow_spec.get("resources", {}).get("dask", [])
         self.cluster_body = self._load_dask_cluster_template()
@@ -128,7 +129,7 @@ class DaskResourceManager:
                 self._prepare_autoscaler()
                 self._create_dask_autoscaler()
 
-            create_dask_dashboard_ingress(self.workflow_id)
+            create_dask_dashboard_ingress(self.workflow_id, self.user_id)
 
         except Exception as e:
             logging.error(
@@ -145,7 +146,13 @@ class DaskResourceManager:
         self._add_eos_volume()
 
         # Add the name of the cluster, used in scheduler service name
-        self.cluster_body["metadata"] = {"name": self.cluster_name}
+        self.cluster_body["metadata"] = {
+            "name": self.cluster_name,
+            "labels": {
+                "reana-run-dask-owner-uuid": self.user_id,
+                "reana-run-dask-workflow-uuid": self.workflow_id,
+            },
+        }
 
         # self.cluster_body["spec"]["worker"]["spec"]["metadata"] = {"name": "amcik"}
 
@@ -180,6 +187,15 @@ class DaskResourceManager:
             {"name": "DASK_SCHEDULER_URI", "value": self.dask_scheduler_uri},
         )
 
+        # Add kubernetes node label if exists
+        if REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL:
+            self.cluster_body["spec"]["scheduler"]["spec"][
+                "nodeSelector"
+            ] = REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL
+            self.cluster_body["spec"]["worker"]["spec"][
+                "nodeSelector"
+            ] = REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL
+
         # Add secrets
         self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["env"].extend(
             self.secret_env_vars
@@ -208,7 +224,13 @@ class DaskResourceManager:
     def _prepare_autoscaler(self):
         """Prepare Dask autoscaler body."""
         # Add the name of the dask autoscaler
-        self.autoscaler_body["metadata"] = {"name": self.autoscaler_name}
+        self.autoscaler_body["metadata"] = {
+            "name": self.autoscaler_name,
+            "labels": {
+                "reana-run-dask-owner-uuid": self.user_id,
+                "reana-run-dask-workflow-uuid": self.workflow_id,
+            },
+        }
 
         # Connect autoscaler to the cluster
         self.autoscaler_body["spec"]["cluster"] = self.cluster_name
@@ -612,7 +634,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
         )
 
 
-def create_dask_dashboard_ingress(workflow_id):
+def create_dask_dashboard_ingress(workflow_id, user_id):
     """Create K8S Ingress object for Dask dashboard."""
     # Define the middleware spec
     middleware_spec = {
@@ -622,6 +644,10 @@ def create_dask_dashboard_ingress(workflow_id):
             "name": get_dask_component_name(
                 workflow_id, "dashboard_ingress_middleware"
             ),
+            "labels": {
+                "reana-run-dask-owner-uuid": user_id,
+                "reana-run-dask-workflow-uuid": workflow_id,
+            },
             "namespace": REANA_RUNTIME_KUBERNETES_NAMESPACE,
         },
         "spec": {
@@ -640,6 +666,10 @@ def create_dask_dashboard_ingress(workflow_id):
             annotations={
                 **REANA_INGRESS_ANNOTATIONS,
                 "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-{get_dask_component_name(workflow_id, 'dashboard_ingress_middleware')}@kubernetescrd",
+            },
+            labels={
+                "reana-run-dask-owner-uuid": user_id,
+                "reana-run-dask-workflow-uuid": workflow_id,
             },
         ),
         spec=client.V1IngressSpec(

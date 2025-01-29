@@ -174,7 +174,7 @@ def test_create_dask_resources(dask_resource_manager):
         mock_create_cluster.assert_called_once()
         mock_create_autoscaler.assert_called_once()
         mock_create_dashboard_ingress.assert_called_once_with(
-            dask_resource_manager.workflow_id
+            dask_resource_manager.workflow_id, dask_resource_manager.user_id
         )
 
 
