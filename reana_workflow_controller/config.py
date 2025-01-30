@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -11,7 +11,6 @@
 import os
 import json
 
-from distutils.util import strtobool
 from reana_commons.config import (
     MQ_CONNECTION_STRING,
     REANA_COMPONENT_PREFIX,
@@ -293,11 +292,17 @@ REANA_INGRESS_HOST = os.getenv("REANA_INGRESS_HOST", "")
 IMAGE_PULL_SECRETS = os.getenv("IMAGE_PULL_SECRETS", "").split(",")
 """Docker image pull secrets which allow the usage of private images."""
 
-DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
-"""Whether Dask is enabled in the cluster or not"""
+TRAEFIK_ENABLED = os.getenv("TRAEFIK_ENABLED", "true").lower() == "true"
+"""Whether Traefik is enabled in the cluster or not."""
+
+TRAEFIK_EXTERNAL = os.getenv("TRAEFIK_EXTERNAL", "false").lower() == "true"
+"""Whether Traefik is deployed externally or not."""
+
+DASK_ENABLED = os.getenv("DASK_ENABLED", "true").lower() == "true"
+"""Whether Dask is enabled in the cluster or not."""
 
 DASK_AUTOSCALER_ENABLED = os.getenv("DASK_AUTOSCALER_ENABLED", "true").lower() == "true"
-"""Whether Dask autoscaler is enabled in the cluster or not"""
+"""Whether Dask autoscaler is enabled in the cluster or not."""
 
 REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
     "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "16Gi"
@@ -307,7 +312,7 @@ REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
 REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS = int(
     os.getenv("REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS", 2)
 )
-"""Number of workers in Dask cluster by default """
+"""Number of workers in Dask cluster by default."""
 
 REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
     "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "2Gi"

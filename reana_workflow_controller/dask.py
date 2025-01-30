@@ -43,6 +43,8 @@ from reana_workflow_controller.config import (
     REANA_INGRESS_HOST,
     REANA_INGRESS_CLASS_NAME,
     REANA_INGRESS_ANNOTATIONS,
+    TRAEFIK_ENABLED,
+    TRAEFIK_EXTERNAL,
 )
 
 
@@ -129,7 +131,8 @@ class DaskResourceManager:
                 self._prepare_autoscaler()
                 self._create_dask_autoscaler()
 
-            create_dask_dashboard_ingress(self.workflow_id, self.user_id)
+            if TRAEFIK_ENABLED or TRAEFIK_EXTERNAL:
+                create_dask_dashboard_ingress(self.workflow_id, self.user_id)
 
         except Exception as e:
             logging.error(
@@ -594,15 +597,16 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
                 f"Error deleting Dask autoscaler for workflow {workflow_id}: {e}"
             )
 
-    try:
-        delete_dask_dashboard_ingress(workflow_id)
-        logging.info(
-            f"Dask dashboard ingress for workflow {workflow_id} deleted successfully."
-        )
-    except Exception as e:
-        errors.append(
-            f"Error deleting Dask dashboard ingress for workflow {workflow_id}: {e}"
-        )
+    if TRAEFIK_ENABLED or TRAEFIK_EXTERNAL:
+        try:
+            delete_dask_dashboard_ingress(workflow_id)
+            logging.info(
+                f"Dask dashboard ingress for workflow {workflow_id} deleted successfully."
+            )
+        except Exception as e:
+            errors.append(
+                f"Error deleting Dask dashboard ingress for workflow {workflow_id}: {e}"
+            )
 
     try:
         dask_service = (
