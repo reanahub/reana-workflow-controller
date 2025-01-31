@@ -41,7 +41,7 @@ from reana_db.utils import (
     get_default_quota_resource,
 )
 from reana_workflow_controller.config import (
-    REANA_HOSTNAME,
+    REANA_URL,
     DEFAULT_NAME_FOR_WORKFLOWS,
     MAX_WORKFLOW_SHARING_MESSAGE_LENGTH,
 )
@@ -631,7 +631,7 @@ def create_workflow():  # noqa
         if requires_dask(workflow):
             dask_service = Service(
                 name=get_dask_component_name(workflow.id_, "database_model_service"),
-                uri=f"https://{REANA_HOSTNAME}/{workflow_uuid}/dashboard/status",
+                uri=f"{REANA_URL}/{workflow_uuid}/dashboard/status",
                 type_=ServiceType.dask,
                 status=ServiceStatus.created,
             )

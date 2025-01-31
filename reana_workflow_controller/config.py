@@ -26,6 +26,22 @@ def _env_vars_dict_to_k8s_list(env_vars):
     return [{"name": name, "value": str(value)} for name, value in env_vars.items()]
 
 
+def compose_reana_url(hostname: str, hostport: int) -> str:
+    """
+    Compose a REANA API URL while omitting the default HTTPS port (443).
+
+    Args:
+        hostname (str): The REANA hostname.
+        hostport (int): The REANA host port.
+
+    Returns:
+        str: The full base URL.
+    """
+    if hostport == 443:
+        return f"https://{hostname}"
+    return f"https://{hostname}:{hostport}"
+
+
 SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
 """Secret key used for the application user sessions."""
 
@@ -277,8 +293,14 @@ REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", "CHANGE_ME")
 REANA_GITLAB_URL = "https://{}".format(REANA_GITLAB_HOST)
 """GitLab API URL"""
 
-REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "CHANGE_ME")
-"""REANA URL"""
+REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "localhost")
+"""REANA host name."""
+
+REANA_HOSTPORT = os.getenv("REANA_HOSTPORT", "30443")
+"""REANA host name port number."""
+
+REANA_URL = compose_reana_url(REANA_HOSTNAME, REANA_HOSTPORT)
+"""REANA URL."""
 
 REANA_INGRESS_ANNOTATIONS = json.loads(os.getenv("REANA_INGRESS_ANNOTATIONS", "{}"))
 """REANA Ingress annotations defined by the administrator."""

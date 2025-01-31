@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -40,7 +40,7 @@ from reana_workflow_controller.config import (
     ALIVE_STATUSES,
     PROGRESS_STATUSES,
     REANA_GITLAB_URL,
-    REANA_HOSTNAME,
+    REANA_URL,
     REANA_JOB_STATUS_CONSUMER_PREFETCH_COUNT,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
@@ -196,7 +196,7 @@ def _update_commit_status(workflow, status):
         return
     gitlab_access_token = gitlab_access_token_secret.value_str
 
-    target_url = f"https://{REANA_HOSTNAME}/api/workflows/{workflow.id_}/logs"
+    target_url = f"{REANA_URL}/api/workflows/{workflow.id_}/logs"
     workflow_name = urlparse.quote_plus(workflow.git_repo)
     system_name = "reana"
     commit_status_url = (

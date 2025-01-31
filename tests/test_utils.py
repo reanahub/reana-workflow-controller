@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -31,6 +31,7 @@ from reana_db.utils import (
     update_users_disk_quota,
 )
 from reana_workflow_controller.errors import REANAWorkflowControllerError
+from reana_workflow_controller.config import compose_reana_url
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
@@ -343,3 +344,21 @@ def test_mv_files(
         assert target_path.exists()
         if source_content:
             assert target_path.read_text() == source_content
+
+
+# Note that this function is inside config.py file and not in
+# `rest/utils.py file due to circular import issues.` However,
+# it is a utility function so it does not hurt to test it in
+# this file.
+@pytest.mark.parametrize(
+    "hostname, hostport, expected_url",
+    [
+        ("reana.cern.ch", 443, "https://reana.cern.ch"),
+        ("reana.cern.ch", 30443, "https://reana.cern.ch:30443"),
+        ("example.com", 443, "https://example.com"),
+        ("example.com", 8080, "https://example.com:8080"),
+    ],
+)
+def test_compose_reana_url(hostname, hostport, expected_url):
+    """Test composing base reana url."""
+    assert compose_reana_url(hostname, hostport) == expected_url
