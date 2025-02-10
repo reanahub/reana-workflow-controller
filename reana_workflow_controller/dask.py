@@ -59,6 +59,7 @@ class DaskResourceManager:
         user_id,
         num_of_workers,
         single_worker_memory,
+        kerberos=False,
     ):
         """Instantiate Dask resource manager.
 
@@ -92,6 +93,8 @@ class DaskResourceManager:
             self.secrets_store.get_secrets_volume_mount_as_k8s_spec()
         )
         self.kubernetes_uid = WORKFLOW_RUNTIME_USER_UID
+
+        self.kerberos = kerberos
 
         if DASK_AUTOSCALER_ENABLED:
             self.autoscaler_name = get_dask_component_name(workflow_id, "autoscaler")
@@ -212,12 +215,10 @@ class DaskResourceManager:
             self.secrets_store.get_file_secrets_volume_as_k8s_specs()
         )
 
-        # FIXME: Decide how to detect if krb5, rucio and voms_proxy are needed
-        kerberos = False
         rucio = False
         voms_proxy = False
 
-        if kerberos:
+        if self.kerberos:
             self._add_krb5_containers()
         if voms_proxy:
             self._add_voms_proxy_init_container()

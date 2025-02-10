@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -399,6 +399,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                         "single_worker_memory",
                         REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
                     ),
+                    kerberos=self.requires_kerberos(),
                 ).create_dask_resources()
 
             current_k8s_batchv1_api_client.create_namespaced_job(
