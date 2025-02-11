@@ -51,7 +51,7 @@ install_requires = [
     "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
     "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.95.0a7,<0.96.0",
+    "reana-commons[kubernetes]>=0.95.0a8,<0.96.0",
     "reana-db>=0.95.0a5,<0.96.0",
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",

@@ -60,6 +60,7 @@ class DaskResourceManager:
         num_of_workers,
         single_worker_memory,
         kerberos=False,
+        voms_proxy=False,
     ):
         """Instantiate Dask resource manager.
 
@@ -95,6 +96,7 @@ class DaskResourceManager:
         self.kubernetes_uid = WORKFLOW_RUNTIME_USER_UID
 
         self.kerberos = kerberos
+        self.voms_proxy = voms_proxy
 
         if DASK_AUTOSCALER_ENABLED:
             self.autoscaler_name = get_dask_component_name(workflow_id, "autoscaler")
@@ -216,11 +218,10 @@ class DaskResourceManager:
         )
 
         rucio = False
-        voms_proxy = False
 
         if self.kerberos:
             self._add_krb5_containers()
-        if voms_proxy:
+        if self.voms_proxy:
             self._add_voms_proxy_init_container()
         if rucio:
             self._add_rucio_init_container()
@@ -343,6 +344,28 @@ class DaskResourceManager:
             f"trap 'touch {KRB5_STATUS_FILE_LOCATION}' EXIT; " + existing_args[0]
         ]
 
+    def _get_voms_proxy_secrets(self, secrets_store):
+        """Get VOMS proxy secrets from secrets store.
+
+        Args:
+            secrets_store: User secrets store instance
+
+        Returns:
+            dict: Dictionary containing VOMS proxy secrets with empty string defaults
+        """
+        secret_keys = ["VONAME", "VOMSPROXY_FILE", "VOMSPROXY_PASS"]
+        secrets = {}
+
+        for key in secret_keys:
+            secret = secrets_store.get_secret(key)
+            secrets[key.lower()] = secret.value_str if secret else ""
+
+        return {
+            "vo": secrets["voname"],
+            "file": secrets["vomsproxy_file"],
+            "pass": secrets["vomsproxy_pass"],
+        }
+
     def _add_voms_proxy_init_container(self):
         """Add sidecar container for Dask workers."""
         ticket_cache_volume = {"name": "voms-proxy-cache", "emptyDir": {}}
@@ -358,8 +381,10 @@ class DaskResourceManager:
             current_app.config["VOMSPROXY_CERT_CACHE_FILENAME"],
         )
 
-        voms_proxy_vo = os.environ.get("VONAME", "")
-        voms_proxy_user_file = os.environ.get("VOMSPROXY_FILE", "")
+        voms_proxy_secrets = self._get_voms_proxy_secrets(self.secrets_store)
+        voms_proxy_vo = voms_proxy_secrets["vo"]
+        voms_proxy_user_file = voms_proxy_secrets["file"]
+        voms_proxy_pass = voms_proxy_secrets["pass"]
 
         if voms_proxy_user_file:
             # multi-user deployment mode, where we rely on VOMS proxy file supplied by the user
@@ -399,23 +424,24 @@ class DaskResourceManager:
                         echo "[ERROR] File usercert.pem does not exist in user secrets."; \
                         exit; \
                      fi; \
-                     if [ -z "$VOMSPROXY_PASS" ]; then \
+                     if [ -z {voms_proxy_pass} ]; then \
                         echo "[ERROR] Environment variable VOMSPROXY_PASS is not set in user secrets."; \
                         exit; \
                      fi; \
-                     if [ -z "$VONAME" ]; then \
+                     if [ -z {voms_proxy_vo} ]; then \
                         echo "[ERROR] Environment variable VONAME is not set in user secrets."; \
                         exit; \
                      fi; \
                      cp /etc/reana/secrets/userkey.pem /tmp/userkey.pem; \
                          chmod 400 /tmp/userkey.pem; \
-                         echo $VOMSPROXY_PASS | base64 -d | voms-proxy-init \
+                         echo {voms_proxy_pass} | base64 -d | voms-proxy-init \
                          --voms {voms_proxy_vo} --key /tmp/userkey.pem \
                          --cert $(readlink -f /etc/reana/secrets/usercert.pem) \
                          --pwstdin --out {voms_proxy_file_path}; \
                          chown {kubernetes_uid} {voms_proxy_file_path}'.format(
                         voms_proxy_vo=voms_proxy_vo.lower(),
                         voms_proxy_file_path=voms_proxy_file_path,
+                        voms_proxy_pass=voms_proxy_pass,
                         kubernetes_uid=self.kubernetes_uid,
                     ),
                 ],

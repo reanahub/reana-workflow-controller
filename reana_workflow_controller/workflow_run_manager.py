@@ -353,6 +353,14 @@ class WorkflowRunManager:
             .get("kerberos", False)
         )
 
+    def requires_voms_proxy(self) -> bool:
+        """Check whether Voms_proxy is necessary to run the workflow engine."""
+        return (
+            self.workflow.reana_specification["workflow"]
+            .get("resources", {})
+            .get("voms_proxy", False)
+        )
+
 
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
@@ -400,6 +408,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                         REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
                     ),
                     kerberos=self.requires_kerberos(),
+                    voms_proxy=self.requires_voms_proxy(),
                 ).create_dask_resources()
 
             current_k8s_batchv1_api_client.create_namespaced_job(
