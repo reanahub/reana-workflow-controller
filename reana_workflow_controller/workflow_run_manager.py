@@ -361,6 +361,14 @@ class WorkflowRunManager:
             .get("voms_proxy", False)
         )
 
+    def requires_rucio(self) -> bool:
+        """Check whether Rucio is necessary to run the workflow engine."""
+        return (
+            self.workflow.reana_specification["workflow"]
+            .get("resources", {})
+            .get("rucio", False)
+        )
+
 
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
@@ -409,6 +417,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     ),
                     kerberos=self.requires_kerberos(),
                     voms_proxy=self.requires_voms_proxy(),
+                    rucio=self.requires_rucio(),
                 ).create_dask_resources()
 
             current_k8s_batchv1_api_client.create_namespaced_job(

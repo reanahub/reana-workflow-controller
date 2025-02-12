@@ -61,6 +61,7 @@ class DaskResourceManager:
         single_worker_memory,
         kerberos=False,
         voms_proxy=False,
+        rucio=False,
     ):
         """Instantiate Dask resource manager.
 
@@ -97,6 +98,7 @@ class DaskResourceManager:
 
         self.kerberos = kerberos
         self.voms_proxy = voms_proxy
+        self.rucio = rucio
 
         if DASK_AUTOSCALER_ENABLED:
             self.autoscaler_name = get_dask_component_name(workflow_id, "autoscaler")
@@ -217,13 +219,11 @@ class DaskResourceManager:
             self.secrets_store.get_file_secrets_volume_as_k8s_specs()
         )
 
-        rucio = False
-
         if self.kerberos:
             self._add_krb5_containers()
         if self.voms_proxy:
             self._add_voms_proxy_init_container()
-        if rucio:
+        if self.rucio:
             self._add_rucio_init_container()
 
     def _prepare_autoscaler(self):
@@ -424,11 +424,11 @@ class DaskResourceManager:
                         echo "[ERROR] File usercert.pem does not exist in user secrets."; \
                         exit; \
                      fi; \
-                     if [ -z {voms_proxy_pass} ]; then \
+                     if [ -z "{voms_proxy_pass}" ]; then \
                         echo "[ERROR] Environment variable VOMSPROXY_PASS is not set in user secrets."; \
                         exit; \
                      fi; \
-                     if [ -z {voms_proxy_vo} ]; then \
+                     if [ -z "{voms_proxy_vo}" ]; then \
                         echo "[ERROR] Environment variable VONAME is not set in user secrets."; \
                         exit; \
                      fi; \
@@ -468,6 +468,49 @@ class DaskResourceManager:
             voms_proxy_container
         )
 
+    def _get_rucio_secrets(self, secrets_store):
+        """Get Rucio secrets from secrets store.
+
+        Args:
+            secrets_store: User secrets store instance
+
+        Returns:
+            dict: Dictionary containing Rucio secrets with empty string defaults
+        """
+        secret_keys = [
+            "VONAME",
+            "RUCIO_USERNAME",
+            "RUCIO_RUCIO_HOST",
+            "RUCIO_AUTH_HOST",
+        ]
+        secrets = {}
+
+        for key in secret_keys:
+            secret = secrets_store.get_secret(key)
+            secrets[key.lower()] = secret.value_str if secret else ""
+
+        # Handle default Rucio hosts based on VO name if not explicitly set
+        if not secrets["rucio_rucio_host"]:
+            vo_name = secrets["voname"]
+            if vo_name == "atlas":
+                secrets["rucio_rucio_host"] = "https://voatlasrucio-server-prod.cern.ch"
+            else:
+                secrets["rucio_rucio_host"] = f"https://{vo_name}-rucio.cern.ch"
+
+        if not secrets["rucio_auth_host"]:
+            vo_name = secrets["voname"]
+            if vo_name == "atlas":
+                secrets["rucio_auth_host"] = "https://voatlasrucio-auth-prod.cern.ch"
+            else:
+                secrets["rucio_auth_host"] = f"https://{vo_name}-rucio-auth.cern.ch"
+
+        return {
+            "vo": secrets["voname"],
+            "rucio_account": secrets["rucio_username"],
+            "rucio_host": secrets["rucio_rucio_host"],
+            "auth_host": secrets["rucio_auth_host"],
+        }
+
     def _add_rucio_init_container(self):
         """Add sidecar container for Dask workers."""
         ticket_cache_volume = {"name": "rucio-cache", "emptyDir": {}}
@@ -488,44 +531,31 @@ class DaskResourceManager:
             current_app.config["RUCIO_CERN_BUNDLE_CACHE_FILENAME"],
         )
 
-        rucio_account = os.environ.get("RUCIO_USERNAME", "")
-        voms_proxy_vo = os.environ.get("VONAME", "")
-
-        # Detect Rucio hosts from VO names
-        if voms_proxy_vo == "atlas":
-            rucio_host = "https://voatlasrucio-server-prod.cern.ch"
-            rucio_auth_host = "https://voatlasrucio-auth-prod.cern.ch"
-        else:
-            rucio_host = f"https://{voms_proxy_vo}-rucio.cern.ch"
-            rucio_auth_host = f"https://{voms_proxy_vo}-rucio-auth.cern.ch"
-
-        # Allow overriding detected Rucio hosts by user-provided environment variables
-        rucio_host = os.environ.get("RUCIO_RUCIO_HOST", rucio_host)
-        rucio_auth_host = os.environ.get("RUCIO_AUTH_HOST", rucio_auth_host)
+        rucio_secrets = self._get_rucio_secrets(self.secrets_store)
 
         rucio_config_container = {
             "image": current_app.config["RUCIO_CONTAINER_IMAGE"],
             "command": ["/bin/bash"],
             "args": [
                 "-c",
-                'if [ -z "$VONAME" ]; then \
+                'if [ -z "{vo}" ]; then \
                     echo "[ERROR] Environment variable VONAME is not set in user secrets."; \
                     exit; \
                  fi; \
-                 if [ -z "$RUCIO_USERNAME" ]; then \
+                 if [ -z "{rucio_account}" ]; then \
                     echo "[ERROR] Environment variable RUCIO_USERNAME is not set in user secrets."; \
                     exit; \
                  fi; \
                  export RUCIO_CFG_ACCOUNT={rucio_account} \
-                    RUCIO_CFG_CLIENT_VO={voms_proxy_vo} \
+                    RUCIO_CFG_CLIENT_VO={vo} \
                     RUCIO_CFG_RUCIO_HOST={rucio_host} \
                     RUCIO_CFG_AUTH_HOST={rucio_auth_host}; \
                 cp /etc/pki/tls/certs/CERN-bundle.pem {cern_bundle_path}; \
                 j2 /opt/user/rucio.cfg.j2 > {rucio_config_file_path}'.format(
-                    rucio_host=rucio_host,
-                    rucio_auth_host=rucio_auth_host,
-                    rucio_account=rucio_account,
-                    voms_proxy_vo=voms_proxy_vo,
+                    vo=rucio_secrets["vo"],
+                    rucio_account=rucio_secrets["rucio_account"],
+                    rucio_host=rucio_secrets["rucio_host"],
+                    rucio_auth_host=rucio_secrets["auth_host"],
                     cern_bundle_path=cern_bundle_path,
                     rucio_config_file_path=rucio_config_file_path,
                 ),
