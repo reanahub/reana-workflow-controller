@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -209,6 +209,7 @@ def dask_resource_manager(sample_serial_workflow_in_db_with_dask, mock_user_secr
         workflow_workspace="/path/to/workspace",
         user_id="user-123",
         num_of_workers=2,
+        num_of_threads=8,
         single_worker_memory="256Mi",
     )
     return manager

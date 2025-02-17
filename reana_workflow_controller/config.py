@@ -346,6 +346,11 @@ REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY = os.getenv(
 )
 """Maximum memory for one Dask worker."""
 
+REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS = int(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS", 4)
+)
+"""Number of threads for one Dask worker by default."""
+
 VOMSPROXY_CONTAINER_IMAGE = os.getenv(
     "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.3.0"
 )

@@ -58,6 +58,7 @@ class DaskResourceManager:
         workflow_workspace,
         user_id,
         num_of_workers,
+        num_of_threads,
         single_worker_memory,
         kerberos=False,
         voms_proxy=False,
@@ -77,6 +78,7 @@ class DaskResourceManager:
         self.cluster_name = get_dask_component_name(workflow_id, "cluster")
         self.num_of_workers = num_of_workers
         self.single_worker_memory = single_worker_memory
+        self.num_of_threads = num_of_threads
         self.workflow_spec = workflow_spec
         self.workflow_workspace = workflow_workspace
         self.workflow_id = str(workflow_id)
@@ -179,9 +181,9 @@ class DaskResourceManager:
         ] = self.cluster_image
 
         # Create the worker command
-        self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["args"][
-            0
-        ] = f'cd {self.workflow_workspace} && {self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["args"][0]}'
+        self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["args"] = [
+            f"cd {self.workflow_workspace} && exec dask-worker --name $(DASK_WORKER_NAME) --dashboard --dashboard-address 8788 --nthreads {self.num_of_threads} --memory-limit {self.single_worker_memory}"
+        ]
 
         # Set resource limits for workers
         self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["resources"] = {

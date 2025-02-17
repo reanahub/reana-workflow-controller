@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2024 CERN.
+# Copyright (C) 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -425,9 +425,7 @@ def test_prepare_cluster(dask_resource_manager):
             "env"
         ]
 
-        expected_command = (
-            f"cd {dask_resource_manager.workflow_workspace} && worker-command"
-        )
+        expected_command = f"cd {dask_resource_manager.workflow_workspace} && exec dask-worker --name $(DASK_WORKER_NAME) --dashboard --dashboard-address 8788 --nthreads 8 --memory-limit 256Mi"
         assert (
             dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["containers"][
                 0

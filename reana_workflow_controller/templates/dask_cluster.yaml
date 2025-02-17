@@ -8,8 +8,6 @@ spec:
         - name: worker
           imagePullPolicy: "IfNotPresent"
           command: ["/bin/sh", "-c"]
-          args:
-            - exec dask-worker --name $(DASK_WORKER_NAME) --dashboard --dashboard-address 8788
           ports:
             - name: http-dashboard
               containerPort: 8788

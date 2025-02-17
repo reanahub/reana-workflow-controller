@@ -91,6 +91,7 @@ from reana_workflow_controller.config import (  # isort:skip
     WORKFLOW_ENGINE_YADAGE_ENV_VARS,
     REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
 )
 
 
@@ -414,6 +415,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     .get(
                         "single_worker_memory",
                         REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+                    ),
+                    num_of_threads=self.workflow.reana_specification["workflow"]
+                    .get("resources", {})
+                    .get("dask", {})
+                    .get(
+                        "single_worker_threads",
+                        REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
                     ),
                     kerberos=self.requires_kerberos(),
                     voms_proxy=self.requires_voms_proxy(),
