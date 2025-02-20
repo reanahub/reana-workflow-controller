@@ -18,7 +18,7 @@ cffi==1.17.1              # via cryptography
 charset-normalizer==3.4.1  # via requests
 checksumdir==1.1.9        # via reana-commons
 click==8.1.8              # via flask, reana-commons
-cryptography==44.0.0      # via sqlalchemy-utils
+cryptography==44.0.1      # via sqlalchemy-utils
 events==0.5               # via opensearch-py
 flask==2.2.5              # via reana-workflow-controller (setup.py)
 fqdn==1.5.1               # via jsonschema
