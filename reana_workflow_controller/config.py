@@ -352,7 +352,7 @@ REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS = int(
 """Number of threads for one Dask worker by default."""
 
 VOMSPROXY_CONTAINER_IMAGE = os.getenv(
-    "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.3.0"
+    "VOMSPROXY_CONTAINER_IMAGE", "docker.io/reanahub/reana-auth-vomsproxy:1.3.1"
 )
 """Default docker image of VOMSPROXY sidecar container."""
 
