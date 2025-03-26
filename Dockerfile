@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -73,13 +73,21 @@ ARG UWSGI_BUFFER_SIZE=8192
 ARG UWSGI_MAX_FD=1048576
 ARG UWSGI_PROCESSES=2
 ARG UWSGI_THREADS=2
+ARG UWSGI_IDLE=60
+ARG UWSGI_MAX_REQUESTS=1999
+ARG UWSGI_MAX_WORKER_LIFETIME=3600
+ARG UWSGI_RELOAD_ON_RSS=1024
 ENV FLASK_APP=reana_workflow_controller/app.py \
     PYTHONPATH=/workdir \
     TERM=xterm \
     UWSGI_BUFFER_SIZE=${UWSGI_BUFFER_SIZE:-8192} \
     UWSGI_MAX_FD=${UWSGI_MAX_FD:-1048576} \
     UWSGI_PROCESSES=${UWSGI_PROCESSES:-2} \
-    UWSGI_THREADS=${UWSGI_THREADS:-2}
+    UWSGI_THREADS=${UWSGI_THREADS:-2} \
+    UWSGI_IDLE=${UWSGI_IDLE:-60} \
+    UWSGI_MAX_REQUESTS=${UWSGI_MAX_REQUESTS:-1999} \
+    UWSGI_MAX_WORKER_LIFETIME=${UWSGI_MAX_WORKER_LIFETIME:-3600} \
+    UWSGI_RELOAD_ON_RSS=${UWSGI_RELOAD_ON_RSS:-1024}
 
 # Expose ports to clients
 EXPOSE 5000
@@ -104,11 +112,15 @@ CMD exec uwsgi \
     --stats /tmp/stats.socket \
     --threads ${UWSGI_THREADS} \
     --vacuum \
-    --wsgi-disable-file-wrapper
+    --wsgi-disable-file-wrapper \
+    --idle ${UWSGI_IDLE} \
+    --max-requests ${UWSGI_MAX_REQUESTS} \
+    --max-worker-lifetime ${UWSGI_MAX_WORKER_LIFETIME} \
+    --reload-on-rss ${UWSGI_RELOAD_ON_RSS}
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"
-LABEL org.opencontainers.image.created="2024-11-29"
+LABEL org.opencontainers.image.created="2025-03-26"
 LABEL org.opencontainers.image.description="REANA reproducible analysis platform - workflow controller component"
 LABEL org.opencontainers.image.documentation="https://reana-workflow-controller.readthedocs.io/"
 LABEL org.opencontainers.image.licenses="MIT"

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -61,8 +61,8 @@ install_requires = [
     "requests==2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
-    "uWSGI>=2.0.17",
-    "uwsgitop>=0.10",
+    "uWSGI>=2.0.28",
+    "uwsgitop>=0.12",
     "webargs>=6.1.0,<7.0.0",
 ]
 
