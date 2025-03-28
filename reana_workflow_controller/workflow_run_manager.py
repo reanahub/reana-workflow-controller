@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -64,9 +64,15 @@ from reana_workflow_controller.config import (  # isort:skip
     JOB_CONTROLLER_ENV_VARS,
     JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
     REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
-    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_CPU_REQUEST,
+    REANA_KUBERNETES_JOBS_CPU_LIMIT,
+    REANA_KUBERNETES_JOBS_MEMORY_REQUEST,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
+    REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST,
+    REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
@@ -626,8 +632,32 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     ),
                 },
                 {
+                    "name": "REANA_KUBERNETES_JOBS_CPU_REQUEST",
+                    "value": REANA_KUBERNETES_JOBS_CPU_REQUEST,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_CPU_LIMIT",
+                    "value": REANA_KUBERNETES_JOBS_CPU_LIMIT,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MEMORY_REQUEST",
+                    "value": REANA_KUBERNETES_JOBS_MEMORY_REQUEST,
+                },
+                {
                     "name": "REANA_KUBERNETES_JOBS_MEMORY_LIMIT",
                     "value": REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST",
+                    "value": REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT",
+                    "value": REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT,
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST",
+                    "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
                 },
                 {
                     "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT",

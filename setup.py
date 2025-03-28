@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -56,7 +56,7 @@ install_requires = [
     "jsonpickle>=0.9.6",
     "marshmallow>2.13.0,<=2.20.1",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.9.9,<0.10.0",
+    "reana-commons[kubernetes]>=0.9.11,<0.10.0",
     "reana-db>=0.9.5,<0.10.0",
     "requests==2.25.0",
     "sqlalchemy-utils>=0.31.0",
