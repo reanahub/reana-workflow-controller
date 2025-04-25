@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-workflow-controller/compare/0.9.4...0.9.5) (2025-04-25)
+
+
+### Features
+
+* **manager:** pass K8s requests/limits to job controller ([#643](https://github.com/reanahub/reana-workflow-controller/issues/643)) ([71aa633](https://github.com/reanahub/reana-workflow-controller/commit/71aa633d83b97aa9f3a230b4845e3d27323d1bbf))
+
+
+### Continuous integration
+
+* **commitlint:** consider commit body full stop as warning ([#643](https://github.com/reanahub/reana-workflow-controller/issues/643)) ([ee9210e](https://github.com/reanahub/reana-workflow-controller/commit/ee9210e4ecc834d79c721ac68dd99427ef206b78))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#647](https://github.com/reanahub/reana-workflow-controller/issues/647)) ([2b004ce](https://github.com/reanahub/reana-workflow-controller/commit/2b004ce78456a31f398bbd9deb43b52f028f2d3a))
+
 ## [0.9.4](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.9.4) (2024-11-29)
 
 
