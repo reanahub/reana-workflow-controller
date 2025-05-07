@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022, 2024 CERN.
+# Copyright (C) 2020, 2021, 2022, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -172,20 +172,30 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
             workflow_logs = {
                 "workflow_logs": logs or workflow.logs,
                 "job_logs": build_workflow_logs(workflow, paginate=paginate),
+                "service_logs": {},
                 "engine_specific": workflow.engine_specific,
             }
-        return (
-            jsonify(
-                {
-                    "workflow_id": workflow.id_,
-                    "workflow_name": get_workflow_name(workflow),
-                    "logs": json.dumps(workflow_logs),
-                    "user": user_uuid,
-                    "live_logs_enabled": REANA_OPENSEARCH_ENABLED,
-                }
-            ),
-            200,
-        )
+
+            workflow_logs["service_logs"] = {
+                s.name: sorted(
+                    [log.log for log in s.logs],
+                    key=lambda x: x["component"] != "scheduler",  # scheduler logs first
+                )
+                for s in workflow.services
+            }
+
+            return (
+                jsonify(
+                    {
+                        "workflow_id": workflow.id_,
+                        "workflow_name": get_workflow_name(workflow),
+                        "logs": json.dumps(workflow_logs),
+                        "user": user_uuid,
+                        "live_logs_enabled": REANA_OPENSEARCH_ENABLED,
+                    }
+                ),
+                200,
+            )
 
     except ValueError:
         return (

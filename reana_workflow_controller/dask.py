@@ -12,10 +12,9 @@ import yaml
 from flask import current_app
 
 from kubernetes import client
-from kubernetes.client.exceptions import ApiException
 
 from reana_db.database import Session
-from reana_db.models import Service
+from reana_db.models import Service, ServiceStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_commons.config import (
     K8S_CERN_EOS_AVAILABLE,
@@ -677,16 +676,15 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
         )
         if dask_service:
             workflow = _get_workflow_with_uuid_or_name(str(workflow_id), user_id)
-            workflow.services.remove(dask_service)
-            Session.delete(dask_service)
+            dask_service.status = ServiceStatus.deleted
             Session.object_session(workflow).commit()
             logging.info(
-                f"Dask service model for workflow {workflow_id} deleted successfully from database."
+                f"Dask service model for workflow {workflow_id} status updated to 'deleted' in database."
             )
 
     except Exception as e:
         errors.append(
-            f"Error deleting Dask Service model from database of the workflow: {workflow_id}: {e}"
+            f"Error updating Dask Service model status in database for workflow {workflow_id}: {e}"
         )
 
     # Raise collected errors if any

@@ -29,7 +29,6 @@ from reana_commons.utils import (
     calculate_hash_of_dir,
     calculate_job_input_hash,
     build_unique_component_name,
-    get_dask_component_name,
 )
 from reana_db.database import Session
 from reana_db.models import Job, JobCache, Workflow, RunStatus, Service

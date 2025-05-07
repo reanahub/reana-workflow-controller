@@ -1234,6 +1234,7 @@ def test_get_created_workflow_logs(
                                 "finished_at": None,
                             }
                         },
+                        "service_logs": {},
                         "engine_specific": None,
                     }
                 ),
@@ -1280,7 +1281,7 @@ def test_get_created_workflow_opensearch_disabled(
                 "workflow_name": workflow_name,
                 "user": str(user0.id_),
                 "live_logs_enabled": False,
-                "logs": '{"workflow_logs": "", "job_logs": {},'
+                "logs": '{"workflow_logs": "", "job_logs": {}, "service_logs": {},'
                 ' "engine_specific": null}',
             }
             assert response_data == expected_data
