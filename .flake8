@@ -7,7 +7,7 @@ exclude =
     dist
     docs
     coverage.xml
-    reana_job_controller.egg-info
+    reana_workflow_controller.egg-info
     .*/
     env/
     .git
