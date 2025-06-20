@@ -15,6 +15,7 @@ include Dockerfile
 include LICENSE
 include pytest.ini
 include docs/openapi.json
+include .editorconfig
 exclude .readthedocs.yaml
 prune docs/_build
 recursive-include docs *.py

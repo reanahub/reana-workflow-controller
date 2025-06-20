@@ -12,25 +12,23 @@ set -o nounset
 export REANA_SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://postgres:mysecretpassword@localhost/postgres
 
 # Verify that db container is running before continuing
-_check_ready () {
+_check_ready() {
     RETRIES=40
-    while ! $2
-    do
+    while ! $2; do
         echo "==> [INFO] Waiting for $1, $((RETRIES--)) remaining attempts..."
         sleep 2
-        if [ $RETRIES -eq 0 ]
-        then
+        if [ $RETRIES -eq 0 ]; then
             echo "==> [ERROR] Couldn't reach $1"
             exit 1
         fi
     done
 }
 
-_db_check () {
-    docker exec --user postgres postgres__reana-workflow-controller bash -c "pg_isready" &>/dev/null;
+_db_check() {
+    docker exec --user postgres postgres__reana-workflow-controller bash -c "pg_isready" &>/dev/null
 }
 
-clean_old_db_container () {
+clean_old_db_container() {
     OLD="$(docker ps --all --quiet --filter=name=postgres__reana-workflow-controller)"
     if [ -n "$OLD" ]; then
         echo '==> [INFO] Cleaning old DB container...'
@@ -38,18 +36,18 @@ clean_old_db_container () {
     fi
 }
 
-start_db_container () {
+start_db_container() {
     echo '==> [INFO] Starting DB container...'
     docker run --rm --name postgres__reana-workflow-controller -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d docker.io/library/postgres:14.10
     _check_ready "Postgres" _db_check
 }
 
-stop_db_container () {
+stop_db_container() {
     echo '==> [INFO] Stopping DB container...'
     docker stop postgres__reana-workflow-controller
 }
 
-check_commitlint () {
+check_commitlint() {
     from=${2:-master}
     to=${3:-HEAD}
     pr=${4:-[0-9]+}
@@ -71,7 +69,7 @@ check_commitlint () {
         # (iii) check absence of merge commits in feature branches
         if [ "$commit_number_of_parents" -gt 1 ]; then
             if echo "$commit_title" | grep -qP "^chore\(.*\): merge "; then
-                break  # skip checking maint-to-master merge commits
+                break # skip checking maint-to-master merge commits
             else
                 echo "✖   Merge commits are not allowed in feature branches: $commit_title"
                 found=1
@@ -83,37 +81,41 @@ check_commitlint () {
     fi
 }
 
-check_shellcheck () {
+check_shellcheck() {
     find . -name "*.sh" -exec shellcheck {} \+
 }
 
-check_pydocstyle () {
+check_pydocstyle() {
     pydocstyle reana_workflow_controller
 }
 
-check_black () {
+check_black() {
     black --check .
 }
 
-check_flake8 () {
+check_flake8() {
     flake8 .
 }
 
-check_openapi_spec () {
+check_openapi_spec() {
     FLASK_APP=reana_workflow_controller/app.py python ./scripts/generate_openapi_spec.py
     diff -q -w temp_openapi.json docs/openapi.json
     rm temp_openapi.json
 }
 
-check_manifest () {
+check_manifest() {
     check-manifest
 }
 
-check_sphinx () {
+check_sphinx() {
     sphinx-build -qnNW docs docs/_build/html
 }
 
-check_pytest () {
+check_shfmt() {
+    shfmt -d .
+}
+
+check_pytest() {
     clean_old_db_container
     start_db_container
     trap clean_old_db_container SIGINT SIGTERM SIGSEGV ERR
@@ -121,15 +123,15 @@ check_pytest () {
     stop_db_container
 }
 
-check_dockerfile () {
-    docker run -i --rm docker.io/hadolint/hadolint:v2.12.0 < Dockerfile
+check_dockerfile() {
+    docker run -i --rm docker.io/hadolint/hadolint:v2.12.0 <Dockerfile
 }
 
-check_docker_build () {
+check_docker_build() {
     docker build -t docker.io/reanahub/reana-workflow-controller .
 }
 
-check_all () {
+check_all() {
     check_commitlint
     check_shellcheck
     check_pydocstyle
@@ -141,6 +143,7 @@ check_all () {
     check_pytest
     check_dockerfile
     check_docker_build
+    check_shfmt
 }
 
 if [ $# -eq 0 ]; then
@@ -150,16 +153,17 @@ fi
 
 arg="$1"
 case $arg in
-    --check-commitlint) check_commitlint "$@";;
-    --check-shellcheck) check_shellcheck;;
-    --check-pydocstyle) check_pydocstyle;;
-    --check-black) check_black;;
-    --check-flake8) check_flake8;;
-    --check-openapi-spec) check_openapi_spec;;
-    --check-manifest) check_manifest;;
-    --check-sphinx) check_sphinx;;
-    --check-pytest) check_pytest;;
-    --check-dockerfile) check_dockerfile;;
-    --check-docker-build) check_docker_build;;
-    *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1;;
+--check-commitlint) check_commitlint "$@" ;;
+--check-shellcheck) check_shellcheck ;;
+--check-pydocstyle) check_pydocstyle ;;
+--check-black) check_black ;;
+--check-flake8) check_flake8 ;;
+--check-openapi-spec) check_openapi_spec ;;
+--check-manifest) check_manifest ;;
+--check-sphinx) check_sphinx ;;
+--check-pytest) check_pytest ;;
+--check-dockerfile) check_dockerfile ;;
+--check-docker-build) check_docker_build ;;
+--check-shfmt) check_shfmt ;;
+*) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1 ;;
 esac
