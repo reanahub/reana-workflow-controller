@@ -196,6 +196,7 @@ case $arg in
     --check-markdownlint) check_markdownlint ;;
     --check-prettier) check_prettier ;;
     --check-shfmt) check_shfmt ;;
-    --check_jsonlint) check_jsonlint ;;
+    --check_jsonlint) creheck_jsonlint ;;
+
     *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1;;
 esac
