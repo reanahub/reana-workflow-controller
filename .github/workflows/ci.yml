@@ -4,7 +4,7 @@
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-name: CI
+name: ci
 
 on: [push, pull_request]
 
@@ -138,6 +138,91 @@ jobs:
 
       - name: Run Sphinx documentation with doctests
         run: ./run-tests.sh --check-sphinx
+
+  format-prettier:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Check Prettier code fomatting
+        run: |
+          npm install prettier --global
+          ./run-tests.sh --check-prettier
+
+  format-shfmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell script code fomatting
+        run: |
+          sudo apt-get install shfmt
+          ./run-tests.sh --check-shfmt
+
+  lint-helm:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2
+
+      - name: Run chart-testing (lint)
+        run: ct lint --config .github/ct.yaml --lint-conf .github/ctlint.yaml
+
+  lint-jsonlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Lint JSON files
+        run: |
+          npm install jsonlint --global
+          ./run-tests.sh --check-jsonlint
+
+  lint-markdownlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Lint Markdown files
+        run: |
+          npm install markdownlint-cli2 --global
+          ./run-tests.sh --check-markdownlint
+
+  lint-yamllint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Lint YAML files
+        run: |
+          pip install yamllint
+          ./run-tests.sh --check-yamllint
 
   python-tests:
     runs-on: ubuntu-24.04
