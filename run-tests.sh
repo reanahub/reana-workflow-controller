@@ -127,6 +127,10 @@ check_prettier() {
     prettier -c .
 }
 
+check_jsonlint() {
+    find . -name "*.json" -exec jsonlint -q {} \+
+}
+
 check_pytest() {
     clean_old_db_container
     start_db_container
@@ -159,6 +163,7 @@ check_all() {
     check_yamllint
     check_markdownlint
     check_prettier
+    check_jsonlint
 }
 
 if [ $# -eq 0 ]; then
@@ -183,5 +188,6 @@ case $arg in
 --check-yamllint) check_yamllint ;;
 --check-markdownlint) check_markdownlint ;;
 --check-prettier) check_prettier ;;
+--check-jsonlint) check_jsonlint ;;
 *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1 ;;
 esac
