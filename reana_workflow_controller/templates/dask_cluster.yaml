@@ -43,11 +43,11 @@ spec:
       selector:
         dask.org/component: scheduler
       ports:
-      - name: tcp-comm
-        protocol: TCP
-        port: 8786
-        targetPort: "tcp-comm"
-      - name: http-dashboard
-        protocol: TCP
-        port: 8787
-        targetPort: "http-dashboard"
+        - name: tcp-comm
+          protocol: TCP
+          port: 8786
+          targetPort: "tcp-comm"
+        - name: http-dashboard
+          protocol: TCP
+          port: 8787
+          targetPort: "http-dashboard"
