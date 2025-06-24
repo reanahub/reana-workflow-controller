@@ -123,6 +123,10 @@ check_markdownlint() {
     markdownlint-cli2 "**/*.md"
 }
 
+check_prettier() {
+    prettier -c .
+}
+
 check_pytest() {
     clean_old_db_container
     start_db_container
@@ -154,6 +158,7 @@ check_all() {
     check_shfmt
     check_yamllint
     check_markdownlint
+    check_prettier
 }
 
 if [ $# -eq 0 ]; then
@@ -177,5 +182,6 @@ case $arg in
 --check-shfmt) check_shfmt ;;
 --check-yamllint) check_yamllint ;;
 --check-markdownlint) check_markdownlint ;;
+--check-prettier) check_prettier ;;
 *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1 ;;
 esac

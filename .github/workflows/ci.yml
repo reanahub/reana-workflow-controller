@@ -157,6 +157,20 @@ jobs:
           npm install markdownlint-cli2 --global
           ./run-tests.sh --check-markdownlint
 
+  format-prettier:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Check Prettier code fomatting
+        run: |
+          npm install prettier --global
+          ./run-tests.sh --check-prettier
+
   docs-sphinx:
     runs-on: ubuntu-24.04
     steps:
@@ -204,8 +218,8 @@ jobs:
 
       - name: Run pytest
         run: |
-            mkdir /tmp/reana
-            SHARED_VOLUME_PATH=/tmp/reana ./run-tests.sh --check-pytest
+          mkdir /tmp/reana
+          SHARED_VOLUME_PATH=/tmp/reana ./run-tests.sh --check-pytest
 
       - name: Codecov Coverage
         uses: codecov/codecov-action@v4
@@ -234,8 +248,7 @@ jobs:
   release-docker:
     runs-on: ubuntu-24.04
     if: >
-      vars.RELEASE_DOCKER == 'true' &&
-      github.event_name == 'push' &&
+      vars.RELEASE_DOCKER == 'true' && github.event_name == 'push' &&
       startsWith(github.ref, 'refs/tags/')
     needs:
       - docs-sphinx
