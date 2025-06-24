@@ -119,6 +119,10 @@ check_yamllint() {
     yamllint .
 }
 
+check_markdownlint() {
+    markdownlint-cli2 "**/*.md"
+}
+
 check_pytest() {
     clean_old_db_container
     start_db_container
@@ -149,6 +153,7 @@ check_all() {
     check_docker_build
     check_shfmt
     check_yamllint
+    check_markdownlint
 }
 
 if [ $# -eq 0 ]; then
@@ -171,5 +176,6 @@ case $arg in
 --check-docker-build) check_docker_build ;;
 --check-shfmt) check_shfmt ;;
 --check-yamllint) check_yamllint ;;
+--check-markdownlint) check_markdownlint ;;
 *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1 ;;
 esac

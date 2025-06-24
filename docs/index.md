@@ -1,3 +1,6 @@
+<!-- markdownlint-disable MD041 -->
+<!-- markdownlint-disable MD033 -->
+
 ```{include} ../README.md
 :end-before: "## About"
 ```
@@ -10,7 +13,8 @@
 ## REST API
 
 The REANA-Workflow-Controller component offers a REST API for managing
-workflows. Detailed REST API documentation can be found <a href="_static/api.html">here</a>.
+workflows. Detailed REST API documentation can be found
+<a href="_static/api.html">here</a>.
 
 ```{eval-rst}
 .. automodule:: reana_workflow_controller.rest.workflows

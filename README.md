@@ -9,9 +9,9 @@
 
 ## About
 
-REANA-Workflow-Controller is a component of the [REANA](http://www.reana.io/) reusable
-and reproducible research data analysis platform. It takes care of instantiating and
-managing computational workflows.
+REANA-Workflow-Controller is a component of the [REANA](http://www.reana.io/)
+reusable and reproducible research data analysis platform. It takes care of
+instantiating and managing computational workflows.
 
 ## Features
 
