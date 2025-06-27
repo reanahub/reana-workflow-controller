@@ -407,3 +407,9 @@ CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"
 
 MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000
 """Maximum length of the user-provided message when sharing a workflow."""
+
+
+REANA_JOB_MONITORING_PROMETHEUS_URL = os.getenv(
+    "REANA_JOB_MONITORING_PROMETHEUS_URL",
+    "http://reana-prometheus-server/api/v1/query_range",
+)

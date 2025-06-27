@@ -454,6 +454,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 f"Interactive type {interactive_session_type} does not exist."
             )
 
+        print("test")
+
         validated_image = _validate_interactive_session_image(
             interactive_session_type, image
         )
