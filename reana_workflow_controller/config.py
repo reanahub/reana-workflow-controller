@@ -18,6 +18,7 @@ from reana_commons.config import (
 )
 from reana_db.models import JobStatus, RunStatus
 from distutils.util import strtobool
+from typing import List
 
 from reana_workflow_controller.version import __version__
 
@@ -465,3 +466,39 @@ CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"
 
 MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000
 """Maximum length of the user-provided message when sharing a workflow."""
+
+
+def _parse_comma_separated_list(value: str) -> List[str]:
+    """Parse comma-separated env var values into a list of strings."""
+    if not value:
+        return []
+    return [x.strip() for x in value.split(",") if x.strip()]
+
+
+WORKSPACE_DISPLAY_FILE_LIMIT = int(os.getenv("WORKSPACE_DISPLAY_FILE_LIMIT", "100000"))
+"""Maximum number of file entries returned by workspace listing endpoints."""
+
+_VALID_GC_COMMANDS = {"ls", "list", "rm", "delete"}
+"""Valid FORCE_GARBAGE_COLLECTION command values."""
+
+_gc_env = os.getenv("FORCE_GARBAGE_COLLECTION", "")
+FORCE_GARBAGE_COLLECTION = _parse_comma_separated_list(_gc_env)
+"""Comma-separated list of commands that trigger a manual `gc.collect()` before operations.
+
+Example:
+  $ export FORCE_GARBAGE_COLLECTION=ls,list,rm,delete
+
+Supported values:
+- ls: trigger `gc.collect()` before listing workspace files
+- list: trigger `gc.collect()` before listing all workflows
+- rm: trigger `gc.collect()` before removing workspace files
+- delete: trigger `gc.collect()` before deleting workflows
+"""
+_invalid_gc = sorted(set(FORCE_GARBAGE_COLLECTION) - _VALID_GC_COMMANDS)
+if _invalid_gc:
+    valid_gc_values = ", ".join(sorted(_VALID_GC_COMMANDS))
+    invalid_gc_values = ", ".join(_invalid_gc)
+    raise ValueError(
+        "Invalid FORCE_GARBAGE_COLLECTION values: "
+        f"{invalid_gc_values}. Valid values: {valid_gc_values}"
+    )

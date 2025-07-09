@@ -11,7 +11,7 @@
 import datetime
 import json
 import logging
-import re
+import gc
 from typing import Optional
 from uuid import uuid4
 
@@ -44,6 +44,7 @@ from reana_workflow_controller.config import (
     REANA_URL,
     DEFAULT_NAME_FOR_WORKFLOWS,
     MAX_WORKFLOW_SHARING_MESSAGE_LENGTH,
+    FORCE_GARBAGE_COLLECTION,
 )
 from reana_workflow_controller.errors import (
     REANAWorkflowControllerError,
@@ -307,6 +308,9 @@ def get_workflows(args, paginate=None):  # noqa
     shared: bool = args.get("shared")
     shared_by: Optional[str] = args.get("shared_by")
     shared_with: Optional[str] = args.get("shared_with")
+
+    if "list" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
 
     if shared_by and shared_with:
         message = "You cannot filter by shared_by and shared_with at the same time."

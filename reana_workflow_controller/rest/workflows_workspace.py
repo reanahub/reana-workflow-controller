@@ -20,7 +20,7 @@ from flask import (
 )
 from fs.errors import CreateFailed
 from werkzeug.datastructures import FileStorage
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import BadRequest, NotFound
 
 from reana_commons import workspace
 from reana_commons.errors import REANAWorkspaceError
@@ -417,7 +417,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
           type: integer
         - name: search
           in: query
-          description: Filter workflow workspace files.
+          description: Filter workflow workspace files by file name, size, or modification date.
           required: false
           type: string
       responses:
@@ -448,7 +448,8 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
                           type: string
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The request parameters are invalid or the filtered
+            result set exceeds the configured display limit.
         404:
           description: >-
             Request failed. Workflow does not exist.
@@ -487,6 +488,8 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         pagination_dict = paginate(file_list)
         return jsonify(pagination_dict), 200
 
+    except json.JSONDecodeError:
+        return jsonify({"message": "Malformed request."}), 400
     except ValueError:
         return (
             jsonify(
@@ -501,6 +504,8 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         )
     except KeyError:
         return jsonify({"message": "Malformed request."}), 400
+    except BadRequest as e:
+        return jsonify({"message": e.description}), e.code
     except REANAWorkspaceError as e:
         return jsonify({"message": str(e)}), 400
     except FileNotFoundError:
