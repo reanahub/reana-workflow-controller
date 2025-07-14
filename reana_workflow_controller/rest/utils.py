@@ -436,7 +436,7 @@ def list_directory_files(
     workspace_path: str, search: Dict[str, List[str]] = None
 ) -> List[dict]:
     """Return a list of files inside a given workspace."""
-    if FORCE_GARBAGE_COLLECTION == "ls":
+    if "ls" in FORCE_GARBAGE_COLLECTION:
         gc.collect()
     file_list = []
     for file_name in workspace.walk(workspace_path, include_dirs=False):
@@ -474,7 +474,7 @@ def remove_files_recursive_wildcard(workspace_path, path_or_pattern):
     :param workspace_path: Directory to delete files from.
     :param path_or_pattern: Wildcard pattern to use for the removal.
     :return: Dictionary with the results:
-       - dictionary with names of succesfully deleted files and their sizes
+       - dictionary with names of successfully deleted files and their sizes
        - dictionary with names of failed deletions and corresponding
        error messages.
     """
@@ -501,7 +501,7 @@ def list_files_recursive_wildcard(workspace_path, path_or_pattern, search=None):
        - dictionary with names of failed listing and corresponding
        error messages.
     """
-    if FORCE_GARBAGE_COLLECTION == "ls":
+    if "ls" in FORCE_GARBAGE_COLLECTION:
         gc.collect()
     list_files_recursive = []
     for path in workspace.glob_or_walk_directory(workspace_path, path_or_pattern):

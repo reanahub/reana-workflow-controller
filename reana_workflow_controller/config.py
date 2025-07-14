@@ -411,10 +411,11 @@ MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000
 WORKSPACE_DISPLAY_FILE_LIMIT = int(os.getenv("WORKSPACE_DISPLAY_FILE_LIMIT", "100000"))
 """Maximum number of file entries to return in `list_directory_*` calls"""
 
-FORCE_GARBAGE_COLLECTION = os.getenv("FORCE_GARBAGE_COLLECTION", "").lower()
+FORCE_GARBAGE_COLLECTION = os.getenv("FORCE_GARBAGE_COLLECTION", [])
 """
-Command to force garbage collection prior function call listing:
-- "": GC automatically handled by Python
-- "ls": trigger a manual `gc.collect()` before listing workspace files
-- other commands like "rm", "list" will be coming soon
+List of garbage-collection commands to run before certain operations.
+- [] (empty list): rely on Python’s automatic GC
+- ["ls"]: trigger a manual `gc.collect()` before listing workspace files
+- ["list"]: trigger a manual `gc.collect()` before listing all workflows
+- (future) ["rm"], ["delete"]: perform deletion-style cleanup
 """
