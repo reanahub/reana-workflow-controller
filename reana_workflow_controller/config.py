@@ -417,5 +417,6 @@ List of garbage-collection commands to run before certain operations.
 - [] (empty list): rely on Python’s automatic GC
 - ["ls"]: trigger a manual `gc.collect()` before listing workspace files
 - ["list"]: trigger a manual `gc.collect()` before listing all workflows
-- (future) ["rm"], ["delete"]: perform deletion-style cleanup
+- ["rm"]: trigger a manual `gc.collect()` before removing workspace files
+- (future) ["delete"]: perform deletion-style cleanup
 """

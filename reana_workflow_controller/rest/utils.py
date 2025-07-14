@@ -478,6 +478,8 @@ def remove_files_recursive_wildcard(workspace_path, path_or_pattern):
        - dictionary with names of failed deletions and corresponding
        error messages.
     """
+    if "rm" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     deleted = {"deleted": {}, "failed": {}}
     for file_name in workspace.glob_or_walk_directory(
         workspace_path, path_or_pattern, topdown=False
