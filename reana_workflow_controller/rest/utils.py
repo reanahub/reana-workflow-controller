@@ -224,6 +224,9 @@ def remove_workflow_jobs_from_cache(workflow):
 
 def delete_workflow(workflow, all_runs=False, workspace=False):
     """Delete workflow."""
+    if "delete" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
+
     if workflow.status in [
         RunStatus.created,
         RunStatus.finished,
