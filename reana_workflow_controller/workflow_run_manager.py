@@ -92,6 +92,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
+    KUEUE_ENABLED,
+    KUEUE_LOCAL_QUEUE_NAME,
 )
 
 
@@ -623,12 +625,17 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             self.workflow.workspace_path
         )
 
+        labels = {
+            "reana_workflow_mode": "batch",
+            "reana-run-batch-workflow-uuid": str(self.workflow.id_),
+        }
+
+        if KUEUE_ENABLED:
+            labels["kueue.x-k8s.io/queue-name"] = KUEUE_LOCAL_QUEUE_NAME
+
         workflow_metadata = client.V1ObjectMeta(
             name=name,
-            labels={
-                "reana_workflow_mode": "batch",
-                "reana-run-batch-workflow-uuid": str(self.workflow.id_),
-            },
+            labels=labels,
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
 
@@ -727,6 +734,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {"name": "USER", "value": user},  # Required by HTCondor
                 {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
                 {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
+                {"name": "KUEUE_ENABLED", "value": str(KUEUE_ENABLED)},
                 {
                     "name": "REANA_SQLALCHEMY_DATABASE_URI",
                     "value": SQLALCHEMY_DATABASE_URI,
@@ -835,7 +843,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             spec.template.spec.volumes.append(k8s_code_volume)
 
             for container in spec.template.spec.containers:
-                container.env.extend(current_app.config["DEBUG_ENV_VARS"])
+                # container.env.extend(current_app.config["DEBUG_ENV_VARS"])
                 sub_path = f"reana-{container.name}"
                 if container.name == "workflow-engine":
                     sub_path += f"-{self.workflow.type_}"

@@ -17,6 +17,7 @@ from reana_commons.config import (
     SHARED_VOLUME_PATH,
 )
 from reana_db.models import JobStatus, RunStatus
+from distutils.util import strtobool
 
 from reana_workflow_controller.version import __version__
 
@@ -393,6 +394,12 @@ ALIVE_STATUSES = [
     RunStatus.pending,
 ]
 """Alive workflow statuses."""
+
+KUEUE_ENABLED = bool(strtobool(os.getenv("KUEUE_ENABLED", "False")))
+"""Whether to use Kueue for workflow scheduling."""
+
+KUEUE_LOCAL_QUEUE_NAME = "local-queue-batch"
+"""Name of the local queue to be used by Kueue."""
 
 REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD = int(
     os.getenv("REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD", "120")
