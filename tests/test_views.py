@@ -1240,7 +1240,85 @@ def test_get_created_workflow_logs(
                 ),
             }
             assert response_data == expected_data
-            mock_method.call_count == 2
+            assert mock_method.call_count == 2
+
+
+def test_get_created_workflow_logs_by_steps(
+    app,
+    user0,
+    cwl_workflow_with_name,
+    tmp_shared_volume_path,
+    session,
+):
+    """Test get workflow logs, filtering by steps."""
+    with app.test_client() as client:
+        # Create the workflow
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={
+                "user": user0.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
+            content_type="application/json",
+            data=json.dumps(cwl_workflow_with_name),
+        )
+
+        # Get the generated workflow UUID
+        response_data = json.loads(res.get_data(as_text=True))
+        workflow_uuid = response_data.get("workflow_id")
+        workflow_name = response_data.get("workflow_name")
+
+        # Create a job for the workflow
+        workflow_job = Job(
+            id_=uuid.UUID("9a22c3a4-6d72-4812-93e7-7e0efdeb985d"),
+            workflow_uuid=workflow_uuid,
+        )
+        workflow_job.status = "running"
+        workflow_job.logs = "test job logs"
+        workflow_job.job_name = "gendata"
+        session.add(workflow_job)
+        session.commit()
+
+        # Call the API to fetch the workflow logs, filtering by steps
+        res = client.get(
+            url_for("statuses.get_workflow_logs", workflow_id_or_name=workflow_uuid),
+            query_string={"user": user0.id_},
+            content_type="application/json",
+            data=json.dumps(["gendata", "fitdata"]),
+        )
+
+        # Expect a successful response
+        assert res.status_code == 200
+
+        # Check the response data is as expected
+        response_data = json.loads(res.get_data(as_text=True))
+        expected_data = {
+            "workflow_id": workflow_uuid,
+            "workflow_name": workflow_name,
+            "user": str(user0.id_),
+            "live_logs_enabled": False,
+            "logs": json.dumps(
+                {
+                    "workflow_logs": None,
+                    "job_logs": {
+                        str(workflow_job.id_): {
+                            "workflow_uuid": str(workflow_job.workflow_uuid),
+                            "job_name": workflow_job.job_name,
+                            "compute_backend": "",
+                            "backend_job_id": "",
+                            "docker_img": "",
+                            "cmd": "",
+                            "status": workflow_job.status.name,
+                            "logs": "test job logs",
+                            "started_at": None,
+                            "finished_at": None,
+                        }
+                    },
+                    "engine_specific": None,
+                }
+            ),
+        }
+        assert response_data == expected_data
 
 
 def test_get_created_workflow_opensearch_disabled(

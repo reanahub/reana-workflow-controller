@@ -150,6 +150,7 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
         steps = None
         if request.is_json:
             steps = request.json
+
         if steps:
             workflow_logs = {
                 "workflow_logs": None,
@@ -172,30 +173,29 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
             workflow_logs = {
                 "workflow_logs": logs or workflow.logs,
                 "job_logs": build_workflow_logs(workflow, paginate=paginate),
-                "service_logs": {},
+                "service_logs": {
+                    s.name: sorted(
+                        [log.log for log in s.logs],
+                        key=lambda x: x["component"]
+                        != "scheduler",  # scheduler logs first
+                    )
+                    for s in workflow.services
+                },
                 "engine_specific": workflow.engine_specific,
             }
 
-            workflow_logs["service_logs"] = {
-                s.name: sorted(
-                    [log.log for log in s.logs],
-                    key=lambda x: x["component"] != "scheduler",  # scheduler logs first
-                )
-                for s in workflow.services
-            }
-
-            return (
-                jsonify(
-                    {
-                        "workflow_id": workflow.id_,
-                        "workflow_name": get_workflow_name(workflow),
-                        "logs": json.dumps(workflow_logs),
-                        "user": user_uuid,
-                        "live_logs_enabled": REANA_OPENSEARCH_ENABLED,
-                    }
-                ),
-                200,
-            )
+        return (
+            jsonify(
+                {
+                    "workflow_id": workflow.id_,
+                    "workflow_name": get_workflow_name(workflow),
+                    "logs": json.dumps(workflow_logs),
+                    "user": user_uuid,
+                    "live_logs_enabled": REANA_OPENSEARCH_ENABLED,
+                }
+            ),
+            200,
+        )
 
     except ValueError:
         return (
