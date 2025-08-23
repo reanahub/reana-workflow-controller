@@ -9,7 +9,7 @@
 """REANA Workflow Controller workflows REST API."""
 
 import difflib
-import fs
+import gc
 import json
 import logging
 import mimetypes
@@ -63,6 +63,8 @@ from reana_workflow_controller.config import (
     PROGRESS_STATUSES,
     REANA_GITLAB_HOST,
     PREVIEWABLE_MIME_TYPE_PREFIXES,
+    FORCE_GARBAGE_COLLECTION,
+    WORKSPACE_DISPLAY_FILE_LIMIT,
 )
 from reana_workflow_controller.consumer import _update_workflow_status
 from reana_workflow_controller.errors import (
@@ -222,6 +224,9 @@ def remove_workflow_jobs_from_cache(workflow):
 
 def delete_workflow(workflow, all_runs=False, workspace=False):
     """Delete workflow."""
+    if "delete" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
+
     if workflow.status in [
         RunStatus.created,
         RunStatus.finished,
@@ -434,8 +439,15 @@ def list_directory_files(
     workspace_path: str, search: Dict[str, List[str]] = None
 ) -> List[dict]:
     """Return a list of files inside a given workspace."""
+    if "ls" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     file_list = []
     for file_name in workspace.walk(workspace_path, include_dirs=False):
+        if len(file_list) >= WORKSPACE_DISPLAY_FILE_LIMIT:
+            raise BadRequest(
+                f"Too many files to display ({WORKSPACE_DISPLAY_FILE_LIMIT} reached). "
+                "Please narrow down using the `search` filter."
+            )
         st = workspace.lstat(workspace_path, file_name)
         file_info = {
             "name": file_name,
@@ -465,10 +477,12 @@ def remove_files_recursive_wildcard(workspace_path, path_or_pattern):
     :param workspace_path: Directory to delete files from.
     :param path_or_pattern: Wildcard pattern to use for the removal.
     :return: Dictionary with the results:
-       - dictionary with names of succesfully deleted files and their sizes
+       - dictionary with names of successfully deleted files and their sizes
        - dictionary with names of failed deletions and corresponding
        error messages.
     """
+    if "rm" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     deleted = {"deleted": {}, "failed": {}}
     for file_name in workspace.glob_or_walk_directory(
         workspace_path, path_or_pattern, topdown=False
@@ -488,12 +502,19 @@ def list_files_recursive_wildcard(workspace_path, path_or_pattern, search=None):
     :param workspace_path: Directory to list files from.
     :param path_or_pattern: Wildcard pattern to use for the listing.
     :return: Dictionary with the results:
-       - dictionary with names of succesfully listed files and their sizes
+       - dictionary with names of successfully listed files and their sizes
        - dictionary with names of failed listing and corresponding
        error messages.
     """
+    if "ls" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     list_files_recursive = []
     for path in workspace.glob_or_walk_directory(workspace_path, path_or_pattern):
+        if len(list_files_recursive) >= WORKSPACE_DISPLAY_FILE_LIMIT:
+            raise BadRequest(
+                f"Too many files to display ({WORKSPACE_DISPLAY_FILE_LIMIT} reached). "
+                "Please narrow down using the `search` filter."
+            )
         st = workspace.lstat(workspace_path, path)
         raw_size = st.st_size
         mtime = st.st_mtime
