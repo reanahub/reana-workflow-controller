@@ -93,7 +93,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     KUEUE_ENABLED,
-    KUEUE_LOCAL_QUEUE_NAME,
+    KUEUE_BATCH_QUEUE_NAME,
+    KUEUE_DEFAULT_QUEUE,
 )
 
 
@@ -631,7 +632,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         }
 
         if KUEUE_ENABLED:
-            labels["kueue.x-k8s.io/queue-name"] = KUEUE_LOCAL_QUEUE_NAME
+            labels["kueue.x-k8s.io/queue-name"] = KUEUE_BATCH_QUEUE_NAME
 
         workflow_metadata = client.V1ObjectMeta(
             name=name,
@@ -735,6 +736,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
                 {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
                 {"name": "KUEUE_ENABLED", "value": str(KUEUE_ENABLED)},
+                {"name": "KUEUE_DEFAULT_QUEUE", "value": KUEUE_DEFAULT_QUEUE},
                 {
                     "name": "REANA_SQLALCHEMY_DATABASE_URI",
                     "value": SQLALCHEMY_DATABASE_URI,
