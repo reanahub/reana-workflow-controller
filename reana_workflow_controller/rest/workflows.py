@@ -377,6 +377,10 @@ def get_workflows(args, paginate=None):  # noqa
             column_sorted = nullslast(WorkflowResource.quota_used.desc())
         elif sort in ["asc", "desc"]:
             column_sorted = getattr(Workflow.created, sort)()
+
+        if type_ == "interactive":
+            # Keep only workflows that have at least one interactive session.
+            query = query.filter(Workflow.sessions.any())
         pagination_dict = paginate(query.order_by(column_sorted))
 
         owner_ids = {workflow.owner_id for workflow in pagination_dict["items"]}
