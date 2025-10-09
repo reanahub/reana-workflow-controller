@@ -398,8 +398,11 @@ ALIVE_STATUSES = [
 KUEUE_ENABLED = bool(strtobool(os.getenv("KUEUE_ENABLED", "False")))
 """Whether to use Kueue for workflow scheduling."""
 
-KUEUE_LOCAL_QUEUE_NAME = "local-queue-batch"
-"""Name of the local queue to be used by Kueue."""
+KUEUE_BATCH_QUEUE_NAME = "batch-queue"
+"""Name of the batch queue running workflow orchestration jobs."""
+
+KUEUE_DEFAULT_QUEUE = os.getenv("KUEUE_DEFAULT_QUEUE", "")
+"""Name of the default queue to be used by jobs spawned by the workflow controller."""
 
 REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD = int(
     os.getenv("REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD", "120")
