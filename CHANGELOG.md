@@ -2,6 +2,49 @@
 
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-workflow-controller/compare/0.9.4...0.9.5) (2025-11-07)
+
+
+### Features
+
+* **dask:** add nthreads option to `dask-worker` command ([#636](https://github.com/reanahub/reana-workflow-controller/issues/636)) ([eaf2b59](https://github.com/reanahub/reana-workflow-controller/commit/eaf2b592679c8be5bb25b0ccb1ef9d71a6f432f9))
+* **dask:** create Kerberos sidecars for Dask workflows ([#632](https://github.com/reanahub/reana-workflow-controller/issues/632)) ([0f90c8a](https://github.com/reanahub/reana-workflow-controller/commit/0f90c8aedd79d14528256826893591ca874d0492))
+* **dask:** create Rucio sidecars for Dask workflows ([#634](https://github.com/reanahub/reana-workflow-controller/issues/634)) ([89c390e](https://github.com/reanahub/reana-workflow-controller/commit/89c390ea15ef37ea7522ddd8ce6357bc8620a8b8))
+* **dask:** create VOMS proxy sidecars for Dask workflows ([#633](https://github.com/reanahub/reana-workflow-controller/issues/633)) ([24cb362](https://github.com/reanahub/reana-workflow-controller/commit/24cb362f0a7e6d49b4af6689c49590cd2cde2ad0))
+* **dask:** introduce labels and node selector to Dask resources ([#628](https://github.com/reanahub/reana-workflow-controller/issues/628)) ([3a8e37e](https://github.com/reanahub/reana-workflow-controller/commit/3a8e37e46037f312b0f629a146f13f0f1667d041)), closes [#623](https://github.com/reanahub/reana-workflow-controller/issues/623)
+* **dask:** return service logs and fix service status handling ([#651](https://github.com/reanahub/reana-workflow-controller/issues/651)) ([ee87fd7](https://github.com/reanahub/reana-workflow-controller/commit/ee87fd73a863e17869ba3fabadacabb0af82788b)), closes [#627](https://github.com/reanahub/reana-workflow-controller/issues/627)
+* **k8s:** support custom namespaces for Dask resources ([#621](https://github.com/reanahub/reana-workflow-controller/issues/621)) ([fbab460](https://github.com/reanahub/reana-workflow-controller/commit/fbab4600076bc5d89745eaa75bfeae8ed33ab976))
+* **list:** display interactive sessions ([#662](https://github.com/reanahub/reana-workflow-controller/issues/662)) ([eebd278](https://github.com/reanahub/reana-workflow-controller/commit/eebd2784608feb6adeaaee3ee6ef0099c5ad4b25))
+* **manager:** add Kueue scheduling option for user workloads ([#658](https://github.com/reanahub/reana-workflow-controller/issues/658)) ([5ca4f44](https://github.com/reanahub/reana-workflow-controller/commit/5ca4f4408ab3c2031484dd6d38e165fb84343e33))
+* **opensearch:** capture logs from Dask cluster pods ([#616](https://github.com/reanahub/reana-workflow-controller/issues/616)) ([51fad95](https://github.com/reanahub/reana-workflow-controller/commit/51fad95d5c7d08712e5e9b1b3f0ae055704891b2)), closes [#610](https://github.com/reanahub/reana-workflow-controller/issues/610)
+* **rest:** add services field to workflow endpoints ([#612](https://github.com/reanahub/reana-workflow-controller/issues/612)) ([afd1400](https://github.com/reanahub/reana-workflow-controller/commit/afd1400ddf79f972000830d8034e6d959afb00b3))
+
+
+### Bug fixes
+
+* **config:** update reana-auth-vomsproxy to 1.3.1 to fix WLCG IAM ([#639](https://github.com/reanahub/reana-workflow-controller/issues/639)) ([12a9742](https://github.com/reanahub/reana-workflow-controller/commit/12a9742178db1ac7a0c3100a61ea23560471c2c7))
+* **dask:** check Traefik before creating dashboard ingress ([#629](https://github.com/reanahub/reana-workflow-controller/issues/629)) ([bb7b2ff](https://github.com/reanahub/reana-workflow-controller/commit/bb7b2ff2b23c169b2209c88bf1bc24aaa4021e9e))
+* **dask:** use correct REANA host port for Dask service URLs ([#630](https://github.com/reanahub/reana-workflow-controller/issues/630)) ([a02767e](https://github.com/reanahub/reana-workflow-controller/commit/a02767ea9fe781c4f4a58c13f4420498bd760a0d))
+* **k8s:** check readiness of Dask service pods ([#626](https://github.com/reanahub/reana-workflow-controller/issues/626)) ([2797300](https://github.com/reanahub/reana-workflow-controller/commit/279730051ecf3ad21d55f57c899cc574d40fe503)), closes [#625](https://github.com/reanahub/reana-workflow-controller/issues/625)
+* **k8s:** improve error handling for Dask K8s resources ([#618](https://github.com/reanahub/reana-workflow-controller/issues/618)) ([a71ad83](https://github.com/reanahub/reana-workflow-controller/commit/a71ad83310c6dc880da6d33531a3ccc528c3d7a6)), closes [#617](https://github.com/reanahub/reana-workflow-controller/issues/617)
+* **rest:** correct response when fetching workflow logs by steps ([#660](https://github.com/reanahub/reana-workflow-controller/issues/660)) ([9880f76](https://github.com/reanahub/reana-workflow-controller/commit/9880f76ee8dc8dd37867a00b7174f4fa60c3ab47)), closes [#659](https://github.com/reanahub/reana-workflow-controller/issues/659)
+* **rest:** detect session status from the pod state ([#611](https://github.com/reanahub/reana-workflow-controller/issues/611)) ([907459b](https://github.com/reanahub/reana-workflow-controller/commit/907459b75ee9aaa9ef028f641e14d1f875b7729a))
+
+
+### Code refactoring
+
+* **dask:** use central function for Dask K8s component names ([#613](https://github.com/reanahub/reana-workflow-controller/issues/613)) ([f252098](https://github.com/reanahub/reana-workflow-controller/commit/f252098250257ea9d513b9c7c850cfdca97aa39c))
+
+
+### Continuous integration
+
+* **commitlint:** fix local running of commit linter on macOS ([#656](https://github.com/reanahub/reana-workflow-controller/issues/656)) ([d939f25](https://github.com/reanahub/reana-workflow-controller/commit/d939f2517f995e2dde8ad0737290f517bad19429))
+* **jsonlint:** add JSON linting ([#655](https://github.com/reanahub/reana-workflow-controller/issues/655)) ([f095249](https://github.com/reanahub/reana-workflow-controller/commit/f0952492779267cda3511139ef7f0fb081e300b8))
+* **markdownlint:** add Markdown linting ([#655](https://github.com/reanahub/reana-workflow-controller/issues/655)) ([d9e6442](https://github.com/reanahub/reana-workflow-controller/commit/d9e64423219f4936796fb6762a3b79d88ae48f6b))
+* **prettier:** add Prettier code formatting checks ([#655](https://github.com/reanahub/reana-workflow-controller/issues/655)) ([2c339b7](https://github.com/reanahub/reana-workflow-controller/commit/2c339b7feb6d7d5dea1e658ae7fb63872076082f))
+* **shfmt:** add shfmt code formatting checks ([#654](https://github.com/reanahub/reana-workflow-controller/issues/654)) ([992506f](https://github.com/reanahub/reana-workflow-controller/commit/992506fc9386134e996917612e9e1abd2211ea1e)), closes [#652](https://github.com/reanahub/reana-workflow-controller/issues/652)
+* **yamllint:** add YAML linting ([#655](https://github.com/reanahub/reana-workflow-controller/issues/655)) ([0e1837d](https://github.com/reanahub/reana-workflow-controller/commit/0e1837dc3b7a42dbc9b71a5a59c5e6fd15569056))
+
 ## [0.9.4](https://github.com/reanahub/reana-workflow-controller/compare/0.9.3...0.9.4) (2024-11-29)
 
 ### Build
