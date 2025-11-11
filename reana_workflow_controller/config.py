@@ -414,3 +414,16 @@ CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"
 
 MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000
 """Maximum length of the user-provided message when sharing a workflow."""
+
+WORKSPACE_DISPLAY_FILE_LIMIT = int(os.getenv("WORKSPACE_DISPLAY_FILE_LIMIT", "100000"))
+"""Maximum number of file entries to return in `list_directory_*` calls"""
+
+FORCE_GARBAGE_COLLECTION = os.getenv("FORCE_GARBAGE_COLLECTION", [])
+"""
+List of garbage-collection commands to run before certain operations.
+- [] (empty list): rely on Python’s automatic GC
+- ["ls"]: trigger a manual `gc.collect()` before listing workspace files
+- ["list"]: trigger a manual `gc.collect()` before listing all workflows
+- ["rm"]: trigger a manual `gc.collect()` before removing workspace files
+- ["delete"]: trigger a manual `gc.collect()` before deleting workflows
+"""
