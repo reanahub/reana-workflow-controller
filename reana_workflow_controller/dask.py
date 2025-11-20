@@ -160,7 +160,7 @@ class DaskResourceManager:
         self.cluster_body["metadata"] = {
             "name": self.cluster_name,
             "labels": {
-                "reana-run-dask-owner-uuid": self.user_id,
+                "user-uuid": self.user_id,
                 "reana-run-dask-workflow-uuid": self.workflow_id,
             },
         }
@@ -233,7 +233,7 @@ class DaskResourceManager:
         self.autoscaler_body["metadata"] = {
             "name": self.autoscaler_name,
             "labels": {
-                "reana-run-dask-owner-uuid": self.user_id,
+                "user-uuid": self.user_id,
                 "reana-run-dask-workflow-uuid": self.workflow_id,
             },
         }
@@ -706,7 +706,7 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
                 workflow_id, "dashboard_ingress_middleware"
             ),
             "labels": {
-                "reana-run-dask-owner-uuid": user_id,
+                "user-uuid": user_id,
                 "reana-run-dask-workflow-uuid": workflow_id,
             },
             "namespace": REANA_RUNTIME_KUBERNETES_NAMESPACE,
@@ -729,7 +729,7 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
                 "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-{get_dask_component_name(workflow_id, 'dashboard_ingress_middleware')}@kubernetescrd",
             },
             labels={
-                "reana-run-dask-owner-uuid": user_id,
+                "user-uuid": user_id,
                 "reana-run-dask-workflow-uuid": workflow_id,
             },
         ),

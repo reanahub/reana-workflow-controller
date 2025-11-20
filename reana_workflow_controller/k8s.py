@@ -170,7 +170,7 @@ class InteractiveDeploymentK8sBuilder(object):
             "app": self.deployment_name,
             "reana_workflow_mode": "session",
             "reana-run-session-workflow-uuid": str(self.workflow_id),
-            "reana-run-session-owner-uuid": str(self.owner_id),
+            "user-uuid": str(self.owner_id),
         }
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels=labels),
