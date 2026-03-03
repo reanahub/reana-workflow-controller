@@ -124,7 +124,8 @@ def open_interactive_session(
             )
             return jsonify({"message": error_msg}), 404
 
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid=user)
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, user_uuid=user)
 
         if workflow.sessions:
             return jsonify({"message": "Interactive session is already open"}), 404
@@ -213,7 +214,8 @@ def close_interactive_session(workflow_id_or_name):  # noqa
     try:
         user_uuid = request.args["user"]
         workflow = None
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, user_uuid)
         int_session = workflow.sessions[0] if workflow.sessions else None
         if not int_session:
             return (
