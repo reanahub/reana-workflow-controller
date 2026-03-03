@@ -32,7 +32,7 @@ RUN apt-get update -y && \
       python3.12 \
       python3.12-dev \
       vim-tiny && \
-    pip install --no-cache-dir --upgrade setuptools && \
+    pip install --no-cache-dir --upgrade "setuptools<81.0.0" && \
     pip install --no-cache-dir -r /code/requirements.txt && \
     apt-get remove -y \
       gcc \

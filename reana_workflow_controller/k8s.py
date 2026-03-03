@@ -51,6 +51,7 @@ class InteractiveDeploymentK8sBuilder(object):
         port,
         path,
         cvmfs_repos=None,
+        image_pull_secret="rancher-gitlab",
     ):
         """Initialise basic interactive deployment builder for Kubernetes.
 
@@ -74,7 +75,8 @@ class InteractiveDeploymentK8sBuilder(object):
         self.image = image
         self.port = port
         self.path = path
-        self.cvmfs_repos = cvmfs_repos or []
+        self.cvmfs_repos = cvmfs_repos or [],
+        self.image_pull_secret = image_pull_secret
         metadata = client.V1ObjectMeta(
             name=deployment_name,
             labels={"reana_workflow_mode": "session"},
@@ -82,9 +84,15 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container = client.V1Container(
             name=self.deployment_name, image=self.image, env=[], volume_mounts=[]
         )
+        self._s3_container = client.V1Container(
+            name=(self.deployment_name + "s3-sidecar"), image=self.image, env=[], volume_mounts=[]
+        )
         self._pod_spec = client.V1PodSpec(
-            containers=[self._session_container],
-            volumes=[],
+            containers=[self._session_container, self._s3_container],
+            volumes=[client.V1Volume(
+                name="s3-mounts",
+                empty_dir=client.V1EmptyDirVolumeSource()
+            )],
             node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
             # Disable service discovery with env variables, so that the environment is
             # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
@@ -161,6 +169,11 @@ class InteractiveDeploymentK8sBuilder(object):
         return service
 
     def _build_deployment(self, metadata):
+        if self.image_pull_secret:
+            self._pod_spec.image_pull_secrets = [
+                client.V1LocalObjectReference(name=self.image_pull_secret)
+            ]
+
         """Build deployment Kubernetes object.
 
         :param metadata: Common Kubernetes metadata for the interactive
@@ -204,6 +217,34 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container.volume_mounts.append(volume_mount)
         self._pod_spec.volumes.append(volume)
 
+    def add_s3_storage(self):
+        """Add the volume for s3 mounts from sidecar"""
+        volume_mount, volume = get_workspace_volume(self.workspace)
+        self._session_container.volume_mounts.append(volume_mount)
+        self._pod_spec.volumes.append(volume)
+
+    def setup_s3_sidecar(self):
+        """Add the sidecar for s3 mounts"""
+        # Define the volume mount for /dev/fuse
+        fuse_volume_mount = client.V1VolumeMount(
+            name="fuse-device",
+            mount_path="/dev/fuse"
+        )
+
+        # Define the volume for /dev/fuse
+        fuse_volume = client.V1HostPathVolumeSource(
+            path="/dev/fuse"
+        )
+
+        # Append the volume mount and volume to the session container and pod spec
+        self._s3_container.volume_mounts.append(fuse_volume_mount)
+        self._pod_spec.volumes.append(client.V1Volume(name="fuse-device", host_path=fuse_volume))
+
+        security_context = client.V1SecurityContext(
+            run_as_user=0, allow_privilege_escalation=True, capabilities=client.V1Capabilities(add=["SYS_ADMIN"]), privileged=True
+        )
+        self._s3_container.security_context = security_context
+
     def add_cvmfs_repo_mounts(self, cvmfs_repos):
         """Add mounts for the provided CVMFS repositories to the deployment.
 
@@ -225,7 +266,7 @@ class InteractiveDeploymentK8sBuilder(object):
     def add_run_with_root_permissions(self):
         """Run interactive session with root."""
         security_context = client.V1SecurityContext(
-            run_as_user=0, allow_privilege_escalation=False
+            run_as_user=0, privileged=True
         )
         self._session_container.security_context = security_context
 
@@ -298,6 +339,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
         )
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
+    deployment_builder.setup_s3_sidecar()
     if cvmfs_repos:
         deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
     if expose_secrets:
