@@ -6,6 +6,8 @@
 
 """REANA Workflow Controller Kubernetes utils."""
 
+import json, os
+
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
@@ -29,6 +31,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_INGRESS_ANNOTATIONS,
     REANA_INGRESS_CLASS_NAME,
     REANA_INGRESS_HOST,
+    REANA_DATASTORE_SECRET,
+    REANA_DATASTORE_IMAGE,
 )
 
 
@@ -51,7 +55,6 @@ class InteractiveDeploymentK8sBuilder(object):
         port,
         path,
         cvmfs_repos=None,
-        image_pull_secret="rancher-gitlab",
     ):
         """Initialise basic interactive deployment builder for Kubernetes.
 
@@ -76,23 +79,20 @@ class InteractiveDeploymentK8sBuilder(object):
         self.port = port
         self.path = path
         self.cvmfs_repos = cvmfs_repos or [],
-        self.image_pull_secret = image_pull_secret
+        self.image_pull_secrets = []
         metadata = client.V1ObjectMeta(
             name=deployment_name,
             labels={"reana_workflow_mode": "session"},
         )
         self._session_container = client.V1Container(
-            name=self.deployment_name, image=self.image, env=[], volume_mounts=[]
+            name=self.deployment_name, image=self.image, env=[], volume_mounts=[], ports=[client.V1ContainerPort(container_port=self.port)]
         )
         self._s3_container = client.V1Container(
-            name=(self.deployment_name + "s3-sidecar"), image=self.image, env=[], volume_mounts=[]
+            name="datastore", image=REANA_DATASTORE_IMAGE, env=[], volume_mounts=[], ports=[], image_pull_policy="Always"
         )
         self._pod_spec = client.V1PodSpec(
             containers=[self._session_container, self._s3_container],
-            volumes=[client.V1Volume(
-                name="s3-mounts",
-                empty_dir=client.V1EmptyDirVolumeSource()
-            )],
+            volumes=[],
             node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
             # Disable service discovery with env variables, so that the environment is
             # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
@@ -169,9 +169,9 @@ class InteractiveDeploymentK8sBuilder(object):
         return service
 
     def _build_deployment(self, metadata):
-        if self.image_pull_secret:
+        if self.image_pull_secrets:
             self._pod_spec.image_pull_secrets = [
-                client.V1LocalObjectReference(name=self.image_pull_secret)
+                client.V1LocalObjectReference(name=self.image_pull_secrets)
             ]
 
         """Build deployment Kubernetes object.
@@ -217,10 +217,37 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container.volume_mounts.append(volume_mount)
         self._pod_spec.volumes.append(volume)
 
-    def add_s3_storage(self):
-        """Add the volume for s3 mounts from sidecar"""
-        volume_mount, volume = get_workspace_volume(self.workspace)
+    def add_image_pull_secrets(self):
+        """Attach the configured image pull secrets to scheduler and worker containers."""
+        for secret_name in REANA_DATASTORE_SECRET:
+            if secret_name:
+                self.image_pull_secrets.append({"name": secret_name})
+
+    def setup_s3_storage(self):
+        """Configure shared empty_dir volume for S3 sidecar and session container."""
+        volume_name = "s3-mounts"
+
+        volume = client.V1Volume(
+            name=volume_name,
+            empty_dir=client.V1EmptyDirVolumeSource()
+        )
+
+        volume_mount = client.V1VolumeMount(
+            name=volume_name,
+            mount_path="/data/s3/",
+            mount_propagation="HostToContainer"
+        )
+
         self._session_container.volume_mounts.append(volume_mount)
+
+        volume_mount = client.V1VolumeMount(
+            name=volume_name,
+            mount_path="/s3-data",
+            mount_propagation="Bidirectional"
+        )
+
+        self._s3_container.volume_mounts.append(volume_mount)
+
         self._pod_spec.volumes.append(volume)
 
     def setup_s3_sidecar(self):
@@ -280,8 +307,25 @@ class InteractiveDeploymentK8sBuilder(object):
         self._pod_spec.volumes.append(secrets_volume)
         self._session_container.volume_mounts.append(secrets_volume_mount)
 
-        # set environment secrets
-        self._session_container.env += user_secrets.get_env_secrets_as_k8s_spec()
+        # build env arrays for different containers
+        # sorting s3 variables to only be mounted in sidecar
+        all_env = user_secrets.get_env_secrets_as_k8s_spec()
+        s3_env = []
+        session_env = []
+        
+        # Single for loop to split secrets
+        for secret in all_env:
+            secret_name = secret.get("name", "")
+            if secret_name.startswith("S3_TO_LOCAL_"):
+                s3_env.append(secret)
+            else:
+                session_env.append(secret)
+
+        # set environment secrets without s3 secrets
+        self._session_container.env = session_env
+
+        # mount s3 secretes
+        self._s3_container.env = s3_env
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
@@ -339,7 +383,9 @@ def build_interactive_jupyter_deployment_k8s_objects(
         )
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
+    deployment_builder.add_image_pull_secrets()
     deployment_builder.setup_s3_sidecar()
+    deployment_builder.setup_s3_storage()
     if cvmfs_repos:
         deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
     if expose_secrets:
