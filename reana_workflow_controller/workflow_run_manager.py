@@ -100,6 +100,9 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     KUEUE_ENABLED,
     KUEUE_LOCAL_QUEUE_NAME,
+    REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS,
+    IMAGE_PULL_SECRETS,
+    REANA_JOB_CONTROLLER_SECRET,
 )
 
 
@@ -826,6 +829,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
                 },
             )
+        if REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS:
+            job_controller_container.env.append(
+                {
+                    "name": "REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS",
+                    "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS"),
+                },
+            )
         if requires_dask(self.workflow):
             job_controller_container.env.append(
                 {
@@ -850,6 +860,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
             init_containers=[],
             termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
+            image_pull_secrets=[],
         )
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
@@ -862,6 +873,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         if kerberos:
             volumes += kerberos.volumes
             spec.template.spec.init_containers.append(kerberos.init_container)
+
+        image_pull_secrets = []
+        for secret_name in REANA_JOB_CONTROLLER_SECRET:
+            if secret_name:
+                self.image_pull_secrets.append({"name": secret_name})
+
+        if image_pull_secrets:
+            spec.template.spec.image_pull_secrets = [
+                client.V1LocalObjectReference(name=self.image_pull_secrets)
+            ]
 
         # filter out volumes with the same name
         spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
