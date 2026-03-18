@@ -321,6 +321,10 @@ JOB_CONTROLLER_IMAGE = os.getenv(
 )
 """Default image for REANA Job Controller sidecar."""
 
+REANA_JOB_CONTROLLER_SECRET  = os.getenv(
+    "REANA_JOB_CONTROLLER_SECRET"
+)
+"""DOptional secret for REANA Job Controller sidecar."""
 
 JOB_CONTROLLER_ENV_VARS = _env_vars_dict_to_k8s_list(
     json.loads(os.getenv("REANA_JOB_CONTROLLER_ENV_VARS", "{}"))
@@ -465,3 +469,19 @@ CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"
 
 MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000
 """Maximum length of the user-provided message when sharing a workflow."""
+
+
+REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS = os.getenv(
+    "REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS"
+)
+"""Tolerations for jobs"""
+
+REANA_DATASTORE_IMAGE = os.getenv(
+    "REANA_DATASTORE_IMAGE"
+)
+"""Image for datastore (s3) sidecar for interactive sessions"""
+
+REANA_DATASTORE_SECRET = os.getenv(
+    "REANA_DATASTORE_SECRET"
+)
+"""Optional secret for datastore (s3) sidecar for interactive sessions"""
