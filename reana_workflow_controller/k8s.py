@@ -33,6 +33,7 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_INGRESS_HOST,
     REANA_DATASTORE_SECRET,
     REANA_DATASTORE_IMAGE,
+    REANA_DATASTORE_ENABLED,
 )
 
 
@@ -87,11 +88,15 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container = client.V1Container(
             name=self.deployment_name, image=self.image, env=[], volume_mounts=[], ports=[client.V1ContainerPort(container_port=self.port)]
         )
-        self._s3_container = client.V1Container(
-            name="datastore", image=REANA_DATASTORE_IMAGE, env=[], volume_mounts=[], ports=[], image_pull_policy="Always", lifecycle=[]
-        )
+        containers = [self._session_container]
+        if(REANA_DATASTORE_ENABLED):
+            self._s3_container = client.V1Container(
+                name="datastore", image=REANA_DATASTORE_IMAGE, env=[], volume_mounts=[], ports=[], image_pull_policy="Always", lifecycle=[]
+            )
+            containers.append(self._s3_container)
+
         self._pod_spec = client.V1PodSpec(
-            containers=[self._session_container, self._s3_container],
+            containers=containers,
             volumes=[],
             node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
             # Disable service discovery with env variables, so that the environment is
@@ -319,7 +324,7 @@ class InteractiveDeploymentK8sBuilder(object):
         all_env = user_secrets.get_env_secrets_as_k8s_spec()
         s3_env = []
         session_env = []
-        
+
         # Single for loop to split secrets
         for secret in all_env:
             secret_name = secret.get("name", "")
@@ -332,7 +337,8 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container.env = session_env
 
         # mount s3 secretes
-        self._s3_container.env = s3_env
+        if(REANA_DATASTORE_ENABLED):
+            self._s3_container.env = s3_env
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
@@ -391,8 +397,9 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
     deployment_builder.add_image_pull_secrets()
-    deployment_builder.setup_s3_sidecar()
-    deployment_builder.setup_s3_storage()
+    if(REANA_DATASTORE_ENABLED):
+        deployment_builder.setup_s3_sidecar()
+        deployment_builder.setup_s3_storage()
     if cvmfs_repos:
         deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
     if expose_secrets:
