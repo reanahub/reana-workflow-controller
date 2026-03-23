@@ -874,14 +874,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             volumes += kerberos.volumes
             spec.template.spec.init_containers.append(kerberos.init_container)
 
-        image_pull_secrets = []
-        for secret_name in REANA_JOB_CONTROLLER_SECRET:
-            if secret_name:
-                self.image_pull_secrets.append({"name": secret_name})
-
-        if image_pull_secrets:
+        if REANA_JOB_CONTROLLER_SECRET:
             spec.template.spec.image_pull_secrets = [
-                client.V1LocalObjectReference(name=self.image_pull_secrets)
+                client.V1LocalObjectReference(name= REANA_JOB_CONTROLLER_SECRET)
             ]
 
         # filter out volumes with the same name
