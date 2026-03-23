@@ -169,11 +169,6 @@ class InteractiveDeploymentK8sBuilder(object):
         return service
 
     def _build_deployment(self, metadata):
-        if self.image_pull_secrets:
-            self._pod_spec.image_pull_secrets = [
-                client.V1LocalObjectReference(name=self.image_pull_secrets)
-            ]
-
         """Build deployment Kubernetes object.
 
         :param metadata: Common Kubernetes metadata for the interactive
@@ -219,9 +214,10 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_image_pull_secrets(self):
         """Attach the configured image pull secrets to scheduler and worker containers."""
-        for secret_name in REANA_DATASTORE_SECRET:
-            if secret_name:
-                self.image_pull_secrets.append({"name": secret_name})
+        if REANA_DATASTORE_SECRET:
+            self._pod_spec.image_pull_secrets = [
+                client.V1LocalObjectReference(name=REANA_DATASTORE_SECRET)
+            ]
 
     def setup_s3_storage(self):
         """Configure shared empty_dir volume for S3 sidecar and session container."""
