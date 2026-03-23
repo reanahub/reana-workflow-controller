@@ -51,6 +51,8 @@ def createS3Mounts(aliases, base_dir):
                 )
             else:
                 print(f"Successfully mounted '{aliases[i][0]}'")
+                with open("/etc/active_mounts.txt", "a") as f:
+                    f.write(f"{target_path}\n")
             os.system("rm .passwd-s3fs")
         except Exception as e:
             print(f"A error accrued during the mounting of alias {aliases[i][0]}: {e}")

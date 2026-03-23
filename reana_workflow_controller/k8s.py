@@ -88,7 +88,7 @@ class InteractiveDeploymentK8sBuilder(object):
             name=self.deployment_name, image=self.image, env=[], volume_mounts=[], ports=[client.V1ContainerPort(container_port=self.port)]
         )
         self._s3_container = client.V1Container(
-            name="datastore", image=REANA_DATASTORE_IMAGE, env=[], volume_mounts=[], ports=[], image_pull_policy="Always"
+            name="datastore", image=REANA_DATASTORE_IMAGE, env=[], volume_mounts=[], ports=[], image_pull_policy="Always", lifecycle=[]
         )
         self._pod_spec = client.V1PodSpec(
             containers=[self._session_container, self._s3_container],
@@ -267,6 +267,17 @@ class InteractiveDeploymentK8sBuilder(object):
             run_as_user=0, allow_privilege_escalation=True, capabilities=client.V1Capabilities(add=["SYS_ADMIN"]), privileged=True
         )
         self._s3_container.security_context = security_context
+
+        # adding umount for correct termination
+        lifecycle_dict = {
+            "preStop": {
+                "exec": {
+                    "command": ["/bin/sh", "-c", "xargs umount -l < /etc/active_mounts.txt || true"]
+                }
+            }
+        }
+
+        self._s3_container.lifecycle = lifecycle_dict
 
     def add_cvmfs_repo_mounts(self, cvmfs_repos):
         """Add mounts for the provided CVMFS repositories to the deployment.
