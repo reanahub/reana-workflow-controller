@@ -22,24 +22,24 @@ COPY requirements.txt /code/
 # Install all system and Python dependencies in one go
 # hadolint ignore=DL3008,DL3013
 RUN apt-get update -y && \
-    apt-get install --no-install-recommends -y \
-      gcc \
-      git \
-      libpcre3 \
-      libpcre3-dev \
-      libpython3.12 \
-      python3-pip \
-      python3.12 \
-      python3.12-dev \
-      vim-tiny && \
-    pip install --no-cache-dir --upgrade "setuptools<81.0.0" && \
-    pip install --no-cache-dir -r /code/requirements.txt && \
-    apt-get remove -y \
-      gcc \
-      python3.12-dev && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get install --no-install-recommends -y \
+  gcc \
+  git \
+  libpcre3 \
+  libpcre3-dev \
+  libpython3.12 \
+  python3-pip \
+  python3.12 \
+  python3.12-dev \
+  vim-tiny && \
+  pip install --no-cache-dir --upgrade 'setuptools<81' && \
+  pip install --no-cache-dir -r /code/requirements.txt && \
+  apt-get remove -y \
+  gcc \
+  python3.12-dev && \
+  apt-get autoremove -y && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
 
 # Copy cluster component source code
 WORKDIR /code
@@ -52,19 +52,19 @@ RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else
 # Are we building with locally-checked-out shared modules?
 # hadolint ignore=DL3013
 RUN if test -e modules/reana-commons; then \
-      if [ "${DEBUG}" -gt 0 ]; then \
-        pip install --no-cache-dir -e "modules/reana-commons[kubernetes]" --upgrade; \
-      else \
-        pip install --no-cache-dir "modules/reana-commons[kubernetes]" --upgrade; \
-      fi \
-    fi; \
-    if test -e modules/reana-db; then \
-      if [ "${DEBUG}" -gt 0 ]; then \
-        pip install --no-cache-dir -e "modules/reana-db" --upgrade; \
-      else \
-        pip install --no-cache-dir "modules/reana-db" --upgrade; \
-      fi \
-    fi
+  if [ "${DEBUG}" -gt 0 ]; then \
+  pip install --no-cache-dir -e "modules/reana-commons[kubernetes]" --upgrade; \
+  else \
+  pip install --no-cache-dir "modules/reana-commons[kubernetes]" --upgrade; \
+  fi \
+  fi; \
+  if test -e modules/reana-db; then \
+  if [ "${DEBUG}" -gt 0 ]; then \
+  pip install --no-cache-dir -e "modules/reana-db" --upgrade; \
+  else \
+  pip install --no-cache-dir "modules/reana-db" --upgrade; \
+  fi \
+  fi
 
 # Check for any broken Python dependencies
 RUN pip check
@@ -75,12 +75,12 @@ ARG UWSGI_MAX_FD=1048576
 ARG UWSGI_PROCESSES=2
 ARG UWSGI_THREADS=2
 ENV FLASK_APP=reana_workflow_controller/app.py \
-    PYTHONPATH=/workdir \
-    TERM=xterm \
-    UWSGI_BUFFER_SIZE=${UWSGI_BUFFER_SIZE:-8192} \
-    UWSGI_MAX_FD=${UWSGI_MAX_FD:-1048576} \
-    UWSGI_PROCESSES=${UWSGI_PROCESSES:-2} \
-    UWSGI_THREADS=${UWSGI_THREADS:-2}
+  PYTHONPATH=/workdir \
+  TERM=xterm \
+  UWSGI_BUFFER_SIZE=${UWSGI_BUFFER_SIZE:-8192} \
+  UWSGI_MAX_FD=${UWSGI_MAX_FD:-1048576} \
+  UWSGI_PROCESSES=${UWSGI_PROCESSES:-2} \
+  UWSGI_THREADS=${UWSGI_THREADS:-2}
 
 # Expose ports to clients
 EXPOSE 5000
@@ -90,22 +90,22 @@ EXPOSE 5000
 # while also allowing shell expansion
 # hadolint ignore=DL3025
 CMD exec uwsgi \
-    --buffer-size ${UWSGI_BUFFER_SIZE} \
-    --die-on-term \
-    --hook-master-start "unix_signal:2 gracefully_kill_them_all" \
-    --hook-master-start "unix_signal:15 gracefully_kill_them_all" \
-    --enable-threads \
-    --http-socket 0.0.0.0:5000 \
-    --master \
-    --max-fd ${UWSGI_MAX_FD} \
-    --module reana_workflow_controller.app:app \
-    --need-app \
-    --processes ${UWSGI_PROCESSES} \
-    --single-interpreter \
-    --stats /tmp/stats.socket \
-    --threads ${UWSGI_THREADS} \
-    --vacuum \
-    --wsgi-disable-file-wrapper
+  --buffer-size ${UWSGI_BUFFER_SIZE} \
+  --die-on-term \
+  --hook-master-start "unix_signal:2 gracefully_kill_them_all" \
+  --hook-master-start "unix_signal:15 gracefully_kill_them_all" \
+  --enable-threads \
+  --http-socket 0.0.0.0:5000 \
+  --master \
+  --max-fd ${UWSGI_MAX_FD} \
+  --module reana_workflow_controller.app:app \
+  --need-app \
+  --processes ${UWSGI_PROCESSES} \
+  --single-interpreter \
+  --stats /tmp/stats.socket \
+  --threads ${UWSGI_THREADS} \
+  --vacuum \
+  --wsgi-disable-file-wrapper
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"
