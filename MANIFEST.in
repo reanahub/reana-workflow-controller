@@ -15,6 +15,7 @@ include Dockerfile
 include LICENSE
 include pytest.ini
 include docs/openapi.json
+include sidecars/datastore/Dockerfile
 exclude .editorconfig
 exclude .prettierrc
 exclude .prettierignore
@@ -33,3 +34,6 @@ recursive-include tests *.py
 recursive-include tests *.finished
 recursive-include tests *.running
 recursive-include tests *.waiting
+recursive-include sidecars *.py
+recursive-include sidecars *.sh
+

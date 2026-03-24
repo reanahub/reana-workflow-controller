@@ -102,7 +102,6 @@ from reana_workflow_controller.config import (  # isort:skip
     KUEUE_ENABLED,
     KUEUE_LOCAL_QUEUE_NAME,
     REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS,
-    IMAGE_PULL_SECRETS,
     REANA_JOB_CONTROLLER_SECRET,
 )
 

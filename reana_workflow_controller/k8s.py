@@ -6,8 +6,6 @@
 
 """REANA Workflow Controller Kubernetes utils."""
 
-import json, os
-
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
