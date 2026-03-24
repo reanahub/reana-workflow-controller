@@ -119,7 +119,7 @@ def test_delete_workflow_with_interactive_session(
         "reana_workflow_controller.k8s",
         current_k8s_networking_api_client=mock.DEFAULT,
     ):
-        (response, http_response) = delete_workflow(workflow)
+        response, http_response = delete_workflow(workflow)
         data = json.loads(response.get_data())
         assert "Workflow successfully deleted" in data["message"]
         assert http_response == 200

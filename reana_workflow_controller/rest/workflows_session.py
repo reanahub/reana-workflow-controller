@@ -8,7 +8,6 @@
 
 """REANA Workflow Controller interactive sessions REST API."""
 
-
 from flask import Blueprint, jsonify, request
 from webargs import fields
 from webargs.flaskparser import use_kwargs
@@ -17,7 +16,6 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_db.models import WorkflowSession, InteractiveSessionType, RunStatus
 
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
-
 
 blueprint = Blueprint("workflows_session", __name__)
 

@@ -79,19 +79,29 @@ class InteractiveDeploymentK8sBuilder(object):
         self.image = image
         self.port = port
         self.path = path
-        self.cvmfs_repos = cvmfs_repos or [],
+        self.cvmfs_repos = (cvmfs_repos or [],)
         self.image_pull_secrets = []
         metadata = client.V1ObjectMeta(
             name=deployment_name,
             labels={"reana_workflow_mode": "session"},
         )
         self._session_container = client.V1Container(
-            name=self.deployment_name, image=self.image, env=[], volume_mounts=[], ports=[client.V1ContainerPort(container_port=self.port)]
+            name=self.deployment_name,
+            image=self.image,
+            env=[],
+            volume_mounts=[],
+            ports=[client.V1ContainerPort(container_port=self.port)],
         )
         containers = [self._session_container]
-        if(REANA_DATASTORE_ENABLED):
+        if REANA_DATASTORE_ENABLED:
             self._s3_container = client.V1Container(
-                name="datastore", image=REANA_DATASTORE_IMAGE, env=[], volume_mounts=[], ports=[], image_pull_policy="Always", lifecycle=[]
+                name="datastore",
+                image=REANA_DATASTORE_IMAGE,
+                env=[],
+                volume_mounts=[],
+                ports=[],
+                image_pull_policy="Always",
+                lifecycle=[],
             )
             containers.append(self._s3_container)
 
@@ -229,22 +239,19 @@ class InteractiveDeploymentK8sBuilder(object):
         volume_name = "s3-mounts"
 
         volume = client.V1Volume(
-            name=volume_name,
-            empty_dir=client.V1EmptyDirVolumeSource()
+            name=volume_name, empty_dir=client.V1EmptyDirVolumeSource()
         )
 
         volume_mount = client.V1VolumeMount(
             name=volume_name,
             mount_path="/data/s3/",
-            mount_propagation="HostToContainer"
+            mount_propagation="HostToContainer",
         )
 
         self._session_container.volume_mounts.append(volume_mount)
 
         volume_mount = client.V1VolumeMount(
-            name=volume_name,
-            mount_path="/s3-data",
-            mount_propagation="Bidirectional"
+            name=volume_name, mount_path="/s3-data", mount_propagation="Bidirectional"
         )
 
         self._s3_container.volume_mounts.append(volume_mount)
@@ -252,24 +259,26 @@ class InteractiveDeploymentK8sBuilder(object):
         self._pod_spec.volumes.append(volume)
 
     def setup_s3_sidecar(self):
-        """Add the sidecar for s3 mounts"""
+        """Add the sidecar for s3 mounts."""
         # Define the volume mount for /dev/fuse
         fuse_volume_mount = client.V1VolumeMount(
-            name="fuse-device",
-            mount_path="/dev/fuse"
+            name="fuse-device", mount_path="/dev/fuse"
         )
 
         # Define the volume for /dev/fuse
-        fuse_volume = client.V1HostPathVolumeSource(
-            path="/dev/fuse"
-        )
+        fuse_volume = client.V1HostPathVolumeSource(path="/dev/fuse")
 
         # Append the volume mount and volume to the session container and pod spec
         self._s3_container.volume_mounts.append(fuse_volume_mount)
-        self._pod_spec.volumes.append(client.V1Volume(name="fuse-device", host_path=fuse_volume))
+        self._pod_spec.volumes.append(
+            client.V1Volume(name="fuse-device", host_path=fuse_volume)
+        )
 
         security_context = client.V1SecurityContext(
-            run_as_user=0, allow_privilege_escalation=True, capabilities=client.V1Capabilities(add=["SYS_ADMIN"]), privileged=True
+            run_as_user=0,
+            allow_privilege_escalation=True,
+            capabilities=client.V1Capabilities(add=["SYS_ADMIN"]),
+            privileged=True,
         )
         self._s3_container.security_context = security_context
 
@@ -277,7 +286,11 @@ class InteractiveDeploymentK8sBuilder(object):
         lifecycle_dict = {
             "preStop": {
                 "exec": {
-                    "command": ["/bin/sh", "-c", "xargs umount -l < /etc/active_mounts.txt || true"]
+                    "command": [
+                        "/bin/sh",
+                        "-c",
+                        "xargs umount -l < /etc/active_mounts.txt || true",
+                    ]
                 }
             }
         }
@@ -304,9 +317,7 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_run_with_root_permissions(self):
         """Run interactive session with root."""
-        security_context = client.V1SecurityContext(
-            run_as_user=0, privileged=True
-        )
+        security_context = client.V1SecurityContext(run_as_user=0, privileged=True)
         self._session_container.security_context = security_context
 
     def add_user_secrets(self):
@@ -337,7 +348,7 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container.env = session_env
 
         # mount s3 secretes
-        if(REANA_DATASTORE_ENABLED):
+        if REANA_DATASTORE_ENABLED:
             self._s3_container.env = s3_env
 
     def get_deployment_objects(self):
@@ -397,7 +408,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
     deployment_builder.add_image_pull_secrets()
-    if(REANA_DATASTORE_ENABLED):
+    if REANA_DATASTORE_ENABLED:
         deployment_builder.setup_s3_sidecar()
         deployment_builder.setup_s3_storage()
     if cvmfs_repos:

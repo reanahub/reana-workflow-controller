@@ -5,6 +5,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Workflow run manager interface."""
+
 import base64
 import copy
 import json
@@ -876,7 +877,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         if REANA_JOB_CONTROLLER_SECRET:
             spec.template.spec.image_pull_secrets = [
-                client.V1LocalObjectReference(name= REANA_JOB_CONTROLLER_SECRET)
+                client.V1LocalObjectReference(name=REANA_JOB_CONTROLLER_SECRET)
             ]
 
         # filter out volumes with the same name

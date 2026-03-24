@@ -321,9 +321,7 @@ JOB_CONTROLLER_IMAGE = os.getenv(
 )
 """Default image for REANA Job Controller sidecar."""
 
-REANA_JOB_CONTROLLER_SECRET  = os.getenv(
-    "REANA_JOB_CONTROLLER_SECRET"
-)
+REANA_JOB_CONTROLLER_SECRET = os.getenv("REANA_JOB_CONTROLLER_SECRET")
 """DOptional secret for REANA Job Controller sidecar."""
 
 JOB_CONTROLLER_ENV_VARS = _env_vars_dict_to_k8s_list(
@@ -475,20 +473,14 @@ REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS = os.getenv(
     "REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS"
 )
 """Tolerations for jobs"""
-REANA_DATASTORE_ENABLED = os.getenv(
-    "REANA_DATASTORE_ENABLED"
-) == "true"
+REANA_DATASTORE_ENABLED = os.getenv("REANA_DATASTORE_ENABLED") == "true"
 """Set datastore (s3) sidecar for interactive sessions enabled or disabled"""
 
-if(REANA_DATASTORE_ENABLED):
-    REANA_DATASTORE_IMAGE = os.getenv(
-        "REANA_DATASTORE_IMAGE"
-    )
+if REANA_DATASTORE_ENABLED:
+    REANA_DATASTORE_IMAGE = os.getenv("REANA_DATASTORE_IMAGE")
     """Optional Image for datastore (s3) sidecar for interactive sessions"""
 
-    REANA_DATASTORE_SECRET = os.getenv(
-        "REANA_DATASTORE_SECRET"
-    )
+    REANA_DATASTORE_SECRET = os.getenv("REANA_DATASTORE_SECRET")
     """Optional secret for datastore (s3) sidecar for interactive sessions"""
 else:
     REANA_DATASTORE_IMAGE = ""
