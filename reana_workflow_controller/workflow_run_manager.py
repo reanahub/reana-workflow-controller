@@ -728,7 +728,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             ports=[],
             # Make sure that all the jobs are stopped before the deletion of the run-batch pod
             lifecycle=client.V1Lifecycle(
-                pre_stop=client.V1Handler(
+                pre_stop=client.V1LifecycleHandler(
                     http_get=client.V1HTTPGetAction(
                         port=JOB_CONTROLLER_CONTAINER_PORT,
                         path=JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
