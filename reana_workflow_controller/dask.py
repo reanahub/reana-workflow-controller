@@ -147,7 +147,12 @@ class DaskResourceManager:
             logging.error(
                 f"An error occured while trying to create dask cluster, now deleting the cluster... Error message:\n{e}"
             )
-            delete_dask_cluster(self.workflow_id, self.user_id)
+            try:
+                delete_dask_cluster(self.workflow_id, self.user_id)
+            except Exception:
+                logging.exception(
+                    "Failed to clean up Dask resources after creation error."
+                )
 
     def _prepare_cluster(self):
         """Prepare Dask cluster body by adding necessary image-pull secrets, volumes, volume mounts, init containers and sidecar containers."""

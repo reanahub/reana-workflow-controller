@@ -153,6 +153,23 @@ def test_add_hostpath_volumes_with_mounts(
         )
 
 
+def test_create_dask_resources_cleanup_error_is_swallowed(dask_resource_manager):
+    """Test that cleanup errors after creation failure do not propagate."""
+    with patch.object(
+        dask_resource_manager,
+        "_prepare_cluster",
+    ), patch.object(
+        dask_resource_manager,
+        "_create_dask_cluster",
+        side_effect=Exception("CRD not found"),
+    ), patch(
+        "reana_workflow_controller.dask.delete_dask_cluster",
+        side_effect=RuntimeError("cleanup failed"),
+    ):
+        # Should not raise despite both creation and cleanup failing
+        dask_resource_manager.create_dask_resources()
+
+
 def test_create_dask_resources(dask_resource_manager):
     """Test create_dask_resources method."""
     # Patch internal methods that should be called
