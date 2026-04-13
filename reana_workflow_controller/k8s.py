@@ -79,6 +79,7 @@ class InteractiveDeploymentK8sBuilder(object):
         self.path = path
         self.cvmfs_repos = (cvmfs_repos or [],)
         self.image_pull_secrets = []
+        self.datastore_enabled = False
         metadata = client.V1ObjectMeta(
             name=deployment_name,
             labels={"reana_workflow_mode": "session"},
@@ -92,16 +93,22 @@ class InteractiveDeploymentK8sBuilder(object):
         )
         containers = [self._session_container]
         if REANA_DATASTORE_ENABLED:
-            self._s3_container = client.V1Container(
-                name="datastore",
-                image=REANA_DATASTORE_IMAGE,
-                env=[],
-                volume_mounts=[],
-                ports=[],
-                image_pull_policy="Always",
-                lifecycle=[],
-            )
-            containers.append(self._s3_container)
+            user_secrets = UserSecretsStore.fetch(self.owner_id)
+            all_env = user_secrets.get_env_secrets_as_k8s_spec()
+            s3_env = [s for s in all_env if s.get("name", "").startswith("S3_TO_LOCAL_")]
+            if s3_env:
+                self.datastore_enabled = True
+            if self.datastore_enabled:
+                self._s3_container = client.V1Container(
+                    name="datastore",
+                    image=REANA_DATASTORE_IMAGE,
+                    env=[],
+                    volume_mounts=[],
+                    ports=[],
+                    image_pull_policy="Always",
+                    lifecycle=[],
+                )
+                containers.append(self._s3_container)
 
         self._pod_spec = client.V1PodSpec(
             containers=containers,
@@ -334,20 +341,20 @@ class InteractiveDeploymentK8sBuilder(object):
         s3_env = []
         session_env = []
 
-        # Single for loop to split secrets
-        for secret in all_env:
-            secret_name = secret.get("name", "")
-            if secret_name.startswith("S3_TO_LOCAL_"):
-                s3_env.append(secret)
-            else:
-                session_env.append(secret)
-
-        # set environment secrets without s3 secrets
-        self._session_container.env = session_env
-
-        # mount s3 secretes
-        if REANA_DATASTORE_ENABLED:
-            self._s3_container.env = s3_env
+        if self.datastore_enabled:
+            for secret in all_env:
+                secret_name = secret.get("name", "")
+                if secret_name.startswith("S3_TO_LOCAL_"):
+                    s3_env.append(secret)
+                else:
+                    session_env.append(secret)
+            # set environment secrets without s3 secrets
+            self._session_container.env = session_env
+            # mount s3 secretes
+            if REANA_DATASTORE_ENABLED:
+                self._s3_container.env = s3_env
+        else:
+            session_env = all_env
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
@@ -406,7 +413,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
     deployment_builder.add_image_pull_secrets()
-    if REANA_DATASTORE_ENABLED:
+    if REANA_DATASTORE_ENABLED and deployment_builder.datastore_enabled:
         deployment_builder.setup_s3_sidecar()
         deployment_builder.setup_s3_storage()
     if cvmfs_repos:
