@@ -95,7 +95,9 @@ class InteractiveDeploymentK8sBuilder(object):
         if REANA_DATASTORE_ENABLED:
             user_secrets = UserSecretsStore.fetch(self.owner_id)
             all_env = user_secrets.get_env_secrets_as_k8s_spec()
-            s3_env = [s for s in all_env if s.get("name", "").startswith("S3_TO_LOCAL_")]
+            s3_env = [
+                s for s in all_env if s.get("name", "").startswith("S3_TO_LOCAL_")
+            ]
             if s3_env:
                 self.datastore_enabled = True
             if self.datastore_enabled:
@@ -354,7 +356,7 @@ class InteractiveDeploymentK8sBuilder(object):
             if REANA_DATASTORE_ENABLED:
                 self._s3_container.env = s3_env
         else:
-            session_env = all_env
+            self._session_container.env = all_env
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
