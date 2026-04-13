@@ -251,17 +251,17 @@ class DaskResourceManager:
         self.autoscaler_body["spec"]["maximum"] = self.num_of_workers
 
     def _add_image_pull_secrets(self):
-        """Attach the configured image pull secrets to scheduler and worker containers."""
+        """Attach the configured image pull secrets to scheduler and worker pods."""
         image_pull_secrets = []
         for secret_name in current_app.config["IMAGE_PULL_SECRETS"]:
             if secret_name:
                 image_pull_secrets.append({"name": secret_name})
 
-        self.cluster_body["spec"]["worker"]["spec"]["containers"][0][
+        self.cluster_body["spec"]["worker"]["spec"][
             "imagePullSecrets"
         ] = image_pull_secrets
 
-        self.cluster_body["spec"]["scheduler"]["spec"]["containers"][0][
+        self.cluster_body["spec"]["scheduler"]["spec"][
             "imagePullSecrets"
         ] = image_pull_secrets
 

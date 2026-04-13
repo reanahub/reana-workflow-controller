@@ -85,15 +85,15 @@ def test_add_image_pull_secrets(dask_resource_manager):
         # Assert
         expected_image_pull_secrets = [{"name": "my-secret"}]
         assert (
-            dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["containers"][
-                0
-            ]["imagePullSecrets"]
+            dask_resource_manager.cluster_body["spec"]["worker"]["spec"][
+                "imagePullSecrets"
+            ]
             == expected_image_pull_secrets
         )
         assert (
             dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"][
-                "containers"
-            ][0]["imagePullSecrets"]
+                "imagePullSecrets"
+            ]
             == expected_image_pull_secrets
         )
 
