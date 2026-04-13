@@ -103,6 +103,9 @@ from reana_workflow_controller.config import (  # isort:skip
     KUEUE_LOCAL_QUEUE_NAME,
     REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS,
     REANA_JOB_CONTROLLER_SECRET,
+    REANA_DATASTORE_IMAGE,
+    REANA_DATASTORE_ENABLED,
+    REANA_DATASTORE_SECRET,
 )
 
 
@@ -712,6 +715,43 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             workflow_engine_container.volume_mounts += kerberos.volume_mounts
             workflow_engine_container.env += kerberos.env
 
+        datastore_container = []
+        if REANA_DATASTORE_ENABLED:
+            security_context = client.V1SecurityContext(
+                run_as_user=0,
+                allow_privilege_escalation=True,
+                capabilities=client.V1Capabilities(add=["SYS_ADMIN"]),
+                privileged=True,
+            )
+
+            user_secrets = UserSecretsStore.fetch(owner_id)
+            all_env = user_secrets.get_env_secrets_as_k8s_spec()
+            s3_env = [s for s in all_env if s.get("name", "").startswith("S3_TO_LOCAL_")]
+            if s3_env:
+                datastore_container = client.V1Container(
+                    name="datastore",
+                    image=REANA_DATASTORE_IMAGE,
+                    image_pull_policy="Always",
+                    security_context=security_context,
+                    volume_mounts=[],
+                )
+
+            s3_env = []
+            for secret in all_env:
+                secret_name = secret.get("name", "")
+                if secret_name.startswith("S3_TO_LOCAL_"):
+                    s3_env.append(secret)
+
+            print("test1 \n\n\n\n")
+            fuse_volume_mount = client.V1VolumeMount(
+                name="fuse-device", mount_path="/dev/fuse"
+            )
+            print("test2 \n\n\n\n")
+            # Append the volume mount and volume to the session container and pod spec
+            datastore_container.volume_mounts.append(fuse_volume_mount)
+            print("test3 \n\n\n\n")
+            datastore_container.env = s3_env
+
         job_controller_env_secrets = user_secrets.get_env_secrets_as_k8s_spec()
 
         user_secret = user_secrets.get_secret("CERN_USER")
@@ -816,6 +856,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "value": REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
                 },
                 {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
+                {"name": "REANA_DATASTORE_IMAGE", "value": json.dumps(REANA_DATASTORE_IMAGE)},
+                {"name": "REANA_DATASTORE_ENABLED", "value": json.dumps(REANA_DATASTORE_ENABLED)},
+
             ]
         )
         # env vars coming from Helm values are added after the ones from r-w-controller
@@ -854,14 +897,34 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_container.ports = [
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
         ]
-        containers = [workflow_engine_container, job_controller_container]
+
+        # create datastore container and configure other ones
+        if REANA_DATASTORE_ENABLED:
+            volume_name = "s3-mounts"
+
+            volume_mount = client.V1VolumeMount(
+                name=volume_name,
+                mount_path="/data/s3/",
+                mount_propagation="HostToContainer",
+            )
+            workflow_engine_container.volume_mounts.append(volume_mount)
+
+            job_controller_container.volume_mounts.append(volume_mount)
+
+            volume_mount = client.V1VolumeMount(
+                name=volume_name, mount_path="/s3-data", mount_propagation="Bidirectional"
+            )
+            datastore_container.volume_mounts.append(volume_mount)
+
+        containers = [workflow_engine_container, job_controller_container, datastore_container]
         spec.template.spec = client.V1PodSpec(
             containers=containers,
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
             init_containers=[],
             termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
-            image_pull_secrets=[],
+            image_pull_secrets=[{"name": REANA_DATASTORE_SECRET}],
         )
+
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
@@ -874,11 +937,23 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             volumes += kerberos.volumes
             spec.template.spec.init_containers.append(kerberos.init_container)
 
-        if REANA_JOB_CONTROLLER_SECRET:
-            spec.template.spec.image_pull_secrets = [
-                client.V1LocalObjectReference(name=REANA_JOB_CONTROLLER_SECRET)
-            ]
+        if REANA_DATASTORE_ENABLED:
+            volumes.append({
+                "name": "s3-mounts",
+                "empty_dir": {}
+            })
+            print("test4 \n\n\n\n")
+            volumes.append({
+                "name": "fuse-device",
+                "hostpath": "/dev/fuse",
+            })
+            print("test5 \n\n\n\n")
 
+        if REANA_JOB_CONTROLLER_SECRET:
+            spec.template.spec.image_pull_secrets.append(client.V1LocalObjectReference(name=REANA_JOB_CONTROLLER_SECRET))
+
+        print(volumes)
+        print("test5 \n\n\n\n")
         # filter out volumes with the same name
         spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
 
