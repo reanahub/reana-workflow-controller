@@ -632,7 +632,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
             group="kubernetes.dask.org",
             version="v1",
             plural="daskclusters",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             name=get_dask_component_name(workflow_id, "cluster"),
         )
         logging.info(f"Dask cluster for workflow {workflow_id} deleted successfully.")
@@ -645,7 +645,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
                 group="kubernetes.dask.org",
                 version="v1",
                 plural="daskautoscalers",
-                namespace="default",
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
                 name=get_dask_component_name(workflow_id, "autoscaler"),
             )
             logging.info(
@@ -765,13 +765,13 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
     current_k8s_custom_objects_api_client.create_namespaced_custom_object(
         group="traefik.io",
         version="v1alpha1",
-        namespace="default",
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         plural="middlewares",
         body=middleware_spec,
     )
     # Create the ingress resource
     current_k8s_networking_api_client.create_namespaced_ingress(
-        namespace="default", body=ingress
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=ingress
     )
 
 
@@ -781,7 +781,7 @@ def delete_dask_dashboard_ingress(workflow_id):
     try:
         current_k8s_networking_api_client.delete_namespaced_ingress(
             get_dask_component_name(workflow_id, "dashboard_ingress"),
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             body=client.V1DeleteOptions(),
         )
     except Exception as e:
@@ -793,7 +793,7 @@ def delete_dask_dashboard_ingress(workflow_id):
         current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
             group="traefik.io",
             version="v1alpha1",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             plural="middlewares",
             name=get_dask_component_name(workflow_id, "dashboard_ingress_middleware"),
         )
