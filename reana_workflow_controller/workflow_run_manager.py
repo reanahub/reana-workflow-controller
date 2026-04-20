@@ -12,6 +12,7 @@ import json
 import logging
 import os
 from typing import List, Optional
+import requests
 
 from flask import current_app
 from kubernetes import client
@@ -101,6 +102,11 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     KUEUE_ENABLED,
     KUEUE_LOCAL_QUEUE_NAME,
+    REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS,
+    REANA_JOB_CONTROLLER_SECRET,
+    REANA_DATASTORE_IMAGE,
+    REANA_DATASTORE_ENABLED,
+    REANA_DATASTORE_SECRET,
 )
 
 
@@ -543,7 +549,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     self.workflow.name
                 )
             )
+
         action_completed = True
+        try:
+            requests.post(
+                f"http://{int_session.name}.{REANA_RUNTIME_KUBERNETES_NAMESPACE}:5000/shutdown",
+                timeout=5,
+            )
+        except Exception as e:
+            print(f"Sidecar already down or unreachable: {e}")
+
         try:
             delete_k8s_ingress_object(
                 ingress_name=int_session.name,
@@ -814,6 +829,18 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "value": REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
                 },
                 {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
+                {
+                    "name": "REANA_DATASTORE_IMAGE",
+                    "value": json.dumps(REANA_DATASTORE_IMAGE).replace('"', ""),
+                },
+                {
+                    "name": "REANA_DATASTORE_ENABLED",
+                    "value": json.dumps(REANA_DATASTORE_ENABLED),
+                },
+                {
+                    "name": "REANA_DATASTORE_SECRET",
+                    "value": json.dumps(REANA_DATASTORE_SECRET).replace('"', ""),
+                },
             ]
         )
         # env vars coming from Helm values are added after the ones from r-w-controller
@@ -825,6 +852,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL",
                     "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
+                },
+            )
+        if REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS:
+            job_controller_container.env.append(
+                {
+                    "name": "REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS",
+                    "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS"),
                 },
             )
         if requires_dask(self.workflow):
@@ -845,13 +879,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_container.ports = [
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
         ]
+
         containers = [workflow_engine_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(
             containers=containers,
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
             init_containers=[],
             termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
+            image_pull_secrets=[],
         )
+
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
@@ -863,6 +900,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         if kerberos:
             volumes += kerberos.volumes
             spec.template.spec.init_containers.append(kerberos.init_container)
+
+        if REANA_JOB_CONTROLLER_SECRET:
+            spec.template.spec.image_pull_secrets.append(
+                client.V1LocalObjectReference(name=REANA_JOB_CONTROLLER_SECRET)
+            )
 
         # filter out volumes with the same name
         spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
