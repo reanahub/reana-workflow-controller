@@ -108,7 +108,6 @@ class InteractiveDeploymentK8sBuilder(object):
                     volume_mounts=[],
                     ports=[],
                     image_pull_policy="Always",
-                    lifecycle=[],
                 )
                 containers.append(self._s3_container)
 
@@ -176,9 +175,15 @@ class InteractiveDeploymentK8sBuilder(object):
             type="ClusterIP",
             ports=[
                 client.V1ServicePort(
+                    name="interactive-session",
                     port=InteractiveDeploymentK8sBuilder.internal_service_port,
                     target_port=self.port,
-                )
+                ),
+                client.V1ServicePort(
+                    name="datastore",
+                    port=5000,
+                    target_port=5000,
+                ),
             ],
             selector={"app": self.deployment_name},
         )
@@ -288,21 +293,6 @@ class InteractiveDeploymentK8sBuilder(object):
             privileged=True,
         )
         self._s3_container.security_context = security_context
-
-        # adding umount for correct termination
-        lifecycle_dict = {
-            "preStop": {
-                "exec": {
-                    "command": [
-                        "/bin/sh",
-                        "-c",
-                        "xargs umount -l < /etc/active_mounts.txt || true",
-                    ]
-                }
-            }
-        }
-
-        self._s3_container.lifecycle = lifecycle_dict
 
     def add_cvmfs_repo_mounts(self, cvmfs_repos):
         """Add mounts for the provided CVMFS repositories to the deployment.
