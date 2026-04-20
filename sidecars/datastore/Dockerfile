@@ -9,6 +9,14 @@ RUN mkdir -p /s3-data
 # Copy the scripts
 COPY entrypoint.sh /entrypoint.sh
 COPY app.py /app/app.py
+COPY requirements.txt .
+COPY mount.py /app/mount.py
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencys
+RUN pip install -r requirements.txt
 
 # Make entrypoint executable
 RUN chmod +x /entrypoint.sh

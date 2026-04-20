@@ -36,4 +36,5 @@ recursive-include tests *.running
 recursive-include tests *.waiting
 recursive-include sidecars *.py
 recursive-include sidecars *.sh
+recursive-include sidecars *.txt
 
