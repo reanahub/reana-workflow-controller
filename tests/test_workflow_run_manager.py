@@ -15,6 +15,7 @@ from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
 
 from reana_commons.config import KRB5_INIT_CONTAINER_NAME
+from reana_db.database import Session
 from reana_db.models import (
     RunStatus,
     InteractiveSession,
@@ -156,10 +157,14 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
                 InteractiveSessionType(0).name, expose_secrets=False
             )
 
-            int_session = InteractiveSession.query.filter_by(
-                owner_id=workflow.owner_id,
-                type_=InteractiveSessionType(0).name,
-            ).first()
+            int_session = (
+                Session.query(InteractiveSession)
+                .filter_by(
+                    owner_id=workflow.owner_id,
+                    type_=InteractiveSessionType(0).name,
+                )
+                .first()
+            )
             assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
             assert not workflow.sessions.first()

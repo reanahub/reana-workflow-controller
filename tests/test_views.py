@@ -17,6 +17,7 @@ import fs
 import mock
 import pytest
 from flask import url_for
+from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
     Job,
@@ -301,16 +302,18 @@ def test_create_workflow_with_name(
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
         # Check workflow fetch by id
-        workflow_by_id = Workflow.query.filter(
-            Workflow.id_ == response_data.get("workflow_id")
-        ).first()
+        workflow_by_id = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == response_data.get("workflow_id"))
+            .first()
+        )
         assert workflow_by_id
 
         # Check workflow fetch by name and that name of created workflow
         # is the same that was supplied to `api.create_workflow`
-        workflow_by_name = Workflow.query.filter(
-            Workflow.name == "my_test_workflow"
-        ).first()
+        workflow_by_name = (
+            Session.query(Workflow).filter(Workflow.name == "my_test_workflow").first()
+        )
         assert workflow_by_name
 
         workflow = workflow_by_id
@@ -338,9 +341,11 @@ def test_create_workflow_without_name(
         response_data = json.loads(res.get_data(as_text=True))
 
         # Check workflow fetch by id
-        workflow_by_id = Workflow.query.filter(
-            Workflow.id_ == response_data.get("workflow_id")
-        ).first()
+        workflow_by_id = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == response_data.get("workflow_id"))
+            .first()
+        )
         assert workflow_by_id
 
         # Check workflow fetch by name and that name of created workflow
@@ -352,9 +357,11 @@ def test_create_workflow_without_name(
             reana_workflow_controller.config.DEFAULT_NAME_FOR_WORKFLOWS
         )
 
-        workflow_by_name = Workflow.query.filter(
-            Workflow.name == default_workflow_name
-        ).first()
+        workflow_by_name = (
+            Session.query(Workflow)
+            .filter(Workflow.name == default_workflow_name)
+            .first()
+        )
         assert workflow_by_name
 
         workflow = workflow_by_id
@@ -381,9 +388,11 @@ def test_create_workflow_wrong_user(
 
         assert res.status_code == 404
         response_data = json.loads(res.get_data(as_text=True))
-        workflow = Workflow.query.filter(
-            Workflow.id_ == response_data.get("workflow_id")
-        ).first()
+        workflow = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == response_data.get("workflow_id"))
+            .first()
+        )
         # workflow exists in DB
         assert not workflow
 
@@ -447,7 +456,7 @@ def test_download_file(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         # create file
         file_name = "output name.csv"
         file_binary_content = b"1,2,3,4\n5,6,7,8"
@@ -492,7 +501,7 @@ def test_download_file_with_path(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         # create file
         file_name = "first/1991/output.csv"
         file_binary_content = b"1,2,3,4\n5,6,7,8"
@@ -549,7 +558,7 @@ def test_download_dir_or_wildcard(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         # create files
         files = {
             "foo/1.txt": b"txt in foo dir",
@@ -609,7 +618,7 @@ def test_get_files(app, session, user0, tmp_shared_volume_path, cwl_workflow_wit
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         # create file
         absolute_path_workflow_workspace = workflow.workspace_path
         fs_ = fs.open_fs(absolute_path_workflow_workspace)
@@ -663,7 +672,7 @@ def test_get_files_deleted_workflow(
         )
         assert res.status_code == 200
 
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         assert workflow.status == RunStatus.deleted
         assert not os.path.exists(workflow.workspace_path)
 
@@ -716,7 +725,7 @@ def test_get_workflow_status_with_uuid(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
 
         res = client.get(
             url_for("statuses.get_workflow_status", workflow_id_or_name=workflow_uuid),
@@ -757,7 +766,9 @@ def test_get_workflow_status_with_name(app, session, user0, cwl_workflow_with_na
         session.add(workflow)
         session.commit()
 
-        workflow = Workflow.query.filter(Workflow.name == workflow_name).first()
+        workflow = (
+            Session.query(Workflow).filter(Workflow.name == workflow_name).first()
+        )
 
         res = client.get(
             url_for(
@@ -862,7 +873,11 @@ def test_set_workflow_status(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_created_uuid).first()
+        workflow = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == workflow_created_uuid)
+            .first()
+        )
         assert workflow.status == RunStatus.created
         payload = START
         with mock.patch(
@@ -912,7 +927,11 @@ def test_start_already_started_workflow(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_created_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_created_uuid).first()
+        workflow = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == workflow_created_uuid)
+            .first()
+        )
         assert workflow.status == RunStatus.created
         payload = START
         with mock.patch(
@@ -1077,7 +1096,7 @@ def test_upload_file(
 
         response_data = json.loads(res.get_data(as_text=True))
         workflow_uuid = response_data.get("workflow_id")
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         # create file
         file_name = "dataset.csv"
         file_binary_content = b"1,2,3,4\n5,6,7,8"
@@ -1433,7 +1452,11 @@ def test_start_input_parameters(
         workflow_created_uuid = sample_serial_workflow_in_db.id_
         session.add(sample_serial_workflow_in_db)
         session.commit()
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_created_uuid).first()
+        workflow = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == workflow_created_uuid)
+            .first()
+        )
         assert workflow.status == RunStatus.created
         payload = START
         parameters = {"input_parameters": {"first": "test"}, "operational_options": {}}
@@ -1458,9 +1481,11 @@ def test_start_input_parameters(
                 )
                 json_response = json.loads(res.data.decode())
                 assert json_response.get("status") == status_dict[payload].name
-                workflow = Workflow.query.filter(
-                    Workflow.id_ == workflow_created_uuid
-                ).first()
+                workflow = (
+                    Session.query(Workflow)
+                    .filter(Workflow.id_ == workflow_created_uuid)
+                    .first()
+                )
                 assert workflow.input_parameters == parameters["input_parameters"]
 
 
@@ -1505,7 +1530,7 @@ def test_start_no_input_parameters(
                 )
         json_response = json.loads(res.data.decode())
         assert json_response["status"] == status_dict[payload].name
-        workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+        workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
         assert workflow.input_parameters == dict()
 
 
@@ -1664,9 +1689,11 @@ def test_workspace_deletion(
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
 
-        workflow = Workflow.query.filter(
-            Workflow.id_ == response_data.get("workflow_id")
-        ).first()
+        workflow = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == response_data.get("workflow_id"))
+            .first()
+        )
         assert workflow
 
         # create a job for the workflow
@@ -1694,9 +1721,9 @@ def test_workspace_deletion(
 
         # check that all cache entries for jobs
         # of the deleted workflow are removed
-        cache_entries_after_delete = JobCache.query.filter_by(
-            job_id=workflow_job.id_
-        ).all()
+        cache_entries_after_delete = (
+            Session.query(JobCache).filter_by(job_id=workflow_job.id_).all()
+        )
         assert not cache_entries_after_delete
 
 
@@ -1717,9 +1744,11 @@ def test_deletion_of_workspace_of_an_already_deleted_workflow(
         assert res.status_code == 201
         response_data = json.loads(res.get_data(as_text=True))
 
-        workflow = Workflow.query.filter(
-            Workflow.id_ == response_data.get("workflow_id")
-        ).first()
+        workflow = (
+            Session.query(Workflow)
+            .filter(Workflow.id_ == response_data.get("workflow_id"))
+            .first()
+        )
         assert workflow
 
         # check that the workflow workspace exists

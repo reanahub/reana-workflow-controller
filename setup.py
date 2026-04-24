@@ -33,7 +33,7 @@ extras_require = {
         "sphinxcontrib-redoc>=1.5.1",
     ],
     "tests": [
-        "pytest-reana>=0.95.0a4,<0.96.0",
+        "pytest-reana>=0.95.0a9,<0.96.0",
     ],
 }
 
@@ -44,21 +44,21 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base/reana-server
-    "Werkzeug>=2.1.0,<2.3.0",  # same upper pin as invenio-base
+    "Flask>=3.0.0,<4.0.0",
+    "Werkzeug>=3.0.0",
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
-    "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
+    "marshmallow>=3.5.0,<4.0.0",
     "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.95.0a14,<0.96.0",
-    "reana-db>=0.95.0a6,<0.96.0",
+    "reana-commons[kubernetes]>=0.95.0a15,<0.96.0",
+    "reana-db>=0.95.0a7,<0.96.0",
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
     "pyuwsgi>=2.0.17",
     "uwsgitop>=0.10",
-    "webargs>=6.1.0,<7.0.0",
+    "webargs>=8.0",
 ]
 
 packages = find_packages()

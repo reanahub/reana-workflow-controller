@@ -19,6 +19,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import and_, nullslast, or_, select
 from sqlalchemy.orm import aliased
 from sqlalchemy.exc import IntegrityError
+import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_args, use_kwargs
 from reana_commons.config import WORKFLOW_TIME_FORMAT
@@ -80,18 +81,19 @@ blueprint = Blueprint("workflows", __name__)
     {
         "include_progress": fields.Bool(),
         "include_workspace_size": fields.Bool(),
-        "search": fields.String(missing=""),
-        "sort": fields.String(missing="desc"),
-        "status": fields.String(missing=""),
+        "search": fields.String(load_default=""),
+        "sort": fields.String(load_default="desc"),
+        "status": fields.String(load_default=""),
         "type": fields.String(required=True),
         "user": fields.String(required=True),
-        "verbose": fields.Bool(missing=False),
+        "verbose": fields.Bool(load_default=False),
         "workflow_id_or_name": fields.String(),
-        "shared": fields.Bool(missing=False),
+        "shared": fields.Bool(load_default=False),
         "shared_by": fields.String(),
         "shared_with": fields.String(),
     },
     location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def get_workflows(args, paginate=None):  # noqa
     r"""Get all workflows.
@@ -318,7 +320,7 @@ def get_workflows(args, paginate=None):  # noqa
 
     try:
 
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
 
@@ -590,7 +592,7 @@ def create_workflow():  # noqa
     """
     try:
         user_uuid = request.args["user"]
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return (
                 jsonify(
@@ -946,7 +948,9 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/retention_rules")
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
     r"""Get the retention rules of a workflow.
 
@@ -1058,7 +1062,9 @@ def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/share", methods=["POST"])
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 @use_kwargs(
     {
         "user_email_to_share_with": fields.Str(required=True),
@@ -1170,7 +1176,7 @@ def share_workflow(
     valid_until = kwargs.get("valid_until")
 
     try:
-        sharer = User.query.filter(User.id_ == user).first()
+        sharer = Session.query(User).filter(User.id_ == user).first()
         if not sharer:
             return (
                 jsonify({"message": f"User with id '{user}' does not exist."}),
@@ -1243,6 +1249,7 @@ def share_workflow(
         "user_email_to_unshare_with": fields.Str(required=True),
     },
     location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def unshare_workflow(
     workflow_id_or_name: str, user: str, user_email_to_unshare_with: str
@@ -1362,7 +1369,7 @@ def unshare_workflow(
               }
     """
     try:
-        sharer = User.query.filter(User.id_ == user).first()
+        sharer = Session.query(User).filter(User.id_ == user).first()
         if not sharer:
             return (
                 jsonify({"message": f"User with id '{sharer}' does not exist."}),
@@ -1411,7 +1418,9 @@ def unshare_workflow(
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/share-status", methods=["GET"])
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 def get_workflow_share_status(
     workflow_id_or_name: str,
     user: str,

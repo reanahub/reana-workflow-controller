@@ -45,14 +45,14 @@ def _create_files(workspace_path, paths):
 def _mock_workspace_access(monkeypatch, workspace_path):
     """Mock user and workflow lookups for workspace route tests."""
 
-    class _UserQuery:
+    class _Query:
         def filter(self, *args, **kwargs):
             return self
 
         def first(self):
             return SimpleNamespace(id_="user-1")
 
-    monkeypatch.setattr(workflows_workspace.User, "query", _UserQuery(), raising=False)
+    monkeypatch.setattr(workflows_workspace.Session, "query", lambda *a, **kw: _Query())
     monkeypatch.setattr(
         workflows_workspace,
         "_get_workflow_with_uuid_or_name",

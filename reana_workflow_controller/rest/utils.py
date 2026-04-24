@@ -266,10 +266,14 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                     remove_workflow_workspace(workflow.workspace_path)
                     # 3. update the disk usage of the user
                     disk_resource = get_default_quota_resource(ResourceType.disk.name)
-                    workflow_disk_resource = WorkflowResource.query.filter(
-                        WorkflowResource.workflow_id == workflow.id_,
-                        WorkflowResource.resource_id == disk_resource.id_,
-                    ).one_or_none()
+                    workflow_disk_resource = (
+                        Session.query(WorkflowResource)
+                        .filter(
+                            WorkflowResource.workflow_id == workflow.id_,
+                            WorkflowResource.resource_id == disk_resource.id_,
+                        )
+                        .one_or_none()
+                    )
                     disk_usage = None
                     if workflow_disk_resource:
                         disk_usage = workflow_disk_resource.quota_used

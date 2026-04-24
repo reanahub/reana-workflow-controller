@@ -24,6 +24,7 @@ from werkzeug.exceptions import BadRequest, NotFound
 
 from reana_commons import workspace
 from reana_commons.errors import REANAWorkspaceError
+from reana_db.database import Session
 from reana_db.models import User
 from reana_db.utils import (
     _get_workflow_with_uuid_or_name,
@@ -248,7 +249,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
     """
     try:
         user_uuid = request.args["user"]
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
@@ -337,7 +338,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
     """
     try:
         user_uuid = request.args["user"]
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 
@@ -471,7 +472,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
     try:
         user_uuid = request.args["user"]
         search = request.args.get("search")
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user)}), 404
 

@@ -167,7 +167,7 @@ def _validate_interactive_session_image(type_: str, user_image: Optional[str]) -
 class WorkflowRunManager:
     """Interface which specifies how to manage workflow runs."""
 
-    if os.getenv("FLASK_ENV") == "development":
+    if os.getenv("FLASK_DEBUG", "").lower() in ("1", "true"):
         WORKFLOW_ENGINE_COMMON_ENV_VARS.extend(DEBUG_ENV_VARS)
 
     engine_mapping = {
@@ -533,9 +533,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def stop_interactive_session(self, interactive_session_id):
         """Stop an interactive workflow run."""
-        int_session = InteractiveSession.query.filter_by(
-            id_=interactive_session_id
-        ).first()
+        int_session = (
+            Session.query(InteractiveSession)
+            .filter_by(id_=interactive_session_id)
+            .first()
+        )
 
         if not int_session:
             raise REANAInteractiveSessionError(
@@ -867,7 +869,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         # filter out volumes with the same name
         spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
 
-        if os.getenv("FLASK_ENV") == "development":
+        if os.getenv("FLASK_DEBUG", "").lower() in ("1", "true"):
             code_volume_name = "reana-code"
             code_mount_path = "/code"
             k8s_code_volume = client.V1Volume(name=code_volume_name)

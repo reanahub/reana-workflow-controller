@@ -11,6 +11,7 @@
 import json
 
 from flask import Blueprint, jsonify, request
+import marshmallow
 from webargs import fields
 from webargs.flaskparser import use_kwargs
 
@@ -362,6 +363,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         "status": fields.Str(required=True),
     },
     location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def set_workflow_status(
     workflow_id_or_name: str, user: str, status: str, **parameters: dict

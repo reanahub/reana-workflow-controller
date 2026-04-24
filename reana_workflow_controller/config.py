@@ -227,7 +227,7 @@ DEBUG_ENV_VARS = (
         "value": os.getenv("WDB_SOCKET_SERVER", f"{REANA_COMPONENT_PREFIX}-wdb"),
     },
     {"name": "WDB_NO_BROWSER_AUTO_OPEN", "value": "True"},
-    {"name": "FLASK_ENV", "value": "development"},
+    {"name": "FLASK_DEBUG", "value": "1"},
 )
 """Common to all workflow engines environment variables for debug mode."""
 

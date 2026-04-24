@@ -8,6 +8,7 @@
 
 """REANA Workflow Controller interactive sessions REST API."""
 
+import marshmallow
 from flask import Blueprint, jsonify, request
 from webargs import fields
 from webargs.flaskparser import use_kwargs
@@ -24,7 +25,9 @@ blueprint = Blueprint("workflows_session", __name__)
     "/workflows/<workflow_id_or_name>/open/<interactive_session_type>",
     methods=["POST"],
 )
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 @use_kwargs({"image": fields.Str()}, location="json")
 def open_interactive_session(
     workflow_id_or_name, interactive_session_type, user, **kwargs
