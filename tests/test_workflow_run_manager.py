@@ -117,7 +117,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
                 "current_k8s_networking_api_client"
             ].delete_namespaced_ingress.assert_called_once()
             mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
-            assert not sample_serial_workflow_in_db.sessions.all()
+            assert not sample_serial_workflow_in_db.sessions
 
 
 def test_stop_workflow_backend_only_kubernetes(
@@ -167,7 +167,7 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
             )
             assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
-            assert not workflow.sessions.first()
+            assert not workflow.sessions
 
 
 def test_container_image_aliases():

@@ -124,7 +124,7 @@ def test_delete_workflow_with_interactive_session(
         data = json.loads(response.get_data())
         assert "Workflow successfully deleted" in data["message"]
         assert http_response == 200
-        assert not len(workflow.sessions.all())
+        assert not workflow.sessions
 
 
 @pytest.mark.parametrize("workspace", [True, False])

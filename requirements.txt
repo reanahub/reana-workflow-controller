@@ -58,7 +58,7 @@ pytz==2026.1.post1        # via bravado-core
 pyuwsgi==2.0.30.post1     # via reana-workflow-controller (setup.py)
 pyyaml==6.0.3             # via bravado, bravado-core, kubernetes, reana-commons, swagger-spec-validator
 reana-commons[kubernetes]==0.95.0a15  # via reana-db, reana-workflow-controller (setup.py)
-reana-db==0.95.0a7        # via reana-workflow-controller (setup.py)
+reana-db==0.95.0a8        # via reana-workflow-controller (setup.py)
 referencing==0.37.0       # via jsonschema, jsonschema-specifications
 requests==2.33.1          # via bravado, bravado-core, kubernetes, opensearch-py, reana-workflow-controller (setup.py), requests-oauthlib
 requests-oauthlib==2.0.0  # via kubernetes

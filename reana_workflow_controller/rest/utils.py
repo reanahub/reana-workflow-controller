@@ -256,7 +256,7 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                 )
             for workflow in to_be_deleted:
                 # 1. Stop open interactive sessions
-                int_session = workflow.sessions.first()
+                int_session = workflow.sessions[0] if workflow.sessions else None
                 if int_session:
                     kwrm = KubernetesWorkflowRunManager(workflow)
                     kwrm.stop_interactive_session(int_session.id_)
