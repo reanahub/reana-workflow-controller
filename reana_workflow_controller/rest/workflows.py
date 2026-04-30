@@ -11,7 +11,7 @@
 import datetime
 import json
 import logging
-import re
+import gc
 from typing import Optional
 from uuid import uuid4
 
@@ -19,6 +19,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import and_, nullslast, or_, select
 from sqlalchemy.orm import aliased
 from sqlalchemy.exc import IntegrityError
+import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_args, use_kwargs
 from reana_commons.config import WORKFLOW_TIME_FORMAT
@@ -44,6 +45,7 @@ from reana_workflow_controller.config import (
     REANA_URL,
     DEFAULT_NAME_FOR_WORKFLOWS,
     MAX_WORKFLOW_SHARING_MESSAGE_LENGTH,
+    FORCE_GARBAGE_COLLECTION,
 )
 from reana_workflow_controller.errors import (
     REANAWorkflowControllerError,
@@ -79,18 +81,19 @@ blueprint = Blueprint("workflows", __name__)
     {
         "include_progress": fields.Bool(),
         "include_workspace_size": fields.Bool(),
-        "search": fields.String(missing=""),
-        "sort": fields.String(missing="desc"),
-        "status": fields.String(missing=""),
+        "search": fields.String(load_default=""),
+        "sort": fields.String(load_default="desc"),
+        "status": fields.String(load_default=""),
         "type": fields.String(required=True),
         "user": fields.String(required=True),
-        "verbose": fields.Bool(missing=False),
+        "verbose": fields.Bool(load_default=False),
         "workflow_id_or_name": fields.String(),
-        "shared": fields.Bool(missing=False),
+        "shared": fields.Bool(load_default=False),
         "shared_by": fields.String(),
         "shared_with": fields.String(),
     },
     location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def get_workflows(args, paginate=None):  # noqa
     r"""Get all workflows.
@@ -308,46 +311,56 @@ def get_workflows(args, paginate=None):  # noqa
     shared_by: Optional[str] = args.get("shared_by")
     shared_with: Optional[str] = args.get("shared_with")
 
+    if "list" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
+
     if shared_by and shared_with:
         message = "You cannot filter by shared_by and shared_with at the same time."
         return (jsonify({"message": message}), 400)
 
     try:
 
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
 
+        owned_workflows = Session.query(Workflow).filter(Workflow.owner_id == user.id_)
+        shared_with_me = (
+            Session.query(Workflow)
+            .join(UserWorkflow, UserWorkflow.workflow_id == Workflow.id_)
+            .filter(UserWorkflow.user_id == user.id_)
+        )
+
         # default case: retrieve owned workflows
-        query = user.workflows
+        query = owned_workflows
         if shared_with:
             if shared_with == "nobody":
                 # retrieve owned unshared workflows
-                query = user.workflows.filter(
+                query = owned_workflows.filter(
                     Workflow.id_.notin_(select(UserWorkflow.workflow_id))
                 )
             elif shared_with == "anybody":
                 # retrieve exclusively owned shared workflows
-                query = user.workflows.filter(
+                query = owned_workflows.filter(
                     Workflow.id_.in_(select(UserWorkflow.workflow_id))
                 )
             else:
                 # retrieve owned workflows shared with specific user
-                query = user.workflows.filter(
+                query = owned_workflows.filter(
                     Workflow.users_it_is_shared_with.any(User.email == shared_with)
                 )
         elif shared_by:
             if shared_by == "anybody":
                 # retrieve unowned workflows shared by anyone
-                query = user.workflows_shared_with_me
+                query = shared_with_me
             else:
                 # retrieve unowned workflows shared by specific user
-                query = user.workflows_shared_with_me.filter(
+                query = shared_with_me.filter(
                     Workflow.owner.has(User.email == shared_by)
                 )
         elif shared:
             # retrieve all workflows, owned and shared with user
-            query = user.workflows.union_all(user.workflows_shared_with_me)
+            query = owned_workflows.union_all(shared_with_me)
 
         if search:
             search = json.loads(search)
@@ -393,10 +406,8 @@ def get_workflows(args, paginate=None):  # noqa
             owner_email = owners[workflow.owner_id]
             if workflow.owner_id == user.id_:
                 shared_with = [
-                    user.email
-                    for user in workflow.users_it_is_shared_with.with_entities(
-                        User.email
-                    )
+                    shared_user.email
+                    for shared_user in workflow.users_it_is_shared_with
                 ]
             else:
                 shared_with = []
@@ -417,7 +428,7 @@ def get_workflows(args, paginate=None):  # noqa
 
             if requires_dask(workflow):
 
-                dask_service = workflow.services.first()
+                dask_service = workflow.services[0] if workflow.services else None
                 if dask_service and dask_service.status == ServiceStatus.created:
                     pod_readiness = check_pod_readiness_by_prefix(
                         pod_name_prefix=get_dask_component_name(workflow.id_, "cluster")
@@ -428,7 +439,7 @@ def get_workflows(args, paginate=None):  # noqa
                         db_session = Session.object_session(dask_service)
                         db_session.commit()
 
-            services = workflow.services.all()
+            services = workflow.services
             services_serialized = [
                 {
                     "name": service.name,
@@ -440,7 +451,7 @@ def get_workflows(args, paginate=None):  # noqa
             workflow_response["services"] = services_serialized
 
             if type_ == "interactive" or verbose:
-                int_session = workflow.sessions.first()
+                int_session = workflow.sessions[0] if workflow.sessions else None
                 if int_session:
                     workflow_response["session_type"] = int_session.type_.name
                     workflow_response["session_uri"] = int_session.path
@@ -475,7 +486,10 @@ def get_workflows(args, paginate=None):  # noqa
                 workflow_response["size"] = empty_disk_usage
             workflows.append(workflow_response)
         pagination_dict["items"] = workflows
-        pagination_dict["user_has_workflows"] = user.workflows.first() is not None
+        pagination_dict["user_has_workflows"] = (
+            Session.query(Workflow.id_).filter(Workflow.owner_id == user.id_).first()
+            is not None
+        )
         return jsonify(pagination_dict), 200
     except (ValueError, KeyError):
         return jsonify({"message": "Malformed request."}), 400
@@ -586,7 +600,7 @@ def create_workflow():  # noqa
     """
     try:
         user_uuid = request.args["user"]
-        user = User.query.filter(User.id_ == user_uuid).first()
+        user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return (
                 jsonify(
@@ -942,7 +956,9 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/retention_rules")
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
     r"""Get the retention rules of a workflow.
 
@@ -1038,7 +1054,7 @@ def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
     try:
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user, True)
 
-        rules = workflow.retention_rules.all()
+        rules = workflow.retention_rules
         response = {
             "workflow_id": workflow.id_,
             "workflow_name": workflow.get_full_workflow_name(),
@@ -1054,7 +1070,9 @@ def get_workflow_retention_rules(workflow_id_or_name: str, user: str):
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/share", methods=["POST"])
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 @use_kwargs(
     {
         "user_email_to_share_with": fields.Str(required=True),
@@ -1166,7 +1184,7 @@ def share_workflow(
     valid_until = kwargs.get("valid_until")
 
     try:
-        sharer = User.query.filter(User.id_ == user).first()
+        sharer = Session.query(User).filter(User.id_ == user).first()
         if not sharer:
             return (
                 jsonify({"message": f"User with id '{user}' does not exist."}),
@@ -1239,6 +1257,7 @@ def share_workflow(
         "user_email_to_unshare_with": fields.Str(required=True),
     },
     location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def unshare_workflow(
     workflow_id_or_name: str, user: str, user_email_to_unshare_with: str
@@ -1358,7 +1377,7 @@ def unshare_workflow(
               }
     """
     try:
-        sharer = User.query.filter(User.id_ == user).first()
+        sharer = Session.query(User).filter(User.id_ == user).first()
         if not sharer:
             return (
                 jsonify({"message": f"User with id '{sharer}' does not exist."}),
@@ -1407,7 +1426,9 @@ def unshare_workflow(
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/share-status", methods=["GET"])
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 def get_workflow_share_status(
     workflow_id_or_name: str,
     user: str,

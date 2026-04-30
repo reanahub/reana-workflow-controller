@@ -5,6 +5,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Dask resource manager."""
+
 import logging
 import os
 import yaml
@@ -146,7 +147,12 @@ class DaskResourceManager:
             logging.error(
                 f"An error occured while trying to create dask cluster, now deleting the cluster... Error message:\n{e}"
             )
-            delete_dask_cluster(self.workflow_id, self.user_id)
+            try:
+                delete_dask_cluster(self.workflow_id, self.user_id)
+            except Exception:
+                logging.exception(
+                    "Failed to clean up Dask resources after creation error."
+                )
 
     def _prepare_cluster(self):
         """Prepare Dask cluster body by adding necessary image-pull secrets, volumes, volume mounts, init containers and sidecar containers."""
@@ -247,17 +253,17 @@ class DaskResourceManager:
         self.autoscaler_body["spec"]["maximum"] = self.num_of_workers
 
     def _add_image_pull_secrets(self):
-        """Attach the configured image pull secrets to scheduler and worker containers."""
+        """Attach the configured image pull secrets to scheduler and worker pods."""
         image_pull_secrets = []
         for secret_name in current_app.config["IMAGE_PULL_SECRETS"]:
             if secret_name:
                 image_pull_secrets.append({"name": secret_name})
 
-        self.cluster_body["spec"]["worker"]["spec"]["containers"][0][
+        self.cluster_body["spec"]["worker"]["spec"][
             "imagePullSecrets"
         ] = image_pull_secrets
 
-        self.cluster_body["spec"]["scheduler"]["spec"]["containers"][0][
+        self.cluster_body["spec"]["scheduler"]["spec"][
             "imagePullSecrets"
         ] = image_pull_secrets
 
@@ -633,7 +639,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
             group="kubernetes.dask.org",
             version="v1",
             plural="daskclusters",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             name=get_dask_component_name(workflow_id, "cluster"),
         )
         logging.info(f"Dask cluster for workflow {workflow_id} deleted successfully.")
@@ -646,7 +652,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
                 group="kubernetes.dask.org",
                 version="v1",
                 plural="daskautoscalers",
-                namespace="default",
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
                 name=get_dask_component_name(workflow_id, "autoscaler"),
             )
             logging.info(
@@ -768,13 +774,13 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
     current_k8s_custom_objects_api_client.create_namespaced_custom_object(
         group="traefik.io",
         version="v1alpha1",
-        namespace="default",
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         plural="middlewares",
         body=middleware_spec,
     )
     # Create the ingress resource
     current_k8s_networking_api_client.create_namespaced_ingress(
-        namespace="default", body=ingress
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=ingress
     )
 
 
@@ -784,7 +790,7 @@ def delete_dask_dashboard_ingress(workflow_id):
     try:
         current_k8s_networking_api_client.delete_namespaced_ingress(
             get_dask_component_name(workflow_id, "dashboard_ingress"),
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             body=client.V1DeleteOptions(),
         )
     except Exception as e:
@@ -796,7 +802,7 @@ def delete_dask_dashboard_ingress(workflow_id):
         current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
             group="traefik.io",
             version="v1alpha1",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             plural="middlewares",
             name=get_dask_component_name(workflow_id, "dashboard_ingress_middleware"),
         )

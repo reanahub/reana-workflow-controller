@@ -9,7 +9,7 @@
 """REANA Workflow Controller workflows REST API."""
 
 import difflib
-import fs
+import gc
 import json
 import logging
 import mimetypes
@@ -63,6 +63,8 @@ from reana_workflow_controller.config import (
     PROGRESS_STATUSES,
     REANA_GITLAB_HOST,
     PREVIEWABLE_MIME_TYPE_PREFIXES,
+    FORCE_GARBAGE_COLLECTION,
+    WORKSPACE_DISPLAY_FILE_LIMIT,
 )
 from reana_workflow_controller.consumer import _update_workflow_status
 from reana_workflow_controller.errors import (
@@ -72,6 +74,12 @@ from reana_workflow_controller.errors import (
     REANAWorkflowStatusError,
 )
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
+
+WORKSPACE_FILE_LISTING_FILTER_HINT = (
+    "Please use more specific filters to narrow the results. "
+    "Available filters: file name, size, or last-modified."
+)
+"""Neutral filter hint shown when workspace listings exceed the display limit."""
 
 
 def start_workflow(workflow, parameters):
@@ -222,6 +230,9 @@ def remove_workflow_jobs_from_cache(workflow):
 
 def delete_workflow(workflow, all_runs=False, workspace=False):
     """Delete workflow."""
+    if "delete" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
+
     if workflow.status in [
         RunStatus.created,
         RunStatus.finished,
@@ -245,7 +256,7 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                 )
             for workflow in to_be_deleted:
                 # 1. Stop open interactive sessions
-                int_session = workflow.sessions.first()
+                int_session = workflow.sessions[0] if workflow.sessions else None
                 if int_session:
                     kwrm = KubernetesWorkflowRunManager(workflow)
                     kwrm.stop_interactive_session(int_session.id_)
@@ -255,10 +266,14 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                     remove_workflow_workspace(workflow.workspace_path)
                     # 3. update the disk usage of the user
                     disk_resource = get_default_quota_resource(ResourceType.disk.name)
-                    workflow_disk_resource = WorkflowResource.query.filter(
-                        WorkflowResource.workflow_id == workflow.id_,
-                        WorkflowResource.resource_id == disk_resource.id_,
-                    ).one_or_none()
+                    workflow_disk_resource = (
+                        Session.query(WorkflowResource)
+                        .filter(
+                            WorkflowResource.workflow_id == workflow.id_,
+                            WorkflowResource.resource_id == disk_resource.id_,
+                        )
+                        .one_or_none()
+                    )
                     disk_usage = None
                     if workflow_disk_resource:
                         disk_usage = workflow_disk_resource.quota_used
@@ -434,8 +449,16 @@ def list_directory_files(
     workspace_path: str, search: Dict[str, List[str]] = None
 ) -> List[dict]:
     """Return a list of files inside a given workspace."""
+    if "ls" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     file_list = []
     for file_name in workspace.walk(workspace_path, include_dirs=False):
+        if len(file_list) >= WORKSPACE_DISPLAY_FILE_LIMIT:
+            raise BadRequest(
+                "Too many files to display "
+                f"(limit={WORKSPACE_DISPLAY_FILE_LIMIT}). "
+                f"{WORKSPACE_FILE_LISTING_FILTER_HINT}"
+            )
         st = workspace.lstat(workspace_path, file_name)
         file_info = {
             "name": file_name,
@@ -465,10 +488,12 @@ def remove_files_recursive_wildcard(workspace_path, path_or_pattern):
     :param workspace_path: Directory to delete files from.
     :param path_or_pattern: Wildcard pattern to use for the removal.
     :return: Dictionary with the results:
-       - dictionary with names of succesfully deleted files and their sizes
+       - dictionary with names of successfully deleted files and their sizes
        - dictionary with names of failed deletions and corresponding
        error messages.
     """
+    if "rm" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     deleted = {"deleted": {}, "failed": {}}
     for file_name in workspace.glob_or_walk_directory(
         workspace_path, path_or_pattern, topdown=False
@@ -488,12 +513,20 @@ def list_files_recursive_wildcard(workspace_path, path_or_pattern, search=None):
     :param workspace_path: Directory to list files from.
     :param path_or_pattern: Wildcard pattern to use for the listing.
     :return: Dictionary with the results:
-       - dictionary with names of succesfully listed files and their sizes
+       - dictionary with names of successfully listed files and their sizes
        - dictionary with names of failed listing and corresponding
        error messages.
     """
+    if "ls" in FORCE_GARBAGE_COLLECTION:
+        gc.collect()
     list_files_recursive = []
     for path in workspace.glob_or_walk_directory(workspace_path, path_or_pattern):
+        if len(list_files_recursive) >= WORKSPACE_DISPLAY_FILE_LIMIT:
+            raise BadRequest(
+                "Too many files to display "
+                f"(limit={WORKSPACE_DISPLAY_FILE_LIMIT}). "
+                f"{WORKSPACE_FILE_LISTING_FILTER_HINT}"
+            )
         st = workspace.lstat(workspace_path, path)
         raw_size = st.st_size
         mtime = st.st_mtime

@@ -17,6 +17,7 @@ from typing import ContextManager
 
 import mock
 import pytest
+from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
     InteractiveSessionType,
@@ -119,11 +120,11 @@ def test_delete_workflow_with_interactive_session(
         "reana_workflow_controller.k8s",
         current_k8s_networking_api_client=mock.DEFAULT,
     ):
-        (response, http_response) = delete_workflow(workflow)
+        response, http_response = delete_workflow(workflow)
         data = json.loads(response.get_data())
         assert "Workflow successfully deleted" in data["message"]
         assert http_response == 200
-        assert not len(workflow.sessions.all())
+        assert not workflow.sessions
 
 
 @pytest.mark.parametrize("workspace", [True, False])
@@ -197,7 +198,9 @@ def test_workspace_deletion(
 
     # check that all cache entries for jobs
     # of the deleted workflow are removed
-    cache_entries_after_delete = JobCache.query.filter_by(job_id=workflow_job.id_).all()
+    cache_entries_after_delete = (
+        Session.query(JobCache).filter_by(job_id=workflow_job.id_).all()
+    )
     assert not cache_entries_after_delete
     assert not os.path.exists(cache_dir_path)
 

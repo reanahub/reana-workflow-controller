@@ -85,15 +85,15 @@ def test_add_image_pull_secrets(dask_resource_manager):
         # Assert
         expected_image_pull_secrets = [{"name": "my-secret"}]
         assert (
-            dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["containers"][
-                0
-            ]["imagePullSecrets"]
+            dask_resource_manager.cluster_body["spec"]["worker"]["spec"][
+                "imagePullSecrets"
+            ]
             == expected_image_pull_secrets
         )
         assert (
             dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"][
-                "containers"
-            ][0]["imagePullSecrets"]
+                "imagePullSecrets"
+            ]
             == expected_image_pull_secrets
         )
 
@@ -151,6 +151,23 @@ def test_add_hostpath_volumes_with_mounts(
             dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["volumes"]
             == expected_volumes
         )
+
+
+def test_create_dask_resources_cleanup_error_is_swallowed(dask_resource_manager):
+    """Test that cleanup errors after creation failure do not propagate."""
+    with patch.object(
+        dask_resource_manager,
+        "_prepare_cluster",
+    ), patch.object(
+        dask_resource_manager,
+        "_create_dask_cluster",
+        side_effect=Exception("CRD not found"),
+    ), patch(
+        "reana_workflow_controller.dask.delete_dask_cluster",
+        side_effect=RuntimeError("cleanup failed"),
+    ):
+        # Should not raise despite both creation and cleanup failing
+        dask_resource_manager.create_dask_resources()
 
 
 def test_create_dask_resources(dask_resource_manager):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -33,7 +33,7 @@ extras_require = {
         "sphinxcontrib-redoc>=1.5.1",
     ],
     "tests": [
-        "pytest-reana>=0.95.0a4,<0.96.0",
+        "pytest-reana>=0.95.0a9,<0.96.0",
     ],
 }
 
@@ -44,21 +44,21 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base/reana-server
-    "Werkzeug>=2.1.0,<2.3.0",  # same upper pin as invenio-base
+    "Flask>=3.0.0,<4.0.0",
+    "Werkzeug>=3.0.0",
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
-    "marshmallow>2.13.0,<3.0.0",  # same upper pin as reana-server
+    "marshmallow>=3.5.0,<4.0.0",
     "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.95.0a9,<0.96.0",
-    "reana-db>=0.95.0a5,<0.96.0",
+    "reana-commons[kubernetes]>=0.95.0a15,<0.96.0",
+    "reana-db>=0.95.0a8,<0.96.0",
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
-    "uWSGI>=2.0.17",
+    "pyuwsgi>=2.0.17",
     "uwsgitop>=0.10",
-    "webargs>=6.1.0,<7.0.0",
+    "webargs>=8.0",
 ]
 
 packages = find_packages()

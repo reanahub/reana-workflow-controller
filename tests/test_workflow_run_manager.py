@@ -15,6 +15,7 @@ from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
 
 from reana_commons.config import KRB5_INIT_CONTAINER_NAME
+from reana_db.database import Session
 from reana_db.models import (
     RunStatus,
     InteractiveSession,
@@ -116,7 +117,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
                 "current_k8s_networking_api_client"
             ].delete_namespaced_ingress.assert_called_once()
             mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
-            assert not sample_serial_workflow_in_db.sessions.all()
+            assert not sample_serial_workflow_in_db.sessions
 
 
 def test_stop_workflow_backend_only_kubernetes(
@@ -156,13 +157,17 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
                 InteractiveSessionType(0).name, expose_secrets=False
             )
 
-            int_session = InteractiveSession.query.filter_by(
-                owner_id=workflow.owner_id,
-                type_=InteractiveSessionType(0).name,
-            ).first()
+            int_session = (
+                Session.query(InteractiveSession)
+                .filter_by(
+                    owner_id=workflow.owner_id,
+                    type_=InteractiveSessionType(0).name,
+                )
+                .first()
+            )
             assert int_session.status == RunStatus.created
             kwrm.stop_interactive_session(int_session.id_)
-            assert not workflow.sessions.first()
+            assert not workflow.sessions
 
 
 def test_container_image_aliases():
