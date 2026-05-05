@@ -28,18 +28,18 @@ def _env_vars_dict_to_k8s_list(env_vars):
     return [{"name": name, "value": str(value)} for name, value in env_vars.items()]
 
 
-def compose_reana_url(hostname: str, hostport: int) -> str:
+def compose_reana_url(hostname: str, hostport: str | int) -> str:
     """
     Compose a REANA API URL while omitting the default HTTPS port (443).
 
     Args:
         hostname (str): The REANA hostname.
-        hostport (int): The REANA host port.
+        hostport (str | int): The REANA host port.
 
     Returns:
         str: The full base URL.
     """
-    if hostport == 443:
+    if str(hostport) == "443":
         return f"https://{hostname}"
     return f"https://{hostname}:{hostport}"
 
