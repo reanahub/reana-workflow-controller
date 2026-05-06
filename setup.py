@@ -33,7 +33,10 @@ extras_require = {
         "sphinxcontrib-redoc>=1.5.1",
     ],
     "tests": [
-        "pytest-reana>=0.95.0a9,<0.96.0",
+        "apispec[yaml]>=3.0",
+        "apispec-webframeworks",
+        "reana-commons[kubernetes,tests]>=0.95.0a17,<0.96.0",
+        "reana-db[tests]>=0.95.0a9,<0.96.0",
     ],
 }
 
@@ -51,8 +54,8 @@ install_requires = [
     "marshmallow>=3.5.0,<4.0.0",
     "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
-    "reana-commons[kubernetes]>=0.95.0a15,<0.96.0",
-    "reana-db>=0.95.0a8,<0.96.0",
+    "reana-commons[kubernetes]>=0.95.0a17,<0.96.0",
+    "reana-db>=0.95.0a9,<0.96.0",
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
