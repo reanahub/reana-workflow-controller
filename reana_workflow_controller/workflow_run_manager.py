@@ -637,6 +637,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         labels = {
             "reana_workflow_mode": "batch",
             "reana-run-batch-workflow-uuid": str(self.workflow.id_),
+            "workflow-uuid": str(self.workflow.id_),
             "user-uuid": owner_id,
         }
 
