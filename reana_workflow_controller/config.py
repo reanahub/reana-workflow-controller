@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -192,6 +192,13 @@ REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT = os.getenv(
 
 Please see the following URL for more details
 https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
+"""
+
+REANA_KUBERNETES_JOBS_MIN_USER_UID = os.getenv("REANA_KUBERNETES_JOBS_MIN_USER_UID")
+"""Minimum accepted user runtime container UID that users can assign to their job
+containers via ``kubernetes_uid`` in ``reana.yaml``. Jobs requesting a smaller
+UID are refused at submission time with a clear error message. Forwarded to
+reana-job-controller via the job batch pod environment.
 """
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [

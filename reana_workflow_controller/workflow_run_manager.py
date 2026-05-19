@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -86,6 +86,7 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+    REANA_KUBERNETES_JOBS_MIN_USER_UID,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE,
@@ -818,6 +819,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
             ]
         )
+        if REANA_KUBERNETES_JOBS_MIN_USER_UID:
+            job_controller_container.env.append(
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MIN_USER_UID",
+                    "value": REANA_KUBERNETES_JOBS_MIN_USER_UID,
+                },
+            )
         # env vars coming from Helm values are added after the ones from r-w-controller
         # so that the former can override the latter in case of necessity
         job_controller_container.env.extend(copy.deepcopy(JOB_CONTROLLER_ENV_VARS))
