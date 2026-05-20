@@ -705,6 +705,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workflow_engine_container.security_context = client.V1SecurityContext(
             run_as_group=WORKFLOW_RUNTIME_USER_GID,
             run_as_user=WORKFLOW_RUNTIME_USER_UID,
+            run_as_non_root=True,
             allow_privilege_escalation=False,
         )
         workflow_engine_container.volume_mounts = [workspace_mount]
