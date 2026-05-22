@@ -70,42 +70,15 @@ RUN if test -e modules/reana-commons; then \
 RUN pip check
 
 # Set useful environment variables
-ARG UWSGI_BUFFER_SIZE=8192
-ARG UWSGI_MAX_FD=1048576
-ARG UWSGI_PROCESSES=2
-ARG UWSGI_THREADS=2
 ENV FLASK_APP=reana_workflow_controller/app.py \
     PYTHONPATH=/workdir \
-    TERM=xterm \
-    UWSGI_BUFFER_SIZE=${UWSGI_BUFFER_SIZE:-8192} \
-    UWSGI_MAX_FD=${UWSGI_MAX_FD:-1048576} \
-    UWSGI_PROCESSES=${UWSGI_PROCESSES:-2} \
-    UWSGI_THREADS=${UWSGI_THREADS:-2}
+    TERM=xterm
 
 # Expose ports to clients
 EXPOSE 5000
 
-# Run server
-# exec is used to make sure signals are propagated to uwsgi,
-# while also allowing shell expansion
-# hadolint ignore=DL3025
-CMD exec uwsgi \
-    --buffer-size ${UWSGI_BUFFER_SIZE} \
-    --die-on-term \
-    --hook-master-start "unix_signal:2 gracefully_kill_them_all" \
-    --hook-master-start "unix_signal:15 gracefully_kill_them_all" \
-    --enable-threads \
-    --http-socket 0.0.0.0:5000 \
-    --master \
-    --max-fd ${UWSGI_MAX_FD} \
-    --module reana_workflow_controller.app:app \
-    --need-app \
-    --processes ${UWSGI_PROCESSES} \
-    --single-interpreter \
-    --stats /tmp/stats.socket \
-    --threads ${UWSGI_THREADS} \
-    --vacuum \
-    --wsgi-disable-file-wrapper
+# Run server (use Flask when FLASK_DEBUG is set, otherwise use uWSGI)
+CMD ["/bin/sh", "-c", "if [ -n \"${FLASK_DEBUG}\" ]; then exec flask run -h 0.0.0.0; else exec uwsgi --ini /var/reana/uwsgi/uwsgi.ini; fi"]
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"
