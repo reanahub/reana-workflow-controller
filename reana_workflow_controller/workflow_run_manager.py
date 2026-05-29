@@ -851,7 +851,15 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
 
         secrets_volume_mount = user_secrets.get_secrets_volume_mount_as_k8s_spec()
-        job_controller_container.volume_mounts = [workspace_mount, secrets_volume_mount]
+        uwsgi_config_mount = {
+            "name": "uwsgi-config-reana-job-controller",
+            "mountPath": "/var/reana/uwsgi",
+        }
+        job_controller_container.volume_mounts = [
+            workspace_mount,
+            secrets_volume_mount,
+            uwsgi_config_mount,
+        ]
 
         job_controller_container.ports = [
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
@@ -866,9 +874,17 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
+        uwsgi_config_volume = {
+            "name": "uwsgi-config-reana-job-controller",
+            "configMap": {
+                "defaultMode": 420,
+                "name": "uwsgi-config-reana-job-controller",
+            },
+        }
         volumes = [
             workspace_volume,
             user_secrets.get_file_secrets_volume_as_k8s_specs(),
+            uwsgi_config_volume,
         ]
 
         if kerberos:
@@ -909,7 +925,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def _create_job_controller_startup_cmd(self, user=None):
         """Create job controller startup cmd."""
-        base_cmd = "exec flask run -h 0.0.0.0;"
+        if os.getenv("FLASK_DEBUG", "").lower() in ("1", "true"):
+            base_cmd = "exec flask run -h 0.0.0.0;"
+        else:
+            base_cmd = "exec uwsgi --ini /var/reana/uwsgi/uwsgi.ini;"
+
         if user:
             add_group_cmd = (
                 "getent group '{gid}' || groupadd -f -g '{gid}' '{name}';".format(

@@ -59,8 +59,8 @@ install_requires = [
     "requests>=2.25.0",
     "sqlalchemy-utils>=0.31.0",
     "uwsgi-tools>=1.1.1",
-    "pyuwsgi>=2.0.17",
-    "uwsgitop>=0.10",
+    "pyuwsgi>=2.0.28",
+    "uwsgitop>=0.12",
     "webargs>=8.0",
 ]
 
