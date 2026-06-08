@@ -45,9 +45,11 @@ from reana_db.database import Session
 from reana_db.models import (
     Job,
     JobCache,
+    Notification,
     ResourceType,
     ResourceUnit,
     RunStatus,
+    UserWorkflow,
     Workflow,
     WorkflowResource,
 )
@@ -310,7 +312,11 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
                     # 4. disable retention rules, as the workspace was deleted
                     workflow.inactivate_workspace_retention_rules()
 
-                # 5. set the workflow as deleted in the database
+                # 5. tell the users the workflow is shared with that it is gone
+                if workflow.status != RunStatus.deleted:
+                    _notify_users_of_shared_workflow_deletion(workflow)
+
+                # 6. set the workflow as deleted in the database
                 _mark_workflow_as_deleted_in_db(workflow)
                 remove_workflow_jobs_from_cache(workflow)
 
@@ -339,6 +345,27 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
         raise REANAWorkflowDeletionError(
             "Workflow {0}.{1} cannot be deleted as it"
             " is currently running.".format(workflow.name, workflow.run_number)
+        )
+
+
+def _notify_users_of_shared_workflow_deletion(workflow):
+    """Add a notification for every user the deleted workflow is shared with.
+
+    The notifications are committed by the workflow status change listener
+    before the deleted status itself is committed.
+    """
+    shares = Session.query(UserWorkflow).filter_by(workflow_id=workflow.id_).all()
+    for share in shares:
+        Session.add(
+            Notification(
+                user_id=share.user_id,
+                type_="workflow_deleted",
+                payload={
+                    "workflow_id": str(workflow.id_),
+                    "workflow_name": workflow.get_full_workflow_name(),
+                    "sharer_email": workflow.owner.email,
+                },
+            )
         )
 
 
