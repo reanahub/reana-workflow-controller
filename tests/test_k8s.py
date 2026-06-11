@@ -8,16 +8,66 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
+from kubernetes import client
+import pytest
 from reana_commons.config import WORKFLOW_RUNTIME_USER_GID, WORKFLOW_RUNTIME_USER_UID
+from reana_commons.k8s.secrets import Secret, UserSecrets, UserSecretsStore
 from reana_workflow_controller.config import (
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS,
 )
+from reana_workflow_controller.errors import ReservedEnvironmentVariableError
 from reana_workflow_controller.k8s import (
     InteractiveDeploymentK8sBuilder,
+    delete_k8s_objects_if_exist,
     get_compatible_kerberos_k8s_config,
+    instantiate_chained_k8s_objects,
 )
-from reana_commons.k8s.secrets import UserSecretsStore, UserSecrets, Secret
+
+
+def test_session_secret_is_supported_by_create_and_delete(monkeypatch):
+    """Session lifecycle creates and deletes per-session Secret objects."""
+    create_secret = Mock(
+        return_value=SimpleNamespace(
+            _metadata=SimpleNamespace(uid="uid", name="session-auth"),
+            _kind="Secret",
+            _api_version="v1",
+        )
+    )
+    delete_secret = Mock()
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.current_k8s_corev1_api_client",
+        SimpleNamespace(
+            create_namespaced_secret=create_secret,
+            delete_namespaced_secret=delete_secret,
+            create_namespaced_service=Mock(),
+            delete_namespaced_service=Mock(),
+        ),
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.current_k8s_appsv1_api_client",
+        SimpleNamespace(
+            create_namespaced_deployment=Mock(),
+            delete_namespaced_deployment=Mock(),
+        ),
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.current_k8s_networking_api_client",
+        SimpleNamespace(
+            create_namespaced_ingress=Mock(),
+            delete_namespaced_ingress=Mock(),
+        ),
+    )
+    secret = client.V1Secret(
+        metadata=client.V1ObjectMeta(name="session-auth"),
+        string_data={"notebook_args": "--NotebookApp.token=not-in-a-pod-spec"},
+    )
+
+    instantiate_chained_k8s_objects({"secret": secret}, "default")
+    delete_k8s_objects_if_exist({"secret": secret}, "default")
+
+    create_secret.assert_called_once_with("default", secret)
+    delete_secret.assert_called_once_with("session-auth", "default")
 
 
 def test_interactive_deployment_k8s_builder_user_secrets(monkeypatch):
@@ -71,6 +121,35 @@ def test_interactive_deployment_k8s_builder_user_secrets(monkeypatch):
     assert pod.containers[0].security_context.allow_privilege_escalation is False
     assert pod.containers[0].security_context.capabilities.drop == ["ALL"]
     assert pod.containers[0].security_context.seccomp_profile.type == "RuntimeDefault"
+
+
+@pytest.mark.parametrize("reserved_name", ["NOTEBOOK_ARGS", "REANA_WORKSPACE"])
+def test_interactive_deployment_rejects_reserved_user_secret(
+    monkeypatch, reserved_name
+):
+    """User secrets cannot replace controller-managed session configuration.
+
+    A colliding secret must reject session start with a clear error, not
+    silently drop the user's secret: a dropped secret produces no signal
+    anywhere the user or an admin would see it, leaving it permanently and
+    invisibly excluded from every future interactive session.
+    """
+    user_secrets = UserSecrets(
+        user_id="owner_id",
+        k8s_secret_name="k8s-secret",
+        secrets=[
+            Secret(name=reserved_name, type_="env", value="override"),
+            Secret(name="own_env", type_="env", value="kept"),
+        ],
+    )
+    monkeypatch.setattr(UserSecretsStore, "fetch", lambda _: user_secrets)
+    builder = InteractiveDeploymentK8sBuilder(
+        "name", "workflow_id", "owner_id", "workspace", "image", 8080, "/path"
+    )
+    builder.add_session_secret("notebook-session-secret")
+
+    with pytest.raises(ReservedEnvironmentVariableError, match=reserved_name):
+        builder.add_user_secrets()
 
 
 def test_interactive_deployment_k8s_builder_skips_security_context_when_disabled(

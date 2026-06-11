@@ -45,12 +45,11 @@ RUN apt-get update -y && \
 WORKDIR /code
 COPY . /code
 
-# Are we debugging?
-ARG DEBUG=0
-RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else pip install --no-cache-dir .; fi;
-
 # Are we building with locally-checked-out shared modules?
+# Install shared modules before the main package so that pip can satisfy
+# unreleased inter-component dependencies from the local checkout.
 # hadolint ignore=DL3013
+ARG DEBUG=0
 RUN if test -e modules/reana-commons; then \
       if [ "${DEBUG}" -gt 0 ]; then \
         pip install --no-cache-dir -e "modules/reana-commons[kubernetes]" --upgrade; \
@@ -65,6 +64,10 @@ RUN if test -e modules/reana-commons; then \
         pip install --no-cache-dir "modules/reana-db" --upgrade; \
       fi \
     fi
+
+# Install the main package
+# hadolint ignore=DL3013
+RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else pip install --no-cache-dir .; fi;
 
 # Check for any broken Python dependencies
 RUN pip check

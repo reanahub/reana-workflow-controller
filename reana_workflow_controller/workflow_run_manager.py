@@ -11,6 +11,7 @@ import copy
 import json
 import logging
 import os
+import secrets
 from typing import List, Optional
 
 from flask import current_app
@@ -52,7 +53,10 @@ from reana_db.config import SQLALCHEMY_DATABASE_URI
 from reana_db.database import Session
 from reana_db.models import Job, JobStatus, InteractiveSession, InteractiveSessionType
 
-from reana_workflow_controller.errors import REANAInteractiveSessionError
+from reana_workflow_controller.errors import (
+    REANAInteractiveSessionError,
+    ReservedEnvironmentVariableError,
+)
 
 from reana_workflow_controller.dask import (
     DaskResourceManager,
@@ -510,6 +514,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         try:
             access_path = self._generate_interactive_workflow_path()
             workflow_run_name = self._workflow_run_name_generator("session")
+            # Random per-session secret used as the notebook access token,
+            # so that no user credential ever reaches the runtime layer.
+            session_secret = secrets.token_urlsafe(32)
             kubernetes_objects = build_interactive_k8s_objects[
                 interactive_session_type
             ](
@@ -517,7 +524,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 self.workflow.workspace_path,
                 access_path,
                 validated_image,
-                access_token=self.workflow.get_owner_access_token(),
+                session_secret=session_secret,
                 cvmfs_repos=self.retrieve_required_cvmfs_repos(),
                 owner_id=self.workflow.owner_id,
                 workflow_id=self.workflow.id_,
@@ -538,6 +545,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 path=access_path,
                 type_=interactive_session_type,
                 owner_id=self.workflow.owner_id,
+                session_secret=session_secret,
             )
             self.workflow.sessions.append(int_session)
             current_db_sessions = Session.object_session(self.workflow)
@@ -558,6 +566,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             raise REANAInteractiveSessionError(
                 "Connection to Kubernetes has failed:\n{}".format(api_exception)
             )
+        except ReservedEnvironmentVariableError:
+            # A user-input error (reserved secret name), not a server/infra
+            # fault -- re-raised as-is so the REST layer can still tell it
+            # apart from the generic wrapping below and map it to 4xx.
+            action_completed = False
+            raise
         except Exception as e:
             action_completed = False
             raise REANAInteractiveSessionError(
@@ -565,9 +579,26 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
         finally:
             if not action_completed and kubernetes_objects:
-                delete_k8s_objects_if_exist(
-                    kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
-                )
+                try:
+                    delete_k8s_objects_if_exist(
+                        kubernetes_objects, REANA_RUNTIME_KUBERNETES_NAMESPACE
+                    )
+                except Exception:
+                    # Never let a cleanup failure here replace the original
+                    # exception already propagating out of this function --
+                    # an exception raised inside `finally` silently discards
+                    # whatever was being raised from the `except` clauses
+                    # above, so the caller and logs would see only "could
+                    # not delete Secret X" instead of the real root cause
+                    # (e.g. a quota error). Log it and leave the orphaned
+                    # object(s) for manual/administrative cleanup instead.
+                    LOGGER.exception(
+                        "Failed to roll back Kubernetes objects %s in "
+                        "namespace %s after a failed interactive session "
+                        "start; they may be orphaned.",
+                        list(kubernetes_objects.keys()),
+                        REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                    )
 
     def stop_interactive_session(self, interactive_session_id):
         """Stop an interactive workflow run."""
@@ -767,9 +798,31 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             # Make sure that all the jobs are stopped before the deletion of the run-batch pod
             lifecycle=client.V1Lifecycle(
                 pre_stop=client.V1LifecycleHandler(
-                    http_get=client.V1HTTPGetAction(
-                        port=JOB_CONTROLLER_CONTAINER_PORT,
-                        path=JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+                    _exec=client.V1ExecAction(
+                        command=[
+                            "python3",
+                            "-c",
+                            (
+                                # A purely local call must not honour a
+                                # site-injected HTTP_PROXY/http_proxy env var
+                                # (e.g. via components.reana_job_controller
+                                # .environment) -- urllib.request.urlopen's
+                                # default global opener would otherwise route
+                                # this loopback shutdown request through the
+                                # proxy, and a NO_PROXY entry covering
+                                # 127.0.0.1 is not guaranteed. Build an
+                                # opener with an explicit empty ProxyHandler
+                                # to always bypass it.
+                                "import urllib.request; "
+                                "urllib.request.build_opener("
+                                "urllib.request.ProxyHandler({{}})"
+                                ").open("
+                                "'http://127.0.0.1:{}{}', timeout=10).read()"
+                            ).format(
+                                JOB_CONTROLLER_CONTAINER_PORT,
+                                JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+                            ),
+                        ]
                     )
                 )
             ),
@@ -923,6 +976,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
 
         secrets_volume_mount = user_secrets.get_secrets_volume_mount_as_k8s_spec()
+        service_account_volume_mount = {
+            "name": "job-controller-service-account",
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "readOnly": True,
+        }
         uwsgi_config_mount = {
             "name": "uwsgi-config-reana-job-controller",
             "mountPath": "/var/reana/uwsgi",
@@ -930,6 +988,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_container.volume_mounts = [
             workspace_mount,
             secrets_volume_mount,
+            service_account_volume_mount,
             uwsgi_config_mount,
             {"name": NSS_WRAPPER_VOLUME_NAME, "mountPath": NSS_WRAPPER_MOUNT_PATH},
         ]
@@ -945,6 +1004,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
             )
         spec.template.spec = client.V1PodSpec(
+            # The workflow-engine container executes user-supplied workflow
+            # code. Never let Kubernetes inject the pod ServiceAccount token
+            # into every container; the explicitly projected credential below
+            # is mounted only into the trusted job-controller sidecar.
+            automount_service_account_token=False,
             containers=containers,
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
             init_containers=[],
@@ -961,10 +1025,44 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 "name": "uwsgi-config-reana-job-controller",
             },
         }
+        service_account_volume = {
+            "name": "job-controller-service-account",
+            "projected": {
+                "defaultMode": 0o644,
+                "sources": [
+                    {
+                        "serviceAccountToken": {
+                            "path": "token",
+                            "expirationSeconds": 3600,
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "name": "kube-root-ca.crt",
+                            "items": [{"key": "ca.crt", "path": "ca.crt"}],
+                        }
+                    },
+                    {
+                        "downwardAPI": {
+                            "items": [
+                                {
+                                    "path": "namespace",
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.namespace",
+                                    },
+                                }
+                            ]
+                        }
+                    },
+                ],
+            },
+        }
         volumes = [
             workspace_volume,
             {"name": NSS_WRAPPER_VOLUME_NAME, "emptyDir": {}},
             user_secrets.get_file_secrets_volume_as_k8s_specs(),
+            service_account_volume,
             uwsgi_config_volume,
         ]
 

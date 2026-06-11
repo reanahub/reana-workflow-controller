@@ -18,6 +18,7 @@ import mock
 import pytest
 from flask import url_for
 from reana_commons.config import WORKFLOW_RUNTIME_USER_GID, WORKFLOW_RUNTIME_USER_UID
+from reana_commons.k8s.secrets import Secret, UserSecrets
 from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
@@ -1984,6 +1985,36 @@ def test_create_interactive_session(
             assert container.security_context.allow_privilege_escalation is False
             assert container.security_context.capabilities.drop == ["ALL"]
             assert container.security_context.seccomp_profile.type == "RuntimeDefault"
+
+
+def test_create_interactive_session_rejects_reserved_env_var_name(
+    app, user0, sample_serial_workflow_in_db, interactive_session_environments
+):
+    """Reserved-name user secret is rejected with 400, not a 500."""
+    user_secrets = UserSecrets(
+        user_id=str(user0.id_),
+        k8s_secret_name="k8s-secret",
+        secrets=[Secret(name="NOTEBOOK_ARGS", type_="env", value="override")],
+    )
+    with app.test_client() as client:
+        with mock.patch.multiple(
+            "reana_workflow_controller.k8s",
+            current_k8s_corev1_api_client=mock.DEFAULT,
+            current_k8s_networking_api_client=mock.DEFAULT,
+            current_k8s_appsv1_api_client=mock.DEFAULT,
+            UserSecretsStore=mock.DEFAULT,
+        ) as mocks:
+            mocks["UserSecretsStore"].fetch.return_value = user_secrets
+            res = client.post(
+                url_for(
+                    "workflows_session.open_interactive_session",
+                    workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                    interactive_session_type="jupyter",
+                ),
+                query_string={"user": user0.id_},
+            )
+            assert res.status_code == 400
+            assert "NOTEBOOK_ARGS" in res.json["message"]
 
 
 def test_create_interactive_session_skips_security_context_when_disabled(

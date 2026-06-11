@@ -29,6 +29,16 @@ class REANAInteractiveSessionError(Exception):
     """Error when trying to create an interactive session."""
 
 
+class ReservedEnvironmentVariableError(REANAInteractiveSessionError):
+    """User-supplied env var name collides with a controller-reserved name.
+
+    A user-input error, not a server/infra failure like most other
+    ``REANAInteractiveSessionError`` raise sites — kept as a distinct
+    subclass so the REST layer can map it to 4xx instead of the generic
+    500 the base class still gets everywhere else.
+    """
+
+
 class REANAExternalCallError(Exception):
     """Error when connecting to an external service."""
 
