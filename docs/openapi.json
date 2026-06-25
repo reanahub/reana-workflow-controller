@@ -280,6 +280,10 @@
                   "description": "GitLab data.",
                   "type": "object"
                 },
+                "git_metadata": {
+                  "description": "Git repository metadata for an already-seeded workspace.",
+                  "type": "object"
+                },
                 "launcher_url": {
                   "description": "Launcher URL.",
                   "type": "string"
@@ -308,6 +312,11 @@
                   },
                   "title": "Retention rules list for the files in the workspace.",
                   "type": "array"
+                },
+                "workflow_id": {
+                  "description": "Optional preallocated workflow UUID.",
+                  "format": "uuid",
+                  "type": "string"
                 },
                 "workflow_name": {
                   "description": "Workflow name. If empty name will be generated.",
@@ -461,6 +470,69 @@
           }
         },
         "summary": "Move files within workspace."
+      }
+    },
+    "/api/workflows/validate": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Spawns a defense-in-depth Kubernetes Job (the reana-workflow-validator image) that loads the raw spec bundle (mounted read-only from ``bundle_path`` on the shared volume) and emits the resulting serialized specification. The sandbox applies no cluster policy; reana-server validates the returned specification itself. Network isolation depends on the cluster CNI enforcing NetworkPolicy; standard NetworkPolicy cannot isolate the pod from its resident node. Returns the sandbox exit code and the loader report.",
+        "operationId": "validate_workflow_spec",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "spec_validation",
+            "required": true,
+            "schema": {
+              "properties": {
+                "bundle_path": {
+                  "description": "Spec bundle path relative to the shared volume root.",
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Override for the Job activeDeadlineSeconds.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "bundle_path"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "The loader ran; report and exit code are returned.",
+            "schema": {
+              "properties": {
+                "exit_code": {
+                  "type": "integer"
+                },
+                "report": {
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Infrastructure failure running the validation sandbox.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Load a workflow specification in a hardened sandbox."
       }
     },
     "/api/workflows/{workflow_id_or_name_a}/diff/{workflow_id_or_name_b}": {

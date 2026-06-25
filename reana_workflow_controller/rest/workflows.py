@@ -12,8 +12,10 @@ import datetime
 import json
 import logging
 import gc
+import os
+import shutil
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import and_, nullslast, or_, select
@@ -542,9 +544,16 @@ def create_workflow():  # noqa
               workflow_name:
                 type: string
                 description: Workflow name. If empty name will be generated.
+              workflow_id:
+                type: string
+                format: uuid
+                description: Optional preallocated workflow UUID.
               git_data:
                 type: object
                 description: GitLab data.
+              git_metadata:
+                type: object
+                description: Git repository metadata for an already-seeded workspace.
               launcher_url:
                 type: string
                 description: Launcher URL.
@@ -608,7 +617,16 @@ def create_workflow():  # noqa
                 ),
                 404,
             )
-        workflow_uuid = str(uuid4())
+        requested_workflow_uuid = request.json.get("workflow_id")
+        if requested_workflow_uuid:
+            try:
+                workflow_uuid = str(UUID(str(requested_workflow_uuid), version=4))
+            except (TypeError, ValueError, AttributeError):
+                raise REANAWorkflowNameError("Workflow id is not a valid UUIDv4.")
+            if workflow_uuid != str(requested_workflow_uuid).lower():
+                raise REANAWorkflowNameError("Workflow id is not a valid UUIDv4.")
+        else:
+            workflow_uuid = str(uuid4())
         # Use name prefix user specified or use default name prefix
         # Actual name is prefix + autoincremented run_number.
         workflow_name = request.json.get("workflow_name", "")
@@ -624,8 +642,9 @@ def create_workflow():  # noqa
                 )
         git_ref = ""
         git_repo = ""
-        if "git_data" in request.json:
-            git_data = request.json["git_data"]
+        git_metadata = request.json.get("git_metadata") or request.json.get("git_data")
+        if git_metadata:
+            git_data = git_metadata
             git_ref = git_data["git_commit_sha"]
             git_repo = git_data["git_url"]
         # add spec and params to DB as JSON
@@ -656,22 +675,28 @@ def create_workflow():  # noqa
 
             workflow.services.append(dask_service)
 
-        Session.add(workflow)
-        Session.object_session(workflow).commit()
-
-        retention_rules = request.json.get("retention_rules", [])
-        if retention_rules:
-            workflow.set_workspace_retention_rules(retention_rules)
-        if git_ref:
-            create_workflow_workspace(
-                workflow.workspace_path,
-                user_id=user.id_,
-                git_url=git_data["git_url"],
-                git_branch=git_data["git_branch"],
-                git_ref=git_ref,
-            )
-        else:
-            create_workflow_workspace(workflow.workspace_path)
+        workspace_existed = os.path.exists(workflow.workspace_path)
+        try:
+            Session.add(workflow)
+            retention_rules = request.json.get("retention_rules", [])
+            if retention_rules:
+                workflow.set_workspace_retention_rules(retention_rules, commit=False)
+            if "git_data" in request.json and git_ref:
+                create_workflow_workspace(
+                    workflow.workspace_path,
+                    user_id=user.id_,
+                    git_url=git_data["git_url"],
+                    git_branch=git_data["git_branch"],
+                    git_ref=git_ref,
+                )
+            else:
+                create_workflow_workspace(workflow.workspace_path)
+            Session.commit()
+        except Exception:
+            Session.rollback()
+            if not workspace_existed:
+                shutil.rmtree(workflow.workspace_path, ignore_errors=True)
+            raise
         return (
             jsonify(
                 {

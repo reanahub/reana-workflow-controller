@@ -335,6 +335,173 @@ JOB_CONTROLLER_ENV_VARS = _env_vars_dict_to_k8s_list(
 )
 """Environment variables to be passed to the job controller container."""
 
+
+REANA_WORKFLOW_VALIDATOR_IMAGE = os.getenv(
+    "REANA_WORKFLOW_VALIDATOR_IMAGE",
+    "docker.io/reanahub/reana-workflow-validator:latest",
+)
+"""Image for the sandboxed workflow specification loader (loads untrusted
+workflow specs in a locked-down Job)."""
+
+
+_SPEC_VALIDATION_RESERVED_ENV_VAR_NAMES = frozenset(
+    {
+        # The controller owns the loader's filesystem contract.
+        "REANA_VALIDATION_INPUT_DIR",
+        "REANA_VALIDATION_WORK_DIR",
+        "HOME",
+        "TMPDIR",
+        # Interpreter and shell startup hooks can execute operator-provided code
+        # before the validator starts.
+        "PATH",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "BASH_ENV",
+        "ENV",
+        "GCONV_PATH",
+        "HOSTALIASES",
+        "SHELLOPTS",
+    }
+)
+
+
+def _parse_spec_validation_env_vars(raw_env_vars):
+    """Parse and validate environment variables for validator Jobs.
+
+    The validator loads untrusted workflow code. The configured values are
+    therefore deliberately treated as non-secret, and variables that could
+    alter the loader's filesystem contract or interpreter startup are rejected.
+    """
+    env_vars = json.loads(raw_env_vars)
+    if not isinstance(env_vars, dict):
+        raise ValueError("REANA_WORKFLOW_VALIDATOR_ENV_VARS must be a JSON object.")
+
+    invalid_names = sorted(
+        name
+        for name in env_vars
+        if name in _SPEC_VALIDATION_RESERVED_ENV_VAR_NAMES or name.startswith("LD_")
+    )
+    if invalid_names:
+        raise ValueError(
+            "Reserved validator environment variable(s): {}.".format(
+                ", ".join(invalid_names)
+            )
+        )
+    return _env_vars_dict_to_k8s_list(env_vars)
+
+
+REANA_WORKFLOW_VALIDATOR_ENV_VARS = _parse_spec_validation_env_vars(
+    os.getenv("REANA_WORKFLOW_VALIDATOR_ENV_VARS", "{}")
+)
+"""Non-secret environment variables passed to sandboxed validator Jobs."""
+
+
+SPEC_VALIDATION_TIMEOUT = int(os.getenv("REANA_SPEC_VALIDATION_TIMEOUT", "60"))
+"""Hard wall-clock limit in seconds (activeDeadlineSeconds) for a sandboxed spec
+validation Job. Kills spec loads that hang (e.g. an infinite-loop Snakefile).
+The deadline counts from pod start (including any image pull), and loading a
+workflow that resolves remote references over the public internet (a yadage
+``toplevel`` git clone, a chain of CWL ``$import``s) can take a while, so the
+default is generous; operators running such workflows can raise it further via
+the ``REANA_SPEC_VALIDATION_TIMEOUT`` environment variable."""
+
+SPEC_VALIDATION_MAX_TIMEOUT = int(
+    os.getenv("REANA_SPEC_VALIDATION_MAX_TIMEOUT", str(SPEC_VALIDATION_TIMEOUT * 10))
+)
+"""Upper bound (seconds) for a caller-supplied validation ``timeout`` override.
+A per-request ``timeout`` is clamped to ``[1, SPEC_VALIDATION_MAX_TIMEOUT]`` so a
+caller cannot request an arbitrarily long-lived (worker-occupying) Job or pass a
+non-positive value that Kubernetes would reject with a confusing error."""
+
+SPEC_VALIDATION_LOG_TAIL_LINES = int(
+    os.getenv("REANA_SPEC_VALIDATION_LOG_TAIL_LINES", "500")
+)
+"""How many trailing log lines to read from a finished validator pod. The
+validator report is emitted last, so it always lives within this tail.
+Configurable via ``REANA_SPEC_VALIDATION_LOG_TAIL_LINES``."""
+
+SPEC_VALIDATION_LOG_LIMIT_BYTES = int(
+    os.getenv("REANA_SPEC_VALIDATION_LOG_LIMIT_BYTES", str(100 * 1024 * 1024))
+)
+"""Maximum bytes to read from a finished validator pod log. The loader runs
+untrusted workflow code, so Kubernetes log retrieval must have a byte cap even
+when a malicious spec prints a single huge line. Configurable via
+``REANA_SPEC_VALIDATION_LOG_LIMIT_BYTES``."""
+
+SPEC_VALIDATION_POLL_INTERVAL = float(
+    os.getenv("REANA_SPEC_VALIDATION_POLL_INTERVAL", "2")
+)
+"""How often (seconds) to poll the validation Job for completion."""
+
+SPEC_VALIDATION_CPU_LIMIT = os.getenv("REANA_SPEC_VALIDATION_CPU_LIMIT", "1")
+"""CPU limit for the sandboxed spec validation container."""
+
+SPEC_VALIDATION_MEMORY_LIMIT = os.getenv("REANA_SPEC_VALIDATION_MEMORY_LIMIT", "1Gi")
+"""Memory limit for the sandboxed spec validation container (bounds spec loads
+that try to exhaust memory)."""
+
+SPEC_VALIDATION_EPHEMERAL_STORAGE_REQUEST = os.getenv(
+    "REANA_SPEC_VALIDATION_EPHEMERAL_STORAGE_REQUEST", "128Mi"
+)
+"""Ephemeral-storage request for sandboxed specification validation."""
+
+SPEC_VALIDATION_EPHEMERAL_STORAGE_LIMIT = os.getenv(
+    "REANA_SPEC_VALIDATION_EPHEMERAL_STORAGE_LIMIT", "1Gi"
+)
+"""Combined scratch-volume and container ephemeral-storage limit."""
+
+SPEC_VALIDATION_MAX_FILES = int(os.getenv("REANA_SPEC_BUNDLE_MAX_FILES", "1000"))
+"""Maximum number of files copied into validator scratch storage."""
+
+SPEC_VALIDATION_MAX_BYTES = int(
+    os.getenv("REANA_SPEC_BUNDLE_MAX_BYTES", str(100 * 1024 * 1024))
+)
+"""Maximum number of bundle bytes copied into validator scratch storage."""
+
+SPEC_VALIDATION_ALLOW_EGRESS = os.getenv(
+    "REANA_SPEC_VALIDATION_ALLOW_EGRESS", "true"
+).lower() in ("true", "1", "yes", "on")
+"""Whether the sandboxed spec validator may reach the *public* network.
+
+Defaults to ``true`` so that workflows referencing remote resources (e.g. a
+remote yadage ``toplevel`` or CWL ``$import``) can still be loaded/validated.
+Set to ``false`` to create a policy with no egress allow rules. Regardless of
+this flag, the NetworkPolicy requests that configured cluster-internal ranges
+remain blocked (see ``SPEC_VALIDATION_BLOCKED_EGRESS_CIDRS``). Enforcement
+requires a NetworkPolicy-capable CNI; applicable policies are additive, and
+standard NetworkPolicy does not block traffic to the pod's resident node."""
+
+SPEC_VALIDATION_BLOCKED_EGRESS_CIDRS = [
+    cidr.strip()
+    for cidr in os.getenv(
+        "REANA_SPEC_VALIDATION_BLOCKED_EGRESS_CIDRS",
+        "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,100.64.0.0/10",
+    ).split(",")
+    if cidr.strip()
+]
+"""Egress destination CIDRs excluded from the validator's public-egress rule.
+Defaults to the private/cluster-internal ranges (pods, services, nodes) plus the
+link-local range (which covers the cloud instance-metadata endpoint
+``169.254.169.254``). Operators on clusters with a different pod/service CIDR
+can extend this list. The exclusion is enforced by the cluster CNI and is
+subject to standard NetworkPolicy limitations, including additive policies and
+resident-node traffic."""
+
+SPEC_VALIDATION_DNS_NAMESERVERS = [
+    server.strip()
+    for server in os.getenv(
+        "REANA_SPEC_VALIDATION_DNS_NAMESERVERS", "1.1.1.1,8.8.8.8"
+    ).split(",")
+    if server.strip()
+]
+"""Public DNS resolvers the validator pod uses when egress is allowed.
+
+The cluster DNS (kube-dns) normally lives in one of the excluded internal
+ranges, so the validator uses these public resolvers when egress is enabled
+(``dnsPolicy: None``). This avoids intentionally allowing cluster DNS while
+still letting remote ``$import``/``toplevel`` hostnames resolve; actual traffic
+isolation depends on the cluster's NetworkPolicy enforcement."""
+
 JOB_CONTROLLER_CONTAINER_PORT = 5000
 """Default container port for REANA Job Controller sidecar."""
 

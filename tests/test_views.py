@@ -25,6 +25,7 @@ from reana_db.models import (
     JobCache,
     RunStatus,
     Workflow,
+    WorkspaceRetentionRule,
     UserWorkflow,
 )
 from reana_workflow_controller.config import (
@@ -372,7 +373,80 @@ def test_create_workflow_without_name(
         workflow = workflow_by_id
 
         # Check that the workflow workspace exists
-        assert os.path.exists(workflow.workspace_path)
+    assert os.path.exists(workflow.workspace_path)
+
+
+def test_create_workflow_accepts_preallocated_uuid(
+    app, session, user0, cwl_workflow_with_name, tmp_shared_volume_path
+):
+    """The server can reserve the workspace before exposing the workflow row."""
+    workflow_id = str(uuid.uuid4())
+    payload = dict(cwl_workflow_with_name)
+    payload["workflow_id"] = workflow_id
+
+    with app.test_client() as client:
+        response = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={
+                "user": user0.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
+            json=payload,
+        )
+
+    assert response.status_code == 201
+    assert response.json["workflow_id"] == workflow_id
+    workflow = session.query(Workflow).filter_by(id_=workflow_id).one()
+    assert workflow.workspace_path.endswith(workflow_id)
+
+
+def test_create_workflow_rolls_back_row_and_rules_on_workspace_failure(
+    app,
+    session,
+    user0,
+    cwl_workflow_with_name,
+    tmp_shared_volume_path,
+    monkeypatch,
+):
+    """Controller creation is one DB unit and cleans partial workspace state."""
+    workflow_id = str(uuid.uuid4())
+    payload = dict(cwl_workflow_with_name)
+    payload.update(
+        {
+            "workflow_id": workflow_id,
+            "retention_rules": [{"workspace_files": "results/**", "retention_days": 7}],
+        }
+    )
+    created_paths = []
+
+    def _partially_create_then_fail(path, **kwargs):
+        os.makedirs(path, exist_ok=True)
+        created_paths.append(path)
+        raise RuntimeError("workspace creation failed")
+
+    monkeypatch.setattr(
+        "reana_workflow_controller.rest.workflows.create_workflow_workspace",
+        _partially_create_then_fail,
+    )
+
+    with app.test_client() as client:
+        response = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={
+                "user": user0.id_,
+                "workspace_root_path": tmp_shared_volume_path,
+            },
+            json=payload,
+        )
+
+    assert response.status_code == 500
+    assert session.query(Workflow).filter_by(id_=workflow_id).first() is None
+    assert (
+        session.query(WorkspaceRetentionRule).filter_by(workflow_id=workflow_id).first()
+        is None
+    )
+    assert len(created_paths) == 1
+    assert not os.path.exists(created_paths[0])
 
 
 def test_create_workflow_wrong_user(

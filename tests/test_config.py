@@ -34,6 +34,31 @@ def test_parse_comma_separated_list():
     assert "l" not in parsed  # ensures no more substring matching
 
 
+def test_parse_spec_validation_env_vars():
+    """Benign validator settings are converted to Kubernetes env entries."""
+    assert config._parse_spec_validation_env_vars(
+        '{"REANA_LOG_LEVEL": "DEBUG", "FEATURE_FLAG": true}'
+    ) == [
+        {"name": "REANA_LOG_LEVEL", "value": "DEBUG"},
+        {"name": "FEATURE_FLAG", "value": "True"},
+    ]
+
+
+@pytest.mark.parametrize(
+    "raw_env_vars",
+    [
+        '["REANA_LOG_LEVEL"]',
+        '{"REANA_VALIDATION_INPUT_DIR": "/tmp/escape"}',
+        '{"PYTHONPATH": "/tmp/escape"}',
+        '{"LD_PRELOAD": "/tmp/inject.so"}',
+    ],
+)
+def test_parse_spec_validation_env_vars_rejects_unsafe_values(raw_env_vars):
+    """Validator configuration cannot override the loader security contract."""
+    with pytest.raises(ValueError):
+        config._parse_spec_validation_env_vars(raw_env_vars)
+
+
 def test_force_garbage_collection_rejects_invalid_values(monkeypatch):
     """Test FORCE_GARBAGE_COLLECTION rejects unsupported command values."""
     with monkeypatch.context() as m:

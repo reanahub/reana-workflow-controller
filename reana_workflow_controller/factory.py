@@ -70,6 +70,7 @@ def create_app(config_mapping=None):
     from reana_workflow_controller.rest import (
         workflows_session,
         workflows_status,
+        workflows_validation,
         workflows_workspace,
         workflows,
     )  # noqa
@@ -77,6 +78,7 @@ def create_app(config_mapping=None):
     app.register_blueprint(workflows_session.blueprint, url_prefix="/api")
     app.register_blueprint(workflows.blueprint, url_prefix="/api")
     app.register_blueprint(workflows_status.blueprint, url_prefix="/api")
+    app.register_blueprint(workflows_validation.blueprint, url_prefix="/api")
     app.register_blueprint(workflows_workspace.blueprint, url_prefix="/api")
 
     app.register_error_handler(UnprocessableEntity, handle_args_validation_error)
