@@ -15,6 +15,7 @@ from webargs.flaskparser import use_kwargs
 
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_db.models import WorkflowSession, InteractiveSessionType, RunStatus
+from reana_commons.errors import REANASecretDoesNotExist
 
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
 
@@ -28,7 +29,10 @@ blueprint = Blueprint("workflows_session", __name__)
 @use_kwargs(
     {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
 )
-@use_kwargs({"image": fields.Str()}, location="json")
+@use_kwargs(
+    {"image": fields.Str(), "secret_names": fields.List(fields.Str())},
+    location="json",
+)
 def open_interactive_session(
     workflow_id_or_name, interactive_session_type, user, **kwargs
 ):  # noqa
@@ -75,6 +79,15 @@ def open_interactive_session(
                 type: string
                 description: >-
                   Replaces the default Docker image of an interactive session.
+              secret_names:
+                type: array
+                items:
+                  type: string
+                description: >-
+                  Optional. Explicit allowlist of user secret names to expose
+                  to the interactive session. If omitted, the interactive
+                  session inherits workflow.resources.secret_names when
+                  present; otherwise, all user secrets remain available.
       responses:
         200:
           description: >-
@@ -136,10 +149,11 @@ def open_interactive_session(
         access_path = kwrm.start_interactive_session(
             interactive_session_type,
             image=kwargs.get("image"),
+            secret_names=kwargs.get("secret_names"),
         )
         return jsonify({"path": str(access_path)}), 200
 
-    except (KeyError, ValueError) as e:
+    except (KeyError, ValueError, REANASecretDoesNotExist) as e:
         status_code = 400 if workflow else 404
         return jsonify({"message": str(e)}), status_code
     except Exception as e:
