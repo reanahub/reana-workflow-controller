@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -25,6 +25,7 @@ recursive-include docs *.py
 recursive-include docs *.png
 recursive-include docs *.md
 recursive-include docs *.txt
+recursive-include etc *.ini
 recursive-include reana_workflow_controller *.html
 recursive-include reana_workflow_controller *.py
 recursive-include reana_workflow_controller/templates *.template

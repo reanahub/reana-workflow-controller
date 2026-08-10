@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -20,6 +20,8 @@ from kubernetes.client.models.v1_delete_options import V1DeleteOptions
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     K8S_CERN_EOS_AVAILABLE,
+    K8S_USE_SECURITY_CONTEXT,
+    WORKFLOW_RUNTIME_GROUP_NAME,
     REANA_COMPONENT_NAMING_SCHEME,
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
@@ -31,14 +33,12 @@ from reana_commons.config import (
     REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
     REANA_STORAGE_BACKEND,
-    WORKFLOW_RUNTIME_GROUP_NAME,
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_NAME,
     WORKFLOW_RUNTIME_USER_UID,
     WORKSPACE_PATHS,
 )
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
-from reana_commons.k8s.kerberos import get_kerberos_k8s_config
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     create_cvmfs_persistent_volume_claim,
@@ -64,6 +64,7 @@ from reana_workflow_controller.k8s import (
     build_interactive_k8s_objects,
     delete_k8s_ingress_object,
     delete_k8s_objects_if_exist,
+    get_compatible_kerberos_k8s_config,
     instantiate_chained_k8s_objects,
 )
 
@@ -87,6 +88,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+    REANA_KUBERNETES_JOBS_MIN_USER_UID,
+    REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE,
@@ -108,6 +111,41 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DATASTORE_ENABLED,
     REANA_DATASTORE_SECRET,
 )
+
+NSS_WRAPPER_VOLUME_NAME = "nss-wrapper"
+NSS_WRAPPER_MOUNT_PATH = "/var/run/nss_wrapper"
+NSS_WRAPPER_PASSWD_PATH = f"{NSS_WRAPPER_MOUNT_PATH}/passwd"
+NSS_WRAPPER_GROUP_PATH = f"{NSS_WRAPPER_MOUNT_PATH}/group"
+LOGGER = logging.getLogger(__name__)
+
+
+def _restricted_security_context(uid: int, gid: int) -> client.V1SecurityContext:
+    """Return a PSA-restricted container security context."""
+    return client.V1SecurityContext(
+        run_as_group=int(gid),
+        run_as_user=int(uid),
+        run_as_non_root=True,
+        allow_privilege_escalation=False,
+        capabilities=client.V1Capabilities(drop=["ALL"]),
+        seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
+    )
+
+
+def _filter_job_controller_env_var_collisions(existing_env_vars, additional_env_vars):
+    """Drop operator-supplied env vars that collide with controller-managed ones."""
+    authoritative_names = {env_var["name"] for env_var in existing_env_vars}
+    filtered_env_vars = []
+    for env_var in additional_env_vars:
+        env_name = env_var["name"]
+        if env_name in authoritative_names:
+            LOGGER.warning(
+                "Ignoring operator-supplied job-controller env var %s because "
+                "the workflow-controller-managed value is authoritative.",
+                env_name,
+            )
+            continue
+        filtered_env_vars.append(env_var)
+    return filtered_env_vars
 
 
 def _container_image_aliases(
@@ -173,7 +211,7 @@ def _validate_interactive_session_image(type_: str, user_image: Optional[str]) -
 class WorkflowRunManager:
     """Interface which specifies how to manage workflow runs."""
 
-    if os.getenv("FLASK_ENV") == "development":
+    if os.getenv("FLASK_DEBUG", "").lower() in ("1", "true"):
         WORKFLOW_ENGINE_COMMON_ENV_VARS.extend(DEBUG_ENV_VARS)
 
     engine_mapping = {
@@ -539,9 +577,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def stop_interactive_session(self, interactive_session_id):
         """Stop an interactive workflow run."""
-        int_session = InteractiveSession.query.filter_by(
-            id_=interactive_session_id
-        ).first()
+        int_session = (
+            Session.query(InteractiveSession)
+            .filter_by(id_=interactive_session_id)
+            .first()
+        )
 
         if not int_session:
             raise REANAInteractiveSessionError(
@@ -665,7 +705,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         user_secrets = UserSecretsStore.fetch(owner_id)
         kerberos = None
         if self.requires_kerberos():
-            kerberos = get_kerberos_k8s_config(
+            kerberos = get_compatible_kerberos_k8s_config(
                 user_secrets,
                 kubernetes_uid=WORKFLOW_RUNTIME_USER_UID,
             )
@@ -714,11 +754,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             ]
         )
         workflow_engine_container.env.extend(workflow_engine_env_vars)
-        workflow_engine_container.security_context = client.V1SecurityContext(
-            run_as_group=WORKFLOW_RUNTIME_USER_GID,
-            run_as_user=WORKFLOW_RUNTIME_USER_UID,
-            allow_privilege_escalation=False,
-        )
+        if K8S_USE_SECURITY_CONTEXT:
+            workflow_engine_container.security_context = _restricted_security_context(
+                WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
+            )
         workflow_engine_container.volume_mounts = [workspace_mount]
 
         if kerberos:
@@ -737,7 +777,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             env=[],
             volume_mounts=[],
             command=["/bin/bash", "-c"],
-            args=self._create_job_controller_startup_cmd(user),
+            args=self._create_job_controller_startup_cmd(),
             ports=[],
             # Make sure that all the jobs are stopped before the deletion of the run-batch pod
             lifecycle=client.V1Lifecycle(
@@ -749,13 +789,30 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 )
             ),
         )
+        if K8S_USE_SECURITY_CONTEXT:
+            job_controller_container.security_context = _restricted_security_context(
+                WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
+            )
 
         job_controller_container.env.extend(
             [
                 {"name": "REANA_USER_ID", "value": owner_id},
                 {"name": "CERN_USER", "value": user},
                 {"name": "USER", "value": user},  # Required by HTCondor
+                {
+                    "name": "K8S_USE_SECURITY_CONTEXT",
+                    "value": str(K8S_USE_SECURITY_CONTEXT),
+                },
                 {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
+                {
+                    "name": "NSS_WRAPPER_GROUP",
+                    "value": NSS_WRAPPER_GROUP_PATH,
+                },
+                {
+                    "name": "NSS_WRAPPER_PASSWD",
+                    "value": NSS_WRAPPER_PASSWD_PATH,
+                },
                 {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
                 {"name": "KUEUE_ENABLED", "value": str(KUEUE_ENABLED)},
                 {
@@ -777,6 +834,22 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 {
                     "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
                     "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                },
+                {
+                    "name": "WORKFLOW_RUNTIME_GROUP_NAME",
+                    "value": WORKFLOW_RUNTIME_GROUP_NAME,
+                },
+                {
+                    "name": "WORKFLOW_RUNTIME_USER_GID",
+                    "value": str(WORKFLOW_RUNTIME_USER_GID),
+                },
+                {
+                    "name": "WORKFLOW_RUNTIME_USER_NAME",
+                    "value": WORKFLOW_RUNTIME_USER_NAME,
+                },
+                {
+                    "name": "WORKFLOW_RUNTIME_USER_UID",
+                    "value": str(WORKFLOW_RUNTIME_USER_UID),
                 },
                 {
                     "name": "REANA_JOB_HOSTPATH_MOUNTS",
@@ -843,9 +916,19 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 },
             ]
         )
-        # env vars coming from Helm values are added after the ones from r-w-controller
-        # so that the former can override the latter in case of necessity
-        job_controller_container.env.extend(copy.deepcopy(JOB_CONTROLLER_ENV_VARS))
+        if REANA_KUBERNETES_JOBS_MIN_USER_UID:
+            job_controller_container.env.append(
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MIN_USER_UID",
+                    "value": REANA_KUBERNETES_JOBS_MIN_USER_UID,
+                },
+            )
+        job_controller_container.env.extend(
+            _filter_job_controller_env_var_collisions(
+                job_controller_container.env,
+                copy.deepcopy(JOB_CONTROLLER_ENV_VARS),
+            )
+        )
         job_controller_container.env.extend(job_controller_env_secrets)
         if REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL:
             job_controller_container.env.append(
@@ -874,17 +957,33 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
 
         secrets_volume_mount = user_secrets.get_secrets_volume_mount_as_k8s_spec()
-        job_controller_container.volume_mounts = [workspace_mount, secrets_volume_mount]
+        uwsgi_config_mount = {
+            "name": "uwsgi-config-reana-job-controller",
+            "mountPath": "/var/reana/uwsgi",
+        }
+        job_controller_container.volume_mounts = [
+            workspace_mount,
+            secrets_volume_mount,
+            uwsgi_config_mount,
+            {"name": NSS_WRAPPER_VOLUME_NAME, "mountPath": NSS_WRAPPER_MOUNT_PATH},
+        ]
 
         job_controller_container.ports = [
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
         ]
 
         containers = [workflow_engine_container, job_controller_container]
+        pod_security_context = None
+        if K8S_USE_SECURITY_CONTEXT:
+            pod_security_context = client.V1PodSecurityContext(
+                fs_group=int(WORKFLOW_RUNTIME_USER_GID),
+                fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+            )
         spec.template.spec = client.V1PodSpec(
             containers=containers,
             node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
             init_containers=[],
+            security_context=pod_security_context,
             termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
             image_pull_secrets=[],
         )
@@ -892,9 +991,18 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
+        uwsgi_config_volume = {
+            "name": "uwsgi-config-reana-job-controller",
+            "configMap": {
+                "defaultMode": 420,
+                "name": "uwsgi-config-reana-job-controller",
+            },
+        }
         volumes = [
             workspace_volume,
+            {"name": NSS_WRAPPER_VOLUME_NAME, "emptyDir": {}},
             user_secrets.get_file_secrets_volume_as_k8s_specs(),
+            uwsgi_config_volume,
         ]
 
         if kerberos:
@@ -909,7 +1017,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         # filter out volumes with the same name
         spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
 
-        if os.getenv("FLASK_ENV") == "development":
+        if os.getenv("FLASK_DEBUG", "").lower() in ("1", "true"):
             code_volume_name = "reana-code"
             code_mount_path = "/code"
             k8s_code_volume = client.V1Volume(name=code_volume_name)
@@ -938,24 +1046,11 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job.spec.backoff_limit = 0
         return job
 
-    def _create_job_controller_startup_cmd(self, user=None):
-        """Create job controller startup cmd."""
-        base_cmd = "exec flask run -h 0.0.0.0;"
-        if user:
-            add_group_cmd = (
-                "getent group '{gid}' || groupadd -f -g '{gid}' '{name}';".format(
-                    gid=WORKFLOW_RUNTIME_USER_GID, name=WORKFLOW_RUNTIME_GROUP_NAME
-                )
-            )
-            add_user_cmd = "useradd -u {} -g {} -M {};".format(
-                WORKFLOW_RUNTIME_USER_UID, WORKFLOW_RUNTIME_USER_GID, user
-            )
-            chown_workspace_cmd = "chown -R {} {};".format(
-                WORKFLOW_RUNTIME_USER_UID,
-                self.workflow.workspace_path,
-            )
-            run_app_cmd = 'exec su {} /bin/bash -c "{}"'.format(user, base_cmd)
-            full_cmd = add_group_cmd + add_user_cmd + chown_workspace_cmd + run_app_cmd
-            return [full_cmd]
-        else:
-            return base_cmd.split()
+    def _create_job_controller_startup_cmd(self):
+        """Create rootless job controller startup command.
+
+        Shared workspaces are expected to stay writable via the common GID=0
+        contract and group-writable workspace creation umask, so no recursive
+        workspace chown is needed here.
+        """
+        return ["exec python3 -m reana_job_controller.nss_wrapper"]

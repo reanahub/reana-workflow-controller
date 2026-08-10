@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -302,11 +302,17 @@ def _get_workflow_engine_pod_logs(workflow: Workflow) -> str:
     )
     for pod in pods.items:
         if str(workflow.id_) in pod.metadata.name:
-            return current_k8s_corev1_api_client.read_namespaced_pod_log(
+            # Read raw response body (``_preload_content=False``) and decode
+            # it ourselves: kubernetes 36.x applies ``str()`` to ``bytes``
+            # payloads in its ``response_type='str'`` deserialiser,
+            # producing ``b'...'`` repr strings instead of UTF-8 text.
+            pod_log_response = current_k8s_corev1_api_client.read_namespaced_pod_log(
                 namespace=pod.metadata.namespace,
                 name=pod.metadata.name,
                 container="workflow-engine",
+                _preload_content=False,
             )
+            return pod_log_response.data.decode("utf-8", errors="replace")
     # There might not be any pod returned by `list_namespaced_pod`, for example
     # when a workflow fails to be scheduled
     return ""

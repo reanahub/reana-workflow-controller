@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -69,47 +69,24 @@ RUN if test -e modules/reana-commons; then \
 # Check for any broken Python dependencies
 RUN pip check
 
+# Install the default uWSGI configuration. Cluster deployments override it
+# by mounting the Helm-managed ConfigMap at the same path.
+COPY etc/uwsgi.ini /var/reana/uwsgi/uwsgi.ini
+
 # Set useful environment variables
-ARG UWSGI_BUFFER_SIZE=8192
-ARG UWSGI_MAX_FD=1048576
-ARG UWSGI_PROCESSES=2
-ARG UWSGI_THREADS=2
 ENV FLASK_APP=reana_workflow_controller/app.py \
   PYTHONPATH=/workdir \
-  TERM=xterm \
-  UWSGI_BUFFER_SIZE=${UWSGI_BUFFER_SIZE:-8192} \
-  UWSGI_MAX_FD=${UWSGI_MAX_FD:-1048576} \
-  UWSGI_PROCESSES=${UWSGI_PROCESSES:-2} \
-  UWSGI_THREADS=${UWSGI_THREADS:-2}
+  TERM=xterm
 
 # Expose ports to clients
 EXPOSE 5000
 
-# Run server
-# exec is used to make sure signals are propagated to uwsgi,
-# while also allowing shell expansion
-# hadolint ignore=DL3025
-CMD exec uwsgi \
-  --buffer-size ${UWSGI_BUFFER_SIZE} \
-  --die-on-term \
-  --hook-master-start "unix_signal:2 gracefully_kill_them_all" \
-  --hook-master-start "unix_signal:15 gracefully_kill_them_all" \
-  --enable-threads \
-  --http-socket 0.0.0.0:5000 \
-  --master \
-  --max-fd ${UWSGI_MAX_FD} \
-  --module reana_workflow_controller.app:app \
-  --need-app \
-  --processes ${UWSGI_PROCESSES} \
-  --single-interpreter \
-  --stats /tmp/stats.socket \
-  --threads ${UWSGI_THREADS} \
-  --vacuum \
-  --wsgi-disable-file-wrapper
+# Run server (use Flask when FLASK_DEBUG is set, otherwise use uWSGI)
+CMD ["/bin/sh", "-c", "case \"$(printf '%s' \"${FLASK_DEBUG}\" | tr '[:upper:]' '[:lower:]')\" in 1|true) exec flask run -h 0.0.0.0 ;; *) exec uwsgi --ini /var/reana/uwsgi/uwsgi.ini ;; esac"]
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"
-LABEL org.opencontainers.image.created="2026-03-26"
+LABEL org.opencontainers.image.created="2026-06-07"
 LABEL org.opencontainers.image.description="REANA reproducible analysis platform - workflow controller component"
 LABEL org.opencontainers.image.documentation="https://reana-workflow-controller.readthedocs.io/"
 LABEL org.opencontainers.image.licenses="MIT"
@@ -118,5 +95,5 @@ LABEL org.opencontainers.image.title="reana-workflow-controller"
 LABEL org.opencontainers.image.url="https://github.com/reanahub/reana-workflow-controller"
 LABEL org.opencontainers.image.vendor="reanahub"
 # x-release-please-start-version
-LABEL org.opencontainers.image.version="0.95.0-alpha.6"
+LABEL org.opencontainers.image.version="0.95.0-alpha.7"
 # x-release-please-end

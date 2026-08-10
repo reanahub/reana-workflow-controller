@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -32,7 +32,7 @@ clean_old_db_container() {
     OLD="$(docker ps --all --quiet --filter=name=postgres__reana-workflow-controller)"
     if [ -n "$OLD" ]; then
         echo '==> [INFO] Cleaning old DB container...'
-        docker stop postgres__reana-workflow-controller
+        docker rm -f postgres__reana-workflow-controller >/dev/null 2>&1 || true
     fi
 }
 
@@ -52,7 +52,7 @@ docker_build() {
 }
 
 docs_openapi() {
-    FLASK_APP=reana_workflow_controller/app.py python ./scripts/generate_openapi_spec.py
+    FLASK_APP=reana_workflow_controller/app.py REANA_SECRET_KEY=SECRET_KEY python ./scripts/generate_openapi_spec.py
     diff -q -w temp_openapi.json docs/openapi.json
     rm temp_openapi.json
 }

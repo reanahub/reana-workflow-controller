@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2024, 2025 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -9,15 +9,19 @@
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
+    K8S_USE_SECURITY_CONTEXT,
     REANA_WORKFLOW_UMASK,
     REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    WORKFLOW_RUNTIME_USER_GID,
+    WORKFLOW_RUNTIME_USER_UID,
 )
 from reana_commons.k8s.api_client import (
     current_k8s_appsv1_api_client,
     current_k8s_corev1_api_client,
     current_k8s_networking_api_client,
 )
+from reana_commons.k8s.kerberos import get_kerberos_k8s_config
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
@@ -32,7 +36,97 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DATASTORE_SECRET,
     REANA_DATASTORE_IMAGE,
     REANA_DATASTORE_ENABLED,
+    REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+    REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS,
 )
+
+
+def _restricted_session_pod_security_context() -> client.V1PodSecurityContext | None:
+    """Return the pod security context for interactive sessions."""
+    if not K8S_USE_SECURITY_CONTEXT:
+        return None
+    pod_security_context_kwargs = dict(
+        fs_group=int(WORKFLOW_RUNTIME_USER_GID),
+        fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+    )
+    if REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS:
+        pod_security_context_kwargs["supplemental_groups"] = (
+            REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS
+        )
+    return client.V1PodSecurityContext(**pod_security_context_kwargs)
+
+
+def _restricted_session_container_security_context() -> client.V1SecurityContext | None:
+    """Return the container security context for interactive sessions."""
+    if not K8S_USE_SECURITY_CONTEXT:
+        return None
+    return client.V1SecurityContext(
+        run_as_group=int(WORKFLOW_RUNTIME_USER_GID),
+        run_as_user=int(WORKFLOW_RUNTIME_USER_UID),
+        run_as_non_root=True,
+        allow_privilege_escalation=False,
+        capabilities=client.V1Capabilities(drop=["ALL"]),
+        seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
+    )
+
+
+def _restricted_kerberos_container_security_context(kubernetes_uid: int) -> dict:
+    """Return the expected PSA-restricted security context for Kerberos containers."""
+    return {
+        "runAsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+        "runAsUser": int(kubernetes_uid),
+        "runAsNonRoot": True,
+        "allowPrivilegeEscalation": False,
+        "capabilities": {"drop": ["ALL"]},
+        "seccompProfile": {"type": "RuntimeDefault"},
+    }
+
+
+def _normalize_kerberos_container_security_context(
+    kerberos_config, kubernetes_uid: int
+):
+    """Backfill missing Kerberos security-context fields from older commons releases."""
+    if not K8S_USE_SECURITY_CONTEXT:
+        return kerberos_config
+
+    for container_name in ("init_container", "renew_container"):
+        container = getattr(kerberos_config, container_name, None)
+        if not container:
+            continue
+
+        expected_security_context = _restricted_kerberos_container_security_context(
+            kubernetes_uid
+        )
+        if "securityContext" not in container:
+            container["securityContext"] = expected_security_context
+            continue
+
+        for field, value in expected_security_context.items():
+            if field not in container["securityContext"]:
+                container["securityContext"][field] = value
+
+    return kerberos_config
+
+
+def get_compatible_kerberos_k8s_config(user_secrets, kubernetes_uid: int):
+    """Return Kerberos k8s config across released and unreleased commons APIs."""
+    try:
+        kerberos_config = get_kerberos_k8s_config(
+            user_secrets,
+            kubernetes_uid=kubernetes_uid,
+            use_security_context=K8S_USE_SECURITY_CONTEXT,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument 'use_security_context'" not in str(exc):
+            raise
+        kerberos_config = get_kerberos_k8s_config(
+            user_secrets,
+            kubernetes_uid=kubernetes_uid,
+        )
+    return _normalize_kerberos_container_security_context(
+        kerberos_config,
+        kubernetes_uid,
+    )
 
 
 class InteractiveDeploymentK8sBuilder(object):
@@ -119,6 +213,7 @@ class InteractiveDeploymentK8sBuilder(object):
             # not polluted with variables like `REANA_SERVER_SERVICE_HOST`
             enable_service_links=False,
             automount_service_account_token=False,
+            security_context=_restricted_session_pod_security_context(),
         )
 
         self.kubernetes_objects = {
@@ -139,7 +234,8 @@ class InteractiveDeploymentK8sBuilder(object):
                 number=InteractiveDeploymentK8sBuilder.internal_service_port
             ),
         )
-        ingress_backend = client.V1IngressBackend(service=ingress_service_backend)
+        ingress_backend = client.V1IngressBackend(
+            service=ingress_service_backend)
         ingress_rule_value = client.V1HTTPIngressRuleValue(
             [
                 client.V1HTTPIngressPath(
@@ -149,7 +245,8 @@ class InteractiveDeploymentK8sBuilder(object):
         )
         spec = client.V1IngressSpec(
             rules=[
-                client.V1IngressRule(http=ingress_rule_value, host=REANA_INGRESS_HOST)
+                client.V1IngressRule(
+                    http=ingress_rule_value, host=REANA_INGRESS_HOST)
             ]
         )
         if REANA_INGRESS_CLASS_NAME:
@@ -312,10 +409,11 @@ class InteractiveDeploymentK8sBuilder(object):
         env_var = client.V1EnvVar(name, str(value))
         self._session_container.env.append(env_var)
 
-    def add_run_with_root_permissions(self):
-        """Run interactive session with root."""
-        security_context = client.V1SecurityContext(run_as_user=0, privileged=True)
-        self._session_container.security_context = security_context
+    def add_run_with_runtime_user_permissions(self):
+        """Run interactive session with the default non-root REANA user."""
+        self._session_container.security_context = (
+            _restricted_session_container_security_context()
+        )
 
     def add_user_secrets(self):
         """Mount the "file" secrets and set the "env" secrets in the container."""
@@ -395,12 +493,14 @@ def build_interactive_jupyter_deployment_k8s_objects(
     command_args = [
         "start-notebook.sh",
         "--NotebookApp.base_url='{base_url}'".format(base_url=access_path),
-        "--notebook-dir='{workflow_workspace}'".format(workflow_workspace=workspace),
+        "--notebook-dir='{workflow_workspace}'".format(
+            workflow_workspace=workspace),
         f'--NotebookApp.terminado_settings={{"shell_command": ["/usr/bin/bash", "-c", "cd \'{workspace}\' && bash"]}}',
     ]
     if access_token:
         command_args.append(
-            "--NotebookApp.token='{access_token}'".format(access_token=access_token)
+            "--NotebookApp.token='{access_token}'".format(
+                access_token=access_token)
         )
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_reana_shared_storage()
@@ -415,9 +515,10 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_builder.add_environment_variable("NB_GID", 0)
     # Changes umask so all files generated by the Jupyter Notebook can be
     # modified by the root group users.
-    deployment_builder.add_environment_variable("NB_UMASK", REANA_WORKFLOW_UMASK)
+    deployment_builder.add_environment_variable(
+        "NB_UMASK", REANA_WORKFLOW_UMASK)
     deployment_builder.add_environment_variable("REANA_WORKSPACE", workspace)
-    deployment_builder.add_run_with_root_permissions()
+    deployment_builder.add_run_with_runtime_user_permissions()
     return deployment_builder.get_deployment_objects()
 
 
@@ -506,7 +607,8 @@ def delete_k8s_ingress_object(ingress_name, namespace):
         )
     except ApiException as k8s_api_exception:
         if k8s_api_exception.reason == "Not Found":
-            raise Exception("K8s object was not found {}.".format(ingress_name))
+            raise Exception(
+                "K8s object was not found {}.".format(ingress_name))
         raise Exception(
             "Exception when calling ExtensionsV1beta1->"
             "Api->delete_namespaced_ingress: {}\n".format(k8s_api_exception)
@@ -518,7 +620,8 @@ def check_pod_readiness_by_prefix(
 ):
     """Check the readiness of a Pod in the given namespace whose name starts with the specified prefix. We assume that there exists 0 or 1 pod with a given prefix."""
     try:
-        pods = current_k8s_corev1_api_client.list_namespaced_pod(namespace=namespace)
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
+            namespace=namespace)
 
         for pod in pods.items:
             if pod.metadata.name.startswith(pod_name_prefix):
@@ -540,7 +643,8 @@ def check_pod_status_by_prefix(
 ):
     """Check the pod status of a Pod in the given namespace whose name starts with the specified prefix. We assume that there exists 0 or 1 pod with a given prefix."""
     try:
-        pods = current_k8s_corev1_api_client.list_namespaced_pod(namespace=namespace)
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
+            namespace=namespace)
 
         for pod in pods.items:
             if pod.metadata.name.startswith(pod_name_prefix):

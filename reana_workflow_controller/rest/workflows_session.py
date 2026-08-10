@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2024 CERN.
+# Copyright (C) 2020, 2021, 2022, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """REANA Workflow Controller interactive sessions REST API."""
 
+import marshmallow
 from flask import Blueprint, jsonify, request
 from webargs import fields
 from webargs.flaskparser import use_kwargs
@@ -24,7 +25,9 @@ blueprint = Blueprint("workflows_session", __name__)
     "/workflows/<workflow_id_or_name>/open/<interactive_session_type>",
     methods=["POST"],
 )
-@use_kwargs({"user": fields.Str(required=True)}, location="query")
+@use_kwargs(
+    {"user": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE
+)
 @use_kwargs({"image": fields.Str()}, location="json")
 def open_interactive_session(
     workflow_id_or_name, interactive_session_type, user, **kwargs
@@ -122,7 +125,7 @@ def open_interactive_session(
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid=user)
 
-        if workflow.sessions.first() is not None:
+        if workflow.sessions:
             return jsonify({"message": "Interactive session is already open"}), 404
 
         if workflow.status == RunStatus.deleted:
@@ -208,7 +211,7 @@ def close_interactive_session(workflow_id_or_name):  # noqa
         user_uuid = request.args["user"]
         workflow = None
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
-        int_session = workflow.sessions.first()
+        int_session = workflow.sessions[0] if workflow.sessions else None
         if not int_session:
             return (
                 jsonify(

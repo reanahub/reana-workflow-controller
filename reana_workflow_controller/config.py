@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,6 +18,7 @@ from reana_commons.config import (
 )
 from reana_db.models import JobStatus, RunStatus
 from distutils.util import strtobool
+from typing import List
 
 from reana_workflow_controller.version import __version__
 
@@ -27,23 +28,23 @@ def _env_vars_dict_to_k8s_list(env_vars):
     return [{"name": name, "value": str(value)} for name, value in env_vars.items()]
 
 
-def compose_reana_url(hostname: str, hostport: int) -> str:
+def compose_reana_url(hostname: str, hostport: str | int) -> str:
     """
     Compose a REANA API URL while omitting the default HTTPS port (443).
 
     Args:
         hostname (str): The REANA hostname.
-        hostport (int): The REANA host port.
+        hostport (str | int): The REANA host port.
 
     Returns:
         str: The full base URL.
     """
-    if hostport == 443:
+    if str(hostport) == "443":
         return f"https://{hostname}"
     return f"https://{hostname}:{hostport}"
 
 
-SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
+SECRET_KEY = os.getenv("REANA_SECRET_KEY", "")
 """Secret key used for the application user sessions."""
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -109,7 +110,8 @@ REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE = os.getenv(
 )
 """Snakemake workflow engine version."""
 
-REANA_KUBERNETES_JOBS_CPU_REQUEST = os.getenv("REANA_KUBERNETES_JOBS_CPU_REQUEST")
+REANA_KUBERNETES_JOBS_CPU_REQUEST = os.getenv(
+    "REANA_KUBERNETES_JOBS_CPU_REQUEST")
 """Default CPU request for user job containers.
 
 Please see the following URL for possible values
@@ -123,14 +125,16 @@ Please see the following URL for possible values
 https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-cpu.
 """
 
-REANA_KUBERNETES_JOBS_MEMORY_REQUEST = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_REQUEST")
+REANA_KUBERNETES_JOBS_MEMORY_REQUEST = os.getenv(
+    "REANA_KUBERNETES_JOBS_MEMORY_REQUEST")
 """Default memory request for user job containers.
 
 Please see the following URL for possible values
 https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory.
 """
 
-REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
+REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Default memory limit for user job containers. Exceeding this limit will terminate the container.
 
 Please see the following URL for possible values
@@ -177,7 +181,8 @@ Please see the following URL for possible values
 https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory.
 """
 
-REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT")
+REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT")
 """Default timeout for user's jobs in seconds. Exceeding this time will terminate the job.
 
 Please see the following URL for more details
@@ -191,6 +196,14 @@ REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT = os.getenv(
 
 Please see the following URL for more details
 https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
+"""
+
+REANA_KUBERNETES_JOBS_MIN_USER_UID = os.getenv(
+    "REANA_KUBERNETES_JOBS_MIN_USER_UID")
+"""Minimum accepted user runtime container UID that users can assign to their job
+containers via ``kubernetes_uid`` in ``reana.yaml``. Jobs requesting a smaller
+UID are refused at submission time with a clear error message. Forwarded to
+reana-job-controller via the job batch pod environment.
 """
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
@@ -226,7 +239,7 @@ DEBUG_ENV_VARS = (
         "value": os.getenv("WDB_SOCKET_SERVER", f"{REANA_COMPONENT_PREFIX}-wdb"),
     },
     {"name": "WDB_NO_BROWSER_AUTO_OPEN", "value": "True"},
-    {"name": "FLASK_ENV", "value": "development"},
+    {"name": "FLASK_DEBUG", "value": "1"},
 )
 """Common to all workflow engines environment variables for debug mode."""
 
@@ -235,7 +248,8 @@ REANA_OPENSEARCH_ENABLED = (
 )
 """OpenSearch enabled flag."""
 
-REANA_OPENSEARCH_HOST = os.getenv("REANA_OPENSEARCH_HOST", "reana-opensearch-master")
+REANA_OPENSEARCH_HOST = os.getenv(
+    "REANA_OPENSEARCH_HOST", "reana-opensearch-master")
 """OpenSearch host."""
 
 REANA_OPENSEARCH_PORT = os.getenv("REANA_OPENSEARCH_PORT", "9200")
@@ -244,10 +258,10 @@ REANA_OPENSEARCH_PORT = os.getenv("REANA_OPENSEARCH_PORT", "9200")
 REANA_OPENSEARCH_URL_PREFIX = os.getenv("REANA_OPENSEARCH_URL_PREFIX", "")
 """OpenSearch URL prefix."""
 
-REANA_OPENSEARCH_USER = os.getenv("REANA_OPENSEARCH_USER", "admin")
+REANA_OPENSEARCH_USER = os.getenv("REANA_OPENSEARCH_USER", "")
 """OpenSearch user."""
 
-REANA_OPENSEARCH_PASSWORD = os.getenv("REANA_OPENSEARCH_PASSWORD", "admin")
+REANA_OPENSEARCH_PASSWORD = os.getenv("REANA_OPENSEARCH_PASSWORD", "")
 """OpenSearch password."""
 
 REANA_OPENSEARCH_USE_SSL = (
@@ -341,11 +355,12 @@ JOB_CONTROLLER_NAME = "job-controller"
 WORKFLOW_ENGINE_NAME = "workflow-engine"
 """Default workflow engine container name."""
 
-REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", "CHANGE_ME")
+REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", "")
 """GitLab API HOST"""
 
-REANA_GITLAB_URL = "https://{}".format(REANA_GITLAB_HOST)
-"""GitLab API URL"""
+REANA_GITLAB_URL = "https://{}".format(
+    REANA_GITLAB_HOST) if REANA_GITLAB_HOST else ""
+"""GitLab API URL, empty when GitLab is not configured."""
 
 REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "localhost")
 """REANA host name."""
@@ -356,7 +371,8 @@ REANA_HOSTPORT = os.getenv("REANA_HOSTPORT", "30443")
 REANA_URL = compose_reana_url(REANA_HOSTNAME, REANA_HOSTPORT)
 """REANA URL."""
 
-REANA_INGRESS_ANNOTATIONS = json.loads(os.getenv("REANA_INGRESS_ANNOTATIONS", "{}"))
+REANA_INGRESS_ANNOTATIONS = json.loads(
+    os.getenv("REANA_INGRESS_ANNOTATIONS", "{}"))
 """REANA Ingress annotations defined by the administrator."""
 
 REANA_INGRESS_CLASS_NAME = os.getenv("REANA_INGRESS_CLASS_NAME")
@@ -377,7 +393,8 @@ TRAEFIK_EXTERNAL = os.getenv("TRAEFIK_EXTERNAL", "false").lower() == "true"
 DASK_ENABLED = os.getenv("DASK_ENABLED", "true").lower() == "true"
 """Whether Dask is enabled in the cluster or not."""
 
-DASK_AUTOSCALER_ENABLED = os.getenv("DASK_AUTOSCALER_ENABLED", "true").lower() == "true"
+DASK_AUTOSCALER_ENABLED = os.getenv(
+    "DASK_AUTOSCALER_ENABLED", "true").lower() == "true"
 """Whether Dask autoscaler is enabled in the cluster or not."""
 
 REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
@@ -462,7 +479,8 @@ REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD = int(
 The job controller needs to clean up all the running jobs before the end of the grace period.
 """
 
-CONTAINER_IMAGE_ALIAS_PREFIXES = ["docker.io/", "docker.io/library/", "library/"]
+CONTAINER_IMAGE_ALIAS_PREFIXES = [
+    "docker.io/", "docker.io/library/", "library/"]
 """Prefixes that can be removed from container image references to generate valid image aliases."""
 
 MAX_WORKFLOW_SHARING_MESSAGE_LENGTH = 5000
@@ -485,3 +503,92 @@ if REANA_DATASTORE_ENABLED:
 else:
     REANA_DATASTORE_IMAGE = ""
     REANA_DATASTORE_SECRET = ""
+
+
+def _parse_comma_separated_list(value: str) -> List[str]:
+    """Parse comma-separated env var values into a list of strings."""
+    if not value:
+        return []
+    return [x.strip() for x in value.split(",") if x.strip()]
+
+
+_VALID_RUNTIME_FS_GROUP_CHANGE_POLICIES = {"Always", "OnRootMismatch"}
+"""Valid REANA runtime pod fsGroup change policy values."""
+
+
+def _parse_runtime_fs_group_change_policy(value: str | None) -> str:
+    """Parse runtime pod fsGroup change policy configuration."""
+    policy = (value or "").strip()
+    if not policy:
+        return "OnRootMismatch"
+    if policy not in _VALID_RUNTIME_FS_GROUP_CHANGE_POLICIES:
+        valid_values = ", ".join(
+            sorted(_VALID_RUNTIME_FS_GROUP_CHANGE_POLICIES))
+        raise ValueError(
+            "Invalid REANA_RUNTIME_FS_GROUP_CHANGE_POLICY value: "
+            f"{policy}. Valid values: {valid_values}"
+        )
+    return policy
+
+
+def _parse_runtime_sessions_supplemental_groups(value: str | None) -> List[int]:
+    """Parse supplemental groups for runtime interactive-session pods."""
+    raw_groups = "100" if value is None else value
+    parsed_groups = []
+    for group_value in _parse_comma_separated_list(raw_groups):
+        try:
+            group_id = int(group_value)
+        except ValueError as exc:
+            raise ValueError(
+                "Invalid REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS value: "
+                f"{group_value}. Values must be non-negative integers."
+            ) from exc
+        if group_id < 0:
+            raise ValueError(
+                "Invalid REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS value: "
+                f"{group_value}. Values must be non-negative integers."
+            )
+        parsed_groups.append(group_id)
+    return parsed_groups
+
+
+WORKSPACE_DISPLAY_FILE_LIMIT = int(
+    os.getenv("WORKSPACE_DISPLAY_FILE_LIMIT", "100000"))
+"""Maximum number of file entries returned by workspace listing endpoints."""
+
+REANA_RUNTIME_FS_GROUP_CHANGE_POLICY = _parse_runtime_fs_group_change_policy(
+    os.getenv("REANA_RUNTIME_FS_GROUP_CHANGE_POLICY")
+)
+"""Policy controlling runtime pod fsGroup ownership updates."""
+
+REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS = (
+    _parse_runtime_sessions_supplemental_groups(
+        os.getenv("REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS")
+    )
+)
+"""Supplemental groups applied to interactive-session pods."""
+
+_VALID_GC_COMMANDS = {"ls", "list", "rm", "delete"}
+"""Valid FORCE_GARBAGE_COLLECTION command values."""
+
+_gc_env = os.getenv("FORCE_GARBAGE_COLLECTION", "")
+FORCE_GARBAGE_COLLECTION = _parse_comma_separated_list(_gc_env)
+"""Comma-separated list of commands that trigger a manual `gc.collect()` before operations.
+
+Example:
+  $ export FORCE_GARBAGE_COLLECTION=ls,list,rm,delete
+
+Supported values:
+- ls: trigger `gc.collect()` before listing workspace files
+- list: trigger `gc.collect()` before listing all workflows
+- rm: trigger `gc.collect()` before removing workspace files
+- delete: trigger `gc.collect()` before deleting workflows
+"""
+_invalid_gc = sorted(set(FORCE_GARBAGE_COLLECTION) - _VALID_GC_COMMANDS)
+if _invalid_gc:
+    valid_gc_values = ", ".join(sorted(_VALID_GC_COMMANDS))
+    invalid_gc_values = ", ".join(_invalid_gc)
+    raise ValueError(
+        "Invalid FORCE_GARBAGE_COLLECTION values: "
+        f"{invalid_gc_values}. Valid values: {valid_gc_values}"
+    )

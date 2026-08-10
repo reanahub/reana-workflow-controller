@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2024, 2025 CERN.
+# Copyright (C) 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -20,8 +20,10 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_commons.config import (
     K8S_CERN_EOS_AVAILABLE,
     K8S_CERN_EOS_MOUNT_CONFIGURATION,
+    K8S_USE_SECURITY_CONTEXT,
     KRB5_STATUS_FILE_LOCATION,
     REANA_JOB_HOSTPATH_MOUNTS,
+    WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_UID,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
@@ -30,7 +32,6 @@ from reana_commons.k8s.api_client import (
     current_k8s_networking_api_client,
     current_k8s_custom_objects_api_client,
 )
-from reana_commons.k8s.kerberos import get_kerberos_k8s_config
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     get_workspace_volume,
@@ -43,9 +44,38 @@ from reana_workflow_controller.config import (
     REANA_INGRESS_HOST,
     REANA_INGRESS_CLASS_NAME,
     REANA_INGRESS_ANNOTATIONS,
+    REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     TRAEFIK_ENABLED,
     TRAEFIK_EXTERNAL,
 )
+from reana_workflow_controller.k8s import get_compatible_kerberos_k8s_config
+
+
+def _restricted_pod_security_context(kubernetes_uid: int) -> dict:
+    """Return a pod security context for non-root Dask pods."""
+    return {
+        "fsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+        "fsGroupChangePolicy": REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+        "runAsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+        "runAsUser": int(kubernetes_uid),
+        "runAsNonRoot": True,
+    }
+
+
+def _restricted_container_security_context(
+    kubernetes_uid: int | None = None,
+) -> dict:
+    """Return a PSA-restricted container security context."""
+    security_context = {
+        "runAsNonRoot": True,
+        "allowPrivilegeEscalation": False,
+        "capabilities": {"drop": ["ALL"]},
+        "seccompProfile": {"type": "RuntimeDefault"},
+    }
+    if kubernetes_uid is not None:
+        security_context["runAsGroup"] = int(WORKFLOW_RUNTIME_USER_GID)
+        security_context["runAsUser"] = int(kubernetes_uid)
+    return security_context
 
 
 class DaskResourceManager:
@@ -96,7 +126,7 @@ class DaskResourceManager:
         self.secrets_volume_mount = (
             self.secrets_store.get_secrets_volume_mount_as_k8s_spec()
         )
-        self.kubernetes_uid = WORKFLOW_RUNTIME_USER_UID
+        self.kubernetes_uid = int(WORKFLOW_RUNTIME_USER_UID)
 
         self.kerberos = kerberos
         self.voms_proxy = voms_proxy
@@ -147,7 +177,12 @@ class DaskResourceManager:
             logging.error(
                 f"An error occured while trying to create dask cluster, now deleting the cluster... Error message:\n{e}"
             )
-            delete_dask_cluster(self.workflow_id, self.user_id)
+            try:
+                delete_dask_cluster(self.workflow_id, self.user_id)
+            except Exception:
+                logging.exception(
+                    "Failed to clean up Dask resources after creation error."
+                )
 
     def _prepare_cluster(self):
         """Prepare Dask cluster body by adding necessary image-pull secrets, volumes, volume mounts, init containers and sidecar containers."""
@@ -208,6 +243,20 @@ class DaskResourceManager:
                 "nodeSelector"
             ] = REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL
 
+        if K8S_USE_SECURITY_CONTEXT:
+            self.cluster_body["spec"]["scheduler"]["spec"]["securityContext"] = (
+                _restricted_pod_security_context(self.kubernetes_uid)
+            )
+            self.cluster_body["spec"]["worker"]["spec"]["securityContext"] = (
+                _restricted_pod_security_context(self.kubernetes_uid)
+            )
+            self.cluster_body["spec"]["scheduler"]["spec"]["containers"][0][
+                "securityContext"
+            ] = _restricted_container_security_context()
+            self.cluster_body["spec"]["worker"]["spec"]["containers"][0][
+                "securityContext"
+            ] = _restricted_container_security_context()
+
         # Add secrets
         self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["env"].extend(
             self.secret_env_vars
@@ -246,17 +295,17 @@ class DaskResourceManager:
         self.autoscaler_body["spec"]["maximum"] = self.num_of_workers
 
     def _add_image_pull_secrets(self):
-        """Attach the configured image pull secrets to scheduler and worker containers."""
+        """Attach the configured image pull secrets to scheduler and worker pods."""
         image_pull_secrets = []
         for secret_name in current_app.config["IMAGE_PULL_SECRETS"]:
             if secret_name:
                 image_pull_secrets.append({"name": secret_name})
 
-        self.cluster_body["spec"]["worker"]["spec"]["containers"][0][
+        self.cluster_body["spec"]["worker"]["spec"][
             "imagePullSecrets"
         ] = image_pull_secrets
 
-        self.cluster_body["spec"]["scheduler"]["spec"]["containers"][0][
+        self.cluster_body["spec"]["scheduler"]["spec"][
             "imagePullSecrets"
         ] = image_pull_secrets
 
@@ -310,7 +359,7 @@ class DaskResourceManager:
 
     def _add_krb5_containers(self):
         """Add krb5 init and renew containers for Dask workers."""
-        krb5_config = get_kerberos_k8s_config(
+        krb5_config = get_compatible_kerberos_k8s_config(
             self.secrets_store,
             kubernetes_uid=self.kubernetes_uid,
         )
@@ -399,11 +448,9 @@ class DaskResourceManager:
                         echo "[ERROR] VOMSPROXY_FILE {voms_proxy_user_file} does not exist in user secrets."; \
                         exit; \
                      fi; \
-                     cp /etc/reana/secrets/{voms_proxy_user_file} {voms_proxy_file_path}; \
-                     chown {kubernetes_uid} {voms_proxy_file_path}'.format(
+                     cp /etc/reana/secrets/{voms_proxy_user_file} {voms_proxy_file_path}'.format(
                         voms_proxy_user_file=voms_proxy_user_file,
                         voms_proxy_file_path=voms_proxy_file_path,
-                        kubernetes_uid=self.kubernetes_uid,
                     ),
                 ],
                 "name": current_app.config["VOMSPROXY_CONTAINER_NAME"],
@@ -411,6 +458,10 @@ class DaskResourceManager:
                 "volumeMounts": [self.secrets_volume_mount] + volume_mounts,
                 "env": self.secret_env_vars,
             }
+            if K8S_USE_SECURITY_CONTEXT:
+                voms_proxy_container["securityContext"] = (
+                    _restricted_container_security_context(self.kubernetes_uid)
+                )
         else:
             # single-user deployment mode, where we generate VOMS proxy file in the sidecar from user secrets
             voms_proxy_container = {
@@ -439,12 +490,10 @@ class DaskResourceManager:
                          echo {voms_proxy_pass} | base64 -d | voms-proxy-init \
                          --voms {voms_proxy_vo} --key /tmp/userkey.pem \
                          --cert $(readlink -f /etc/reana/secrets/usercert.pem) \
-                         --pwstdin --out {voms_proxy_file_path}; \
-                         chown {kubernetes_uid} {voms_proxy_file_path}'.format(
+                         --pwstdin --out {voms_proxy_file_path}'.format(
                         voms_proxy_vo=voms_proxy_vo.lower(),
                         voms_proxy_file_path=voms_proxy_file_path,
                         voms_proxy_pass=voms_proxy_pass,
-                        kubernetes_uid=self.kubernetes_uid,
                     ),
                 ],
                 "name": current_app.config["VOMSPROXY_CONTAINER_NAME"],
@@ -452,6 +501,10 @@ class DaskResourceManager:
                 "volumeMounts": [self.secrets_volume_mount] + volume_mounts,
                 "env": self.secret_env_vars,
             }
+            if K8S_USE_SECURITY_CONTEXT:
+                voms_proxy_container["securityContext"] = (
+                    _restricted_container_security_context(self.kubernetes_uid)
+                )
 
         self.cluster_body["spec"]["worker"]["spec"]["volumes"].extend(
             [ticket_cache_volume]
@@ -567,6 +620,10 @@ class DaskResourceManager:
             "volumeMounts": [self.secrets_volume_mount] + volume_mounts,
             "env": self.secret_env_vars,
         }
+        if K8S_USE_SECURITY_CONTEXT:
+            rucio_config_container["securityContext"] = (
+                _restricted_container_security_context(self.kubernetes_uid)
+            )
 
         self.cluster_body["spec"]["worker"]["spec"]["volumes"].extend(
             [ticket_cache_volume]
@@ -632,7 +689,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
             group="kubernetes.dask.org",
             version="v1",
             plural="daskclusters",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             name=get_dask_component_name(workflow_id, "cluster"),
         )
         logging.info(f"Dask cluster for workflow {workflow_id} deleted successfully.")
@@ -645,7 +702,7 @@ def delete_dask_cluster(workflow_id, user_id) -> None:
                 group="kubernetes.dask.org",
                 version="v1",
                 plural="daskautoscalers",
-                namespace="default",
+                namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
                 name=get_dask_component_name(workflow_id, "autoscaler"),
             )
             logging.info(
@@ -765,13 +822,13 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
     current_k8s_custom_objects_api_client.create_namespaced_custom_object(
         group="traefik.io",
         version="v1alpha1",
-        namespace="default",
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         plural="middlewares",
         body=middleware_spec,
     )
     # Create the ingress resource
     current_k8s_networking_api_client.create_namespaced_ingress(
-        namespace="default", body=ingress
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=ingress
     )
 
 
@@ -781,7 +838,7 @@ def delete_dask_dashboard_ingress(workflow_id):
     try:
         current_k8s_networking_api_client.delete_namespaced_ingress(
             get_dask_component_name(workflow_id, "dashboard_ingress"),
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             body=client.V1DeleteOptions(),
         )
     except Exception as e:
@@ -793,7 +850,7 @@ def delete_dask_dashboard_ingress(workflow_id):
         current_k8s_custom_objects_api_client.delete_namespaced_custom_object(
             group="traefik.io",
             version="v1alpha1",
-            namespace="default",
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
             plural="middlewares",
             name=get_dask_component_name(workflow_id, "dashboard_ingress_middleware"),
         )

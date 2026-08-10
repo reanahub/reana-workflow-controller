@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2024, 2025 CERN.
+# Copyright (C) 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -10,7 +10,8 @@ from uuid import uuid4
 from flask import current_app
 from mock import patch, MagicMock
 
-
+from reana_commons.config import WORKFLOW_RUNTIME_USER_GID, WORKFLOW_RUNTIME_USER_UID
+from reana_workflow_controller.config import REANA_RUNTIME_FS_GROUP_CHANGE_POLICY
 from reana_workflow_controller.dask import requires_dask
 
 
@@ -85,15 +86,15 @@ def test_add_image_pull_secrets(dask_resource_manager):
         # Assert
         expected_image_pull_secrets = [{"name": "my-secret"}]
         assert (
-            dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["containers"][
-                0
-            ]["imagePullSecrets"]
+            dask_resource_manager.cluster_body["spec"]["worker"]["spec"][
+                "imagePullSecrets"
+            ]
             == expected_image_pull_secrets
         )
         assert (
             dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"][
-                "containers"
-            ][0]["imagePullSecrets"]
+                "imagePullSecrets"
+            ]
             == expected_image_pull_secrets
         )
 
@@ -151,6 +152,23 @@ def test_add_hostpath_volumes_with_mounts(
             dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["volumes"]
             == expected_volumes
         )
+
+
+def test_create_dask_resources_cleanup_error_is_swallowed(dask_resource_manager):
+    """Test that cleanup errors after creation failure do not propagate."""
+    with patch.object(
+        dask_resource_manager,
+        "_prepare_cluster",
+    ), patch.object(
+        dask_resource_manager,
+        "_create_dask_cluster",
+        side_effect=Exception("CRD not found"),
+    ), patch(
+        "reana_workflow_controller.dask.delete_dask_cluster",
+        side_effect=RuntimeError("cleanup failed"),
+    ):
+        # Should not raise despite both creation and cleanup failing
+        dask_resource_manager.create_dask_resources()
 
 
 def test_create_dask_resources(dask_resource_manager):
@@ -297,7 +315,7 @@ def test_add_shared_volume_already_added(dask_resource_manager):
 def test_add_krb5_containers(dask_resource_manager):
     """Test _add_krb5_containers method."""
     with patch(
-        "reana_workflow_controller.dask.get_kerberos_k8s_config"
+        "reana_workflow_controller.dask.get_compatible_kerberos_k8s_config"
     ) as mock_get_krb5_config, patch(
         "reana_workflow_controller.dask.KRB5_STATUS_FILE_LOCATION", "/tmp/krb5_status"
     ):
@@ -445,6 +463,40 @@ def test_prepare_cluster(dask_resource_manager):
             ][0]["image"]
             == dask_resource_manager.cluster_image
         )
+        assert dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"][
+            "securityContext"
+        ] == {
+            "fsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+            "fsGroupChangePolicy": REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+            "runAsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+            "runAsUser": int(WORKFLOW_RUNTIME_USER_UID),
+            "runAsNonRoot": True,
+        }
+        assert dask_resource_manager.cluster_body["spec"]["worker"]["spec"][
+            "securityContext"
+        ] == {
+            "fsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+            "fsGroupChangePolicy": REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+            "runAsGroup": int(WORKFLOW_RUNTIME_USER_GID),
+            "runAsUser": int(WORKFLOW_RUNTIME_USER_UID),
+            "runAsNonRoot": True,
+        }
+        assert dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"][
+            "containers"
+        ][0]["securityContext"] == {
+            "runAsNonRoot": True,
+            "allowPrivilegeEscalation": False,
+            "capabilities": {"drop": ["ALL"]},
+            "seccompProfile": {"type": "RuntimeDefault"},
+        }
+        assert dask_resource_manager.cluster_body["spec"]["worker"]["spec"][
+            "containers"
+        ][0]["securityContext"] == {
+            "runAsNonRoot": True,
+            "allowPrivilegeEscalation": False,
+            "capabilities": {"drop": ["ALL"]},
+            "seccompProfile": {"type": "RuntimeDefault"},
+        }
 
         assert (
             dask_resource_manager.secrets_volume_mount
@@ -461,4 +513,60 @@ def test_prepare_cluster(dask_resource_manager):
                 "selector"
             ]["dask.org/cluster-name"]
             == dask_resource_manager.cluster_name
+        )
+
+
+def test_prepare_cluster_skips_security_context_when_disabled(dask_resource_manager):
+    """Test _prepare_cluster omits explicit security contexts when disabled."""
+    with patch.object(dask_resource_manager, "_add_image_pull_secrets"), patch.object(
+        dask_resource_manager, "_add_hostpath_volumes"
+    ), patch.object(dask_resource_manager, "_add_workspace_volume"), patch.object(
+        dask_resource_manager, "_add_shared_volume"
+    ), patch.object(
+        dask_resource_manager, "_add_eos_volume"
+    ), patch.object(
+        dask_resource_manager.secrets_store, "get_file_secrets_volume_as_k8s_specs"
+    ) as mock_get_file_secrets_volume, patch(
+        "reana_workflow_controller.dask.K8S_USE_SECURITY_CONTEXT", False
+    ):
+        mock_get_file_secrets_volume.return_value = {"name": "secrets-volume"}
+        dask_resource_manager.cluster_body = {
+            "spec": {
+                "worker": {
+                    "spec": {
+                        "containers": [
+                            {"args": ["worker-command"], "env": [], "volumeMounts": []}
+                        ],
+                        "volumes": [],
+                    }
+                },
+                "scheduler": {
+                    "spec": {"containers": [{}]},
+                    "service": {"selector": {}},
+                },
+            }
+        }
+        dask_resource_manager.autoscaler_body = {"spec": {}}
+
+        dask_resource_manager._prepare_cluster()
+
+        assert (
+            "securityContext"
+            not in dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"]
+        )
+        assert (
+            "securityContext"
+            not in dask_resource_manager.cluster_body["spec"]["worker"]["spec"]
+        )
+        assert (
+            "securityContext"
+            not in dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"][
+                "containers"
+            ][0]
+        )
+        assert (
+            "securityContext"
+            not in dask_resource_manager.cluster_body["spec"]["worker"]["spec"][
+                "containers"
+            ][0]
         )

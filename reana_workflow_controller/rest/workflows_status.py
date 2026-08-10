@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022, 2024, 2025 CERN.
+# Copyright (C) 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -11,6 +11,7 @@
 import json
 
 from flask import Blueprint, jsonify, request
+import marshmallow
 from webargs import fields
 from webargs.flaskparser import use_kwargs
 
@@ -362,6 +363,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         "status": fields.Str(required=True),
     },
     location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def set_workflow_status(
     workflow_id_or_name: str, user: str, status: str, **parameters: dict

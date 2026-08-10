@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021 CERN.
+# Copyright (C) 2021, 2022, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -17,7 +17,11 @@ from reana_commons.publisher import WorkflowStatusPublisher
 from reana_commons.k8s.secrets import UserSecrets, Secret
 from reana_db.models import RunStatus
 
-from reana_workflow_controller.consumer import JobStatusConsumer, _update_commit_status
+from reana_workflow_controller.consumer import (
+    JobStatusConsumer,
+    _get_workflow_engine_pod_logs,
+    _update_commit_status,
+)
 
 
 def test_workflow_finish_and_kubernetes_not_available(
@@ -88,6 +92,42 @@ def test_update_commit_status(
         url = post_mock.call_args.args[0]
         assert "access_token=my-token" in url
         assert f"state={gitlab_status}" in url
+
+
+def test_get_workflow_engine_pod_logs_preserves_newlines(sample_serial_workflow_in_db):
+    """Raw engine pod log bytes are decoded to str with newlines preserved.
+
+    Guards against kubernetes 36.x's str-deserialiser regression that
+    turns ``bytes`` payloads into ``"b'...'"`` repr strings with literal
+    backslash-n inside.
+    """
+    workflow = sample_serial_workflow_in_db
+    pod_log_bytes = b"adage | MainThread | INFO | workflow completed successfully.\n"
+    pod = Mock()
+    pod.metadata.name = f"run-batch-{workflow.id_}"
+    pod.metadata.namespace = "default"
+    pods = Mock()
+    pods.items = [pod]
+    k8s_corev1_api_client_mock = Mock()
+    k8s_corev1_api_client_mock.list_namespaced_pod = Mock(return_value=pods)
+    k8s_corev1_api_client_mock.read_namespaced_pod_log = Mock(
+        return_value=Mock(data=pod_log_bytes)
+    )
+    with patch(
+        "reana_workflow_controller.consumer.current_k8s_corev1_api_client",
+        k8s_corev1_api_client_mock,
+    ):
+        logs = _get_workflow_engine_pod_logs(workflow)
+        assert isinstance(logs, str)
+        assert pod_log_bytes.decode("utf-8") == logs
+        assert "b'" not in logs
+        assert "\\n" not in logs
+        # Lock in the kubernetes 36.x workaround: the call MUST pass
+        # ``_preload_content=False`` so we get raw bytes from urllib3
+        # instead of the broken str-deserialiser output.
+        assert k8s_corev1_api_client_mock.read_namespaced_pod_log.called
+        for call in k8s_corev1_api_client_mock.read_namespaced_pod_log.call_args_list:
+            assert call.kwargs.get("_preload_content") is False
 
 
 def test_update_commit_status_without_token(session, sample_serial_workflow_in_db):

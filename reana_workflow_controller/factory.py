@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -54,6 +54,15 @@ def create_app(config_mapping=None):
     app.config.from_object("reana_workflow_controller.config")
     if config_mapping:
         app.config.from_mapping(config_mapping)
+
+    if not app.config.get("SECRET_KEY"):
+        raise ValueError(
+            "SECRET_KEY is unset. Provide a strong random value via "
+            "secrets.reana.REANA_SECRET_KEY in your Helm values, e.g. "
+            "`--set secrets.reana.REANA_SECRET_KEY=$(openssl rand -hex 32)`. "
+            "For existing clusters that need to rotate, see: "
+            "https://blog.reana.io/posts/2024/reana-0.9.4/"
+        )
 
     # Register API routes
     from reana_workflow_controller.rest import (

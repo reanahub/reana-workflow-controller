@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2025 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -17,6 +17,7 @@ from typing import ContextManager
 
 import mock
 import pytest
+from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
     InteractiveSessionType,
@@ -123,7 +124,7 @@ def test_delete_workflow_with_interactive_session(
         data = json.loads(response.get_data())
         assert "Workflow successfully deleted" in data["message"]
         assert http_response == 200
-        assert not len(workflow.sessions.all())
+        assert not workflow.sessions
 
 
 @pytest.mark.parametrize("workspace", [True, False])
@@ -197,7 +198,9 @@ def test_workspace_deletion(
 
     # check that all cache entries for jobs
     # of the deleted workflow are removed
-    cache_entries_after_delete = JobCache.query.filter_by(job_id=workflow_job.id_).all()
+    cache_entries_after_delete = (
+        Session.query(JobCache).filter_by(job_id=workflow_job.id_).all()
+    )
     assert not cache_entries_after_delete
     assert not os.path.exists(cache_dir_path)
 
