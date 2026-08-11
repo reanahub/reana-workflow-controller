@@ -344,11 +344,16 @@ class InteractiveDeploymentK8sBuilder(object):
             ]
 
     def setup_s3_storage(self):
-        """Configure shared empty_dir volume for S3 sidecar and session container."""
+        """Configure memory-backed empty_dir volume for S3 sidecar with mount propagation."""
         volume_name = "s3-mounts"
 
+        # Use memory-backed emptyDir as per K8s recommendations for mount propagation
         volume = client.V1Volume(
-            name=volume_name, empty_dir=client.V1EmptyDirVolumeSource()
+            name=volume_name,
+            empty_dir=client.V1EmptyDirVolumeSource(
+                medium="Memory",
+                size_limit="1Gi"
+            )
         )
 
         volume_mount = client.V1VolumeMount(
@@ -368,7 +373,7 @@ class InteractiveDeploymentK8sBuilder(object):
         self._pod_spec.volumes.append(volume)
 
     def setup_s3_sidecar(self):
-        """Add the sidecar for s3 mounts."""
+        """Add the sidecar for s3 mounts with minimal required privileges."""
         # Define the volume mount for /dev/fuse
         fuse_volume_mount = client.V1VolumeMount(
             name="fuse-device", mount_path="/dev/fuse"
@@ -377,17 +382,24 @@ class InteractiveDeploymentK8sBuilder(object):
         # Define the volume for /dev/fuse
         fuse_volume = client.V1HostPathVolumeSource(path="/dev/fuse")
 
-        # Append the volume mount and volume to the session container and pod spec
+        # Append the volume mount and volume to the sidecar container and pod spec
         self._s3_container.volume_mounts.append(fuse_volume_mount)
         self._pod_spec.volumes.append(
             client.V1Volume(name="fuse-device", host_path=fuse_volume)
         )
 
+        # Security context for FUSE - privileged required for bidirectional mounting
+        # Note: allowPrivilegeEscalation must be true when privileged=true per K8s rules
         security_context = client.V1SecurityContext(
             run_as_user=0,
-            allow_privilege_escalation=True,
-            capabilities=client.V1Capabilities(add=["SYS_ADMIN"]),
-            privileged=True,
+            allow_privilege_escalation=True,  # Required when privileged=True
+            capabilities=client.V1Capabilities(
+                add=["SYS_ADMIN"],
+                drop=["ALL"]  # Drop all other capabilities
+            ),
+            privileged=True,  # Required by K8s for bidirectional mount propagation
+            seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
+            read_only_root_filesystem=False,
         )
         self._s3_container.security_context = security_context
 
