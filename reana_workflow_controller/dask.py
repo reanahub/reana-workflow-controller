@@ -777,15 +777,30 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
         },
     }
 
+    middlewares_key = "traefik.ingress.kubernetes.io/router.middlewares"
+    dashboard_middleware_ref = (
+        f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-"
+        f"{get_dask_component_name(workflow_id, 'dashboard_ingress_middleware')}"
+        "@kubernetescrd"
+    )
+    # Append to, rather than replace, any router.middlewares REANA_INGRESS_ANNOTATIONS
+    # already carries (e.g. an administrator-configured one, or the auth-rework
+    # Referrer-Policy middleware the chart now sets by default): a dict literal
+    # would otherwise silently discard it for this ingress alone.
+    dashboard_annotations = dict(REANA_INGRESS_ANNOTATIONS)
+    existing_middlewares = dashboard_annotations.get(middlewares_key)
+    dashboard_annotations[middlewares_key] = (
+        f"{existing_middlewares},{dashboard_middleware_ref}"
+        if existing_middlewares
+        else dashboard_middleware_ref
+    )
+
     ingress = client.V1Ingress(
         api_version="networking.k8s.io/v1",
         kind="Ingress",
         metadata=client.V1ObjectMeta(
             name=get_dask_component_name(workflow_id, "dashboard_ingress"),
-            annotations={
-                **REANA_INGRESS_ANNOTATIONS,
-                "traefik.ingress.kubernetes.io/router.middlewares": f"{REANA_RUNTIME_KUBERNETES_NAMESPACE}-{get_dask_component_name(workflow_id, 'dashboard_ingress_middleware')}@kubernetescrd",
-            },
+            annotations=dashboard_annotations,
             labels={
                 "user-uuid": user_id,
                 "reana-run-dask-workflow-uuid": workflow_id,
