@@ -28,6 +28,7 @@ from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_commons.utils import build_unique_component_name, get_dask_component_name
 from reana_db.database import Session
 from reana_db.models import (
+    Notification,
     RunStatus,
     User,
     UserWorkflow,
@@ -1241,14 +1242,24 @@ def share_workflow(
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, sharer.id_)
 
         try:
-            Session.add(
-                UserWorkflow(
-                    user_id=user_to_share_with.id_,
-                    workflow_id=workflow.id_,
-                    message=message,
-                    valid_until=valid_until,
-                )
+            share = UserWorkflow(
+                user_id=user_to_share_with.id_,
+                workflow_id=workflow.id_,
+                message=message,
+                valid_until=valid_until,
             )
+            notification = Notification(
+                user_id=user_to_share_with.id_,
+                type_="workflow_shared",
+                payload={
+                    "workflow_id": str(workflow.id_),
+                    "workflow_name": workflow.get_full_workflow_name(),
+                    "sharer_email": sharer.email,
+                    "message": message,
+                    "valid_until": valid_until.isoformat() if valid_until else None,
+                },
+            )
+            Session.add_all([share, notification])
             Session.commit()
         except IntegrityError:
             Session.rollback()

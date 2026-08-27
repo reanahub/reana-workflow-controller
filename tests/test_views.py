@@ -23,6 +23,7 @@ from reana_db.models import (
     InteractiveSession,
     Job,
     JobCache,
+    Notification,
     RunStatus,
     Workflow,
     WorkspaceRetentionRule,
@@ -2213,7 +2214,14 @@ def test_share_workflow(
         response_data = res.get_json()
         assert response_data["message"] == "The workflow has been shared with the user."
 
+    notification = session.query(Notification).filter_by(user_id=user2.id_).one()
+    assert notification.type_ == "workflow_shared"
+    assert notification.payload["workflow_id"] == str(workflow.id_)
+    assert notification.payload["sharer_email"] == user1.email
+
+    session.delete(notification)
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+    session.commit()
 
 
 def test_share_workflow_with_message_and_valid_until(
@@ -2242,7 +2250,13 @@ def test_share_workflow_with_message_and_valid_until(
         response_data = res.get_json()
         assert response_data["message"] == "The workflow has been shared with the user."
 
+    notification = session.query(Notification).filter_by(user_id=user2.id_).one()
+    assert notification.payload["message"] == share_details["message"]
+    assert notification.payload["valid_until"] == share_details["valid_until"]
+
+    session.delete(notification)
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+    session.commit()
 
 
 def test_share_workflow_invalid_email(
