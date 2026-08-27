@@ -22,24 +22,24 @@ COPY requirements.txt /code/
 # Install all system and Python dependencies in one go
 # hadolint ignore=DL3008,DL3013
 RUN apt-get update -y && \
-    apt-get install --no-install-recommends -y \
-      gcc \
-      git \
-      libpcre3 \
-      libpcre3-dev \
-      libpython3.12 \
-      python3-pip \
-      python3.12 \
-      python3.12-dev \
-      vim-tiny && \
-    pip install --no-cache-dir --upgrade 'setuptools<81' && \
-    pip install --no-cache-dir -r /code/requirements.txt && \
-    apt-get remove -y \
-      gcc \
-      python3.12-dev && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get install --no-install-recommends -y \
+  gcc \
+  git \
+  libpcre3 \
+  libpcre3-dev \
+  libpython3.12 \
+  python3-pip \
+  python3.12 \
+  python3.12-dev \
+  vim-tiny && \
+  pip install --no-cache-dir --upgrade 'setuptools<81' && \
+  pip install --no-cache-dir -r /code/requirements.txt && \
+  apt-get remove -y \
+  gcc \
+  python3.12-dev && \
+  apt-get autoremove -y && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
 
 # Copy cluster component source code
 WORKDIR /code
@@ -52,19 +52,19 @@ RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else
 # Are we building with locally-checked-out shared modules?
 # hadolint ignore=DL3013
 RUN if test -e modules/reana-commons; then \
-      if [ "${DEBUG}" -gt 0 ]; then \
-        pip install --no-cache-dir -e "modules/reana-commons[kubernetes]" --upgrade; \
-      else \
-        pip install --no-cache-dir "modules/reana-commons[kubernetes]" --upgrade; \
-      fi \
-    fi; \
-    if test -e modules/reana-db; then \
-      if [ "${DEBUG}" -gt 0 ]; then \
-        pip install --no-cache-dir -e "modules/reana-db" --upgrade; \
-      else \
-        pip install --no-cache-dir "modules/reana-db" --upgrade; \
-      fi \
-    fi
+  if [ "${DEBUG}" -gt 0 ]; then \
+  pip install --no-cache-dir -e "modules/reana-commons[kubernetes]" --upgrade; \
+  else \
+  pip install --no-cache-dir "modules/reana-commons[kubernetes]" --upgrade; \
+  fi \
+  fi; \
+  if test -e modules/reana-db; then \
+  if [ "${DEBUG}" -gt 0 ]; then \
+  pip install --no-cache-dir -e "modules/reana-db" --upgrade; \
+  else \
+  pip install --no-cache-dir "modules/reana-db" --upgrade; \
+  fi \
+  fi
 
 # Check for any broken Python dependencies
 RUN pip check
@@ -75,8 +75,8 @@ COPY etc/uwsgi.ini /var/reana/uwsgi/uwsgi.ini
 
 # Set useful environment variables
 ENV FLASK_APP=reana_workflow_controller/app.py \
-    PYTHONPATH=/workdir \
-    TERM=xterm
+  PYTHONPATH=/workdir \
+  TERM=xterm
 
 # Expose ports to clients
 EXPOSE 5000
