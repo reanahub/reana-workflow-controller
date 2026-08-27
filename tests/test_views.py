@@ -2072,6 +2072,58 @@ def test_create_interactive_session_custom_image(
             assert fargs[1].spec.template.spec.containers[0].image == custom_image
 
 
+def test_create_interactive_session_secret_names(
+    app,
+    user0,
+    sample_serial_workflow_in_db,
+    interactive_session_environments,
+    corev1_api_client_with_user_secrets,
+    user_secrets,
+):
+    """Create an interactive session with a filtered secret allowlist."""
+    interactive_session_configuration = {"secret_names": ["username"]}
+    with app.test_client() as client:
+        with mock.patch.multiple(
+            "reana_workflow_controller.k8s",
+            current_k8s_corev1_api_client=mock.DEFAULT,
+            current_k8s_networking_api_client=mock.DEFAULT,
+            current_k8s_appsv1_api_client=mock.DEFAULT,
+        ) as mocks:
+            with mock.patch(
+                "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+                corev1_api_client_with_user_secrets(user_secrets),
+            ):
+                res = client.post(
+                    url_for(
+                        "workflows_session.open_interactive_session",
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                        interactive_session_type="jupyter",
+                    ),
+                    query_string={"user": user0.id_},
+                    content_type="application/json",
+                    data=json.dumps(interactive_session_configuration),
+                )
+                assert res.status_code == 200
+                fargs, _ = mocks[
+                    "current_k8s_appsv1_api_client"
+                ].create_namespaced_deployment.call_args
+
+            pod_spec = fargs[1].spec.template.spec
+            env_names = {
+                env_var["name"] if isinstance(env_var, dict) else env_var.name
+                for env_var in pod_spec.containers[0].env
+            }
+
+            assert "username" in env_names
+            assert "password" not in env_names
+            assert not any(
+                (
+                    volume["name"] if isinstance(volume, dict) else volume.name
+                ).startswith("reana-secretsstore")
+                for volume in pod_spec.volumes
+            )
+
+
 def test_close_interactive_session(app, session, user0, sample_serial_workflow_in_db):
     """Test close an interactive session."""
     expected_data = {"message": "The interactive session has been closed"}

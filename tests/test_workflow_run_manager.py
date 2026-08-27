@@ -10,6 +10,9 @@
 
 from __future__ import absolute_import, print_function
 
+import base64
+import json
+
 import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
@@ -20,6 +23,7 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_UID,
 )
+from reana_commons.errors import REANASecretDoesNotExist
 from reana_db.database import Session
 from reana_db.models import (
     RunStatus,
@@ -244,6 +248,46 @@ def test_interactive_session_custom_image(sample_serial_workflow_in_db, monkeypa
         ].create_namespaced_ingress.assert_called_once()
 
 
+def test_start_interactive_session_inherits_workflow_secret_names(
+    sample_serial_workflow_in_db,
+    user_secrets,
+    corev1_api_client_with_user_secrets,
+):
+    """Notebook sessions inherit workflow.resources.secret_names when CLI is silent."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {
+        "secret_names": ["username"]
+    }
+
+    with patch.multiple(
+        "reana_workflow_controller.k8s",
+        current_k8s_corev1_api_client=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_appsv1_api_client=DEFAULT,
+    ) as mocks, patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        kwrm.start_interactive_session(InteractiveSessionType(0).name)
+
+    deployment = mocks["current_k8s_appsv1_api_client"].create_namespaced_deployment
+    pod_spec = deployment.call_args.args[1].spec.template.spec
+    env_names = {
+        env_var["name"] if isinstance(env_var, dict) else env_var.name
+        for env_var in pod_spec.containers[0].env
+    }
+
+    assert "username" in env_names
+    assert "password" not in env_names
+    assert not any(
+        (volume["name"] if isinstance(volume, dict) else volume.name).startswith(
+            "reana-secretsstore"
+        )
+        for volume in pod_spec.volumes
+    )
+
+
 def test_create_job_spec_kerberos(
     sample_serial_workflow_in_db,
     kerberos_user_secrets,
@@ -423,3 +467,538 @@ def test_create_job_spec_drops_colliding_job_controller_env_vars(
     assert not any(
         "workflow_runtime_user_uid" in message for message in warning_messages
     )
+
+
+def test_create_job_spec_scopes_job_controller_sidecar(
+    sample_serial_workflow_in_db,
+    user_secrets,
+    corev1_api_client_with_user_secrets,
+):
+    """The run-batch job-controller sidecar should inherit workflow secret scoping."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {
+        "secret_names": ["username"]
+    }
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_names = {env_var["name"] for env_var in job_controller_container.env}
+
+    assert "username" in env_names
+    assert "password" not in env_names
+
+
+def test_create_job_spec_sidecar_drops_unused_workflow_secret_default(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Workflow defaults should not leak into the sidecar when every step overrides."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {"secret_names": ["global"]}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [
+            {"name": "prepare", "commands": ["echo one"], "secret_names": []},
+            {"name": "fit", "commands": ["echo two"], "secret_names": ["fit"]},
+        ]
+    }
+    scoped_user_secrets = {
+        "global": {"value": b"1", "type": "env"},
+        "fit": {"value": b"2", "type": "env"},
+        "unrelated": {"value": b"3", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"fit": "env"}
+    assert "global" not in manifest
+    assert "unrelated" not in manifest
+
+
+def test_create_job_spec_validates_explicit_step_secret_names_early(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Explicit step-local secret names should be rejected at workflow start."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [
+            {"name": "prepare", "commands": ["echo one"]},
+            {"name": "fit", "commands": ["echo two"], "secret_names": ["missing"]},
+        ]
+    }
+    scoped_user_secrets = {
+        "username": {"value": b"1", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        with pytest.raises(REANASecretDoesNotExist, match="missing"):
+            kwrm._create_job_spec("run-batch-test")
+
+
+def test_create_job_spec_sidecar_manifest_keeps_existing_feature_secrets(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """The run-batch sidecar manifest should keep feature secrets for step-local hints."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {"secret_names": []}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [{"name": "fit", "commands": ["echo hi"], "voms_proxy": True}]
+    }
+    voms_user_secrets = {
+        "ordinary": {"value": b"1", "type": "env"},
+        "VOMSPROXY_FILE": {"value": b"proxy.pem", "type": "env"},
+        "proxy.pem": {"value": b"proxy file", "type": "file"},
+    }
+    for secret in voms_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(voms_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"VOMSPROXY_FILE": "env", "proxy.pem": "file"}
+    assert "ordinary" not in manifest
+
+
+def test_create_job_spec_sidecar_manifest_does_not_leak_unused_feature_secrets(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Feature-looking secrets should not be added unless the workflow enables them."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {
+        "secret_names": ["username"]
+    }
+    scoped_user_secrets = {
+        "username": {"value": b"johndoe", "type": "env"},
+        "VOMSPROXY_FILE": {"value": b"proxy.pem", "type": "env"},
+        "proxy.pem": {"value": b"proxy file", "type": "file"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"username": "env"}
+
+
+@pytest.mark.parametrize("compute_backend", ["htcondorcern", "slurmcern"])
+def test_create_job_spec_sidecar_manifest_keeps_cern_backend_kerberos_secrets(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+    compute_backend,
+):
+    """CERN backends should keep Kerberos credentials for backend authentication."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {"secret_names": []}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [
+            {
+                "name": "fit",
+                "commands": ["echo hi"],
+                "compute_backend": compute_backend,
+            }
+        ]
+    }
+    kerberos_user_secrets = {
+        "ordinary": {"value": b"1", "type": "env"},
+        "CERN_USER": {"value": b"johndoe", "type": "env"},
+        "CERN_KEYTAB": {"value": b".keytab", "type": "env"},
+        ".keytab": {"value": b"keytab file", "type": "file"},
+    }
+    for secret in kerberos_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(kerberos_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {
+        "CERN_USER": "env",
+        "CERN_KEYTAB": "env",
+        ".keytab": "file",
+    }
+    assert "ordinary" not in manifest
+
+
+def test_create_job_spec_sidecar_manifest_keeps_cwl_step_feature_secrets(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Packed CWL step-level hints should drive sidecar feature credentials."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {"secret_names": []}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "$graph": [
+            {
+                "class": "Workflow",
+                "id": "#main",
+                "steps": [
+                    {
+                        "id": "#main/fit",
+                        "run": "#tool",
+                        "in": [],
+                        "out": [],
+                        "hints": [{"class": "reana", "voms_proxy": True}],
+                    }
+                ],
+            },
+            {"class": "CommandLineTool", "id": "#tool"},
+        ]
+    }
+    voms_user_secrets = {
+        "ordinary": {"value": b"1", "type": "env"},
+        "VOMSPROXY_FILE": {"value": b"proxy.pem", "type": "env"},
+        "proxy.pem": {"value": b"proxy file", "type": "file"},
+    }
+    for secret in voms_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(voms_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"VOMSPROXY_FILE": "env", "proxy.pem": "file"}
+    assert "ordinary" not in manifest
+
+
+def test_create_job_spec_scopes_sidecar_for_cwl_step_local_secret_names_only(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Packed CWL step-local secret_names should scope the sidecar without a global default."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "$graph": [
+            {
+                "class": "Workflow",
+                "id": "#main",
+                "steps": [
+                    {
+                        "id": "#main/fit",
+                        "run": "#tool",
+                        "in": [],
+                        "out": [],
+                        "hints": [{"class": "reana", "secret_names": ["fit"]}],
+                    }
+                ],
+            },
+            {"class": "CommandLineTool", "id": "#tool"},
+        ]
+    }
+    scoped_user_secrets = {
+        "fit": {"value": b"1", "type": "env"},
+        "unrelated": {"value": b"2", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"fit": "env"}
+    assert "unrelated" not in manifest
+
+
+def test_create_job_spec_scopes_sidecar_for_step_local_secret_names_only(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Step-local-only secret scopes should reduce the sidecar when every step is explicit."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [
+            {"name": "prepare", "commands": ["echo one"], "secret_names": ["common"]},
+            {
+                "name": "fit",
+                "commands": ["echo two"],
+                "secret_names": ["common", "fit"],
+            },
+        ]
+    }
+    scoped_user_secrets = {
+        "common": {"value": b"1", "type": "env"},
+        "fit": {"value": b"2", "type": "env"},
+        "unrelated": {"value": b"3", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"common": "env", "fit": "env"}
+    assert "unrelated" not in manifest
+
+
+def test_create_job_spec_keeps_control_secret_manifest_authoritative(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """The sidecar secret manifest should win over colliding user env secrets."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {}
+    scoped_user_secrets = {
+        "REANA_USER_SECRETS_TYPES": {"value": b"user-secret-value", "type": "env"},
+        "username": {"value": b"1", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    manifest_entries = [
+        env_var
+        for env_var in job_controller_container.env
+        if (env_var["name"] if isinstance(env_var, dict) else env_var.name)
+        == "REANA_USER_SECRETS_TYPES"
+    ]
+
+    assert len(manifest_entries) == 2
+    last_entry = manifest_entries[-1]
+    manifest_value = (
+        last_entry.get("value") if isinstance(last_entry, dict) else last_entry.value
+    )
+    assert json.loads(manifest_value) == {
+        "REANA_USER_SECRETS_TYPES": "env",
+        "username": "env",
+    }
+    if isinstance(last_entry, dict):
+        assert "valueFrom" not in last_entry
+    else:
+        assert last_entry.value_from is None
+
+
+def test_create_job_spec_scopes_sidecar_for_explicit_empty_secret_names_only(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """Explicit empty step-local scopes must not collapse back to expose-all."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {}
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [
+            {"name": "prepare", "commands": ["echo one"], "secret_names": []},
+            {"name": "fit", "commands": ["echo two"], "secret_names": []},
+        ]
+    }
+    scoped_user_secrets = {
+        "common": {"value": b"1", "type": "env"},
+        "unrelated": {"value": b"2", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {}
+
+
+def test_create_job_spec_sidecar_manifest_includes_step_local_secret_overrides(
+    sample_serial_workflow_in_db,
+    corev1_api_client_with_user_secrets,
+):
+    """The run-batch sidecar must include step-local secret_names beyond the workflow default."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification["workflow"]["resources"] = {
+        "secret_names": ["common", "global"]
+    }
+    workflow.reana_specification["workflow"]["specification"] = {
+        "steps": [
+            {
+                "name": "fit",
+                "commands": ["echo hi"],
+                "secret_names": ["common", "global", "fit"],
+            }
+        ]
+    }
+    scoped_user_secrets = {
+        "common": {"value": b"1", "type": "env"},
+        "global": {"value": b"2", "type": "env"},
+        "fit": {"value": b"3", "type": "env"},
+        "unrelated": {"value": b"4", "type": "env"},
+    }
+    for secret in scoped_user_secrets.values():
+        secret["value"] = base64.b64encode(secret["value"]).decode()
+
+    with patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(scoped_user_secrets),
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        job = kwrm._create_job_spec("run-batch-test")
+
+    job_controller_container = next(
+        container
+        for container in job.spec.template.spec.containers
+        if container.name == "job-controller"
+    )
+    env_values = {}
+    for env_var in job_controller_container.env:
+        name = env_var["name"] if isinstance(env_var, dict) else env_var.name
+        value = env_var.get("value") if isinstance(env_var, dict) else env_var.value
+        env_values[name] = value
+    manifest = json.loads(env_values["REANA_USER_SECRETS_TYPES"])
+
+    assert manifest == {"common": "env", "global": "env", "fit": "env"}
+    assert "unrelated" not in manifest

@@ -37,8 +37,15 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_UID,
     WORKSPACE_PATHS,
 )
+from reana_commons.errors import REANASecretDoesNotExist
 from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
-from reana_commons.k8s.secrets import UserSecretsStore
+from reana_commons.k8s.secrets import (
+    get_declared_workflow_features,
+    get_explicit_workflow_secret_names,
+    UserSecretsStore,
+    get_declared_workflow_secret_names,
+    get_workflow_secret_names,
+)
 from reana_commons.k8s.volumes import (
     create_cvmfs_persistent_volume_claim,
     get_workspace_volume,
@@ -216,6 +223,7 @@ class WorkflowRunManager:
                 "--workflow-uuid {id} "
                 "--workflow-workspace {workspace} "
                 "--workflow-json '{workflow_json}' "
+                "--workflow-resources '{workflow_resources}' "
                 "--workflow-file '{workflow_file}' "
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
@@ -230,6 +238,7 @@ class WorkflowRunManager:
                 "--workflow-uuid {id} "
                 "--workflow-workspace {workspace} "
                 "--workflow-json '{workflow_json}' "
+                "--workflow-resources '{workflow_resources}' "
                 "--workflow-file '{workflow_file}' "
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
@@ -244,6 +253,7 @@ class WorkflowRunManager:
                 "--workflow-uuid {id} "
                 "--workflow-workspace {workspace} "
                 "--workflow-json '{workflow_json}' "
+                "--workflow-resources '{workflow_resources}' "
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
             ),
@@ -256,6 +266,7 @@ class WorkflowRunManager:
                 "run-snakemake-workflow "
                 "--workflow-uuid {id} "
                 "--workflow-workspace {workspace} "
+                "--workflow-resources '{workflow_resources}' "
                 "--workflow-file '{workflow_file}' "
                 "--workflow-parameters '{parameters}' "
                 "--operational-options '{options}' "
@@ -320,11 +331,17 @@ class WorkflowRunManager:
         self, overwrite_input_parameters=None, overwrite_operational_options=None
     ):
         """Return the command to be run for a given workflow engine."""
+        workflow_resources = (
+            self.workflow.reana_specification["workflow"].get("resources", {}) or {}
+        )
         return WorkflowRunManager.engine_mapping[self.workflow.type_]["command"].format(
             id=self.workflow.id_,
             workspace=self.workflow.workspace_path,
             workflow_json=base64.standard_b64encode(
                 json.dumps(self.workflow.get_specification()).encode()
+            ),
+            workflow_resources=base64.standard_b64encode(
+                json.dumps(workflow_resources).encode()
             ),
             workflow_file=self.workflow.reana_specification.get("workflow").get("file"),
             parameters=base64.standard_b64encode(
@@ -349,6 +366,10 @@ class WorkflowRunManager:
             "resources", {}
         )
         return required_resources.get("cvmfs", [])
+
+    def get_workflow_resources(self):
+        """Return workflow-level resources configuration."""
+        return self.workflow.reana_specification["workflow"].get("resources", {}) or {}
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
@@ -504,6 +525,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         validated_image = _validate_interactive_session_image(
             interactive_session_type, image
         )
+        secret_names = kwargs.pop("secret_names", None)
+        if secret_names is None:
+            secret_names = get_workflow_secret_names(self.get_workflow_resources())
+        kwargs["secret_names"] = secret_names
 
         action_completed = True
         kubernetes_objects = None
@@ -558,6 +583,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             raise REANAInteractiveSessionError(
                 "Connection to Kubernetes has failed:\n{}".format(api_exception)
             )
+        except REANASecretDoesNotExist:
+            action_completed = False
+            raise
         except Exception as e:
             action_completed = False
             raise REANAInteractiveSessionError(
@@ -635,6 +663,445 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         workflow_run_name = self._workflow_run_name_generator("batch")
         self._delete_k8s_job_quiet(workflow_run_name)
 
+    def _create_workflow_metadata(self, name, owner_id):
+        """Create Kubernetes object metadata for the workflow pod."""
+        labels = {
+            "reana_workflow_mode": "batch",
+            "reana-run-batch-workflow-uuid": str(self.workflow.id_),
+            "user-uuid": owner_id,
+        }
+
+        if KUEUE_ENABLED:
+            labels["kueue.x-k8s.io/queue-name"] = KUEUE_LOCAL_QUEUE_NAME
+
+        return client.V1ObjectMeta(
+            name=name,
+            labels=labels,
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        )
+
+    def _get_job_controller_user_secrets(
+        self, user_secrets, workflow_sidecar_secret_names, workflow_declared_features
+    ):
+        """Return user secrets exposed to the job-controller sidecar."""
+        if workflow_sidecar_secret_names is None:
+            return user_secrets
+
+        sidecar_secret_names = list(workflow_sidecar_secret_names)
+        sidecar_secret_names.extend(
+            user_secrets.get_existing_required_feature_secret_names(
+                **workflow_declared_features
+            )
+        )
+        return user_secrets.filter_secrets(list(dict.fromkeys(sidecar_secret_names)))
+
+    def _get_workflow_user_secrets(self, owner_id):
+        """Return user secrets scoped for workflow engine and job controller."""
+        workflow_resources = self.get_workflow_resources()
+        workflow_specification = self.workflow.get_specification()
+        workflow_secret_names = get_workflow_secret_names(workflow_resources)
+        workflow_sidecar_secret_names = get_declared_workflow_secret_names(
+            workflow_specification,
+            workflow_resources,
+        )
+        workflow_declared_features = get_declared_workflow_features(
+            workflow_specification,
+            workflow_resources,
+        )
+        explicit_workflow_secret_names = get_explicit_workflow_secret_names(
+            workflow_specification
+        )
+        user_secrets = UserSecretsStore.fetch(owner_id)
+        if explicit_workflow_secret_names:
+            user_secrets.validate_secret_names(explicit_workflow_secret_names)
+
+        workflow_engine_user_secrets = user_secrets.get_scoped_secrets(
+            workflow_secret_names,
+            kerberos=self.requires_kerberos(),
+            voms_proxy=self.requires_voms_proxy(),
+            rucio=self.requires_rucio(),
+        )
+        exposed_user_secrets = self._get_job_controller_user_secrets(
+            user_secrets,
+            workflow_sidecar_secret_names,
+            workflow_declared_features,
+        )
+        return workflow_engine_user_secrets, exposed_user_secrets
+
+    def _get_kerberos_config(self, workflow_engine_user_secrets):
+        """Return Kerberos Kubernetes configuration when required."""
+        if not self.requires_kerberos():
+            return None
+
+        return get_compatible_kerberos_k8s_config(
+            workflow_engine_user_secrets,
+            kubernetes_uid=WORKFLOW_RUNTIME_USER_UID,
+        )
+
+    def _workflow_engine_common_env_vars(self):
+        """Return common environment variables for the workflow engine."""
+        return [
+            {
+                "name": "REANA_JOB_CONTROLLER_SERVICE_PORT_HTTP",
+                "value": str(current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]),
+            },
+            {"name": "REANA_JOB_CONTROLLER_SERVICE_HOST", "value": "localhost"},
+            {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
+            {
+                "name": "REANA_COMPONENT_NAMING_SCHEME",
+                "value": REANA_COMPONENT_NAMING_SCHEME,
+            },
+            {
+                "name": "REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE",
+                "value": REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+            },
+            {
+                "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
+                "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            },
+            {
+                "name": "REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP",
+                "value": str(REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP),
+            },
+        ]
+
+    def _create_workflow_engine_container(
+        self, image, command, workflow_engine_env_vars, workspace_mount, kerberos
+    ):
+        """Create the workflow engine container spec."""
+        workflow_engine_container = client.V1Container(
+            name=current_app.config["WORKFLOW_ENGINE_NAME"],
+            image=image,
+            image_pull_policy="IfNotPresent",
+            env=[],
+            volume_mounts=[],
+            command=["/bin/bash", "-c"],
+            args=command,
+        )
+
+        workflow_engine_env_vars.extend(self._workflow_engine_common_env_vars())
+        workflow_engine_container.env.extend(workflow_engine_env_vars)
+        if K8S_USE_SECURITY_CONTEXT:
+            workflow_engine_container.security_context = _restricted_security_context(
+                WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
+            )
+        workflow_engine_container.volume_mounts = [workspace_mount]
+
+        if kerberos:
+            workflow_engine_container.volume_mounts += kerberos.volume_mounts
+            workflow_engine_container.env += kerberos.env
+
+        return workflow_engine_container
+
+    def _get_job_controller_user(self, exposed_user_secrets):
+        """Return the runtime user name for the job controller."""
+        user_secret = exposed_user_secrets.get_secret("CERN_USER")
+        return user_secret.value_str if user_secret else WORKFLOW_RUNTIME_USER_NAME
+
+    def _job_controller_base_env_vars(self, owner_id, user):
+        """Return base environment variables for the job-controller sidecar."""
+        return [
+            {"name": "REANA_USER_ID", "value": owner_id},
+            {"name": "CERN_USER", "value": user},
+            {"name": "USER", "value": user},  # Required by HTCondor
+            {
+                "name": "K8S_USE_SECURITY_CONTEXT",
+                "value": str(K8S_USE_SECURITY_CONTEXT),
+            },
+            {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
+            {
+                "name": "NSS_WRAPPER_GROUP",
+                "value": NSS_WRAPPER_GROUP_PATH,
+            },
+            {
+                "name": "NSS_WRAPPER_PASSWD",
+                "value": NSS_WRAPPER_PASSWD_PATH,
+            },
+            {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
+            {"name": "KUEUE_ENABLED", "value": str(KUEUE_ENABLED)},
+            {
+                "name": "REANA_SQLALCHEMY_DATABASE_URI",
+                "value": SQLALCHEMY_DATABASE_URI,
+            },
+            # reduce the number of open database connections kept in the pool
+            {"name": "SQLALCHEMY_POOL_SIZE", "value": "1"},
+            {"name": "REANA_STORAGE_BACKEND", "value": REANA_STORAGE_BACKEND},
+            {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
+            {
+                "name": "REANA_COMPONENT_NAMING_SCHEME",
+                "value": REANA_COMPONENT_NAMING_SCHEME,
+            },
+            {
+                "name": "REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE",
+                "value": REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+            },
+            {
+                "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
+                "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            },
+            {
+                "name": "WORKFLOW_RUNTIME_GROUP_NAME",
+                "value": WORKFLOW_RUNTIME_GROUP_NAME,
+            },
+            {
+                "name": "WORKFLOW_RUNTIME_USER_GID",
+                "value": str(WORKFLOW_RUNTIME_USER_GID),
+            },
+            {
+                "name": "WORKFLOW_RUNTIME_USER_NAME",
+                "value": WORKFLOW_RUNTIME_USER_NAME,
+            },
+            {
+                "name": "WORKFLOW_RUNTIME_USER_UID",
+                "value": str(WORKFLOW_RUNTIME_USER_UID),
+            },
+            {
+                "name": "REANA_JOB_HOSTPATH_MOUNTS",
+                "value": json.dumps(REANA_JOB_HOSTPATH_MOUNTS),
+            },
+            {
+                "name": "REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES",
+                "value": ",".join(
+                    REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES
+                ),
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_CPU_REQUEST",
+                "value": REANA_KUBERNETES_JOBS_CPU_REQUEST,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_CPU_LIMIT",
+                "value": REANA_KUBERNETES_JOBS_CPU_LIMIT,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MEMORY_REQUEST",
+                "value": REANA_KUBERNETES_JOBS_MEMORY_REQUEST,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MEMORY_LIMIT",
+                "value": REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST",
+                "value": REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT",
+                "value": REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST",
+                "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT",
+                "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT",
+                "value": REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
+            },
+            {
+                "name": "REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT",
+                "value": REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+            },
+            {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
+        ]
+
+    def _add_job_controller_runtime_env_vars(self, env_vars):
+        """Add optional runtime environment variables for the job controller."""
+        if REANA_KUBERNETES_JOBS_MIN_USER_UID:
+            env_vars.append(
+                {
+                    "name": "REANA_KUBERNETES_JOBS_MIN_USER_UID",
+                    "value": REANA_KUBERNETES_JOBS_MIN_USER_UID,
+                },
+            )
+        if REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL:
+            env_vars.append(
+                {
+                    "name": "REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL",
+                    "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
+                },
+            )
+        if requires_dask(self.workflow):
+            env_vars.append(
+                {
+                    "name": "DASK_SCHEDULER_URI",
+                    "value": get_dask_component_name(
+                        self.workflow.id_,
+                        "dashboard_service_uri",
+                        REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                    ),
+                },
+            )
+
+    def _job_controller_volume_mounts(self, workspace_mount, exposed_user_secrets):
+        """Return volume mounts for the job-controller sidecar."""
+        volume_mounts = [
+            workspace_mount,
+            {
+                "name": "uwsgi-config-reana-job-controller",
+                "mountPath": "/var/reana/uwsgi",
+            },
+            {"name": NSS_WRAPPER_VOLUME_NAME, "mountPath": NSS_WRAPPER_MOUNT_PATH},
+        ]
+        if exposed_user_secrets.has_file_secrets():
+            volume_mounts.append(
+                exposed_user_secrets.get_secrets_volume_mount_as_k8s_spec()
+            )
+        return volume_mounts
+
+    def _create_job_controller_container(
+        self, owner_id, exposed_user_secrets, workspace_mount
+    ):
+        """Create the job-controller sidecar container spec."""
+        job_controller_container = client.V1Container(
+            name=current_app.config["JOB_CONTROLLER_NAME"],
+            image=current_app.config["JOB_CONTROLLER_IMAGE"],
+            image_pull_policy="IfNotPresent",
+            env=[],
+            volume_mounts=[],
+            command=["/bin/bash", "-c"],
+            args=self._create_job_controller_startup_cmd(),
+            ports=[],
+            # Make sure that all the jobs are stopped before the deletion of the run-batch pod
+            lifecycle=client.V1Lifecycle(
+                pre_stop=client.V1LifecycleHandler(
+                    http_get=client.V1HTTPGetAction(
+                        port=JOB_CONTROLLER_CONTAINER_PORT,
+                        path=JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+                    )
+                )
+            ),
+        )
+        if K8S_USE_SECURITY_CONTEXT:
+            job_controller_container.security_context = _restricted_security_context(
+                WORKFLOW_RUNTIME_USER_UID,
+                WORKFLOW_RUNTIME_USER_GID,
+            )
+
+        user = self._get_job_controller_user(exposed_user_secrets)
+        job_controller_container.env.extend(
+            self._job_controller_base_env_vars(owner_id, user)
+        )
+        job_controller_container.env.extend(
+            _filter_job_controller_env_var_collisions(
+                job_controller_container.env,
+                copy.deepcopy(JOB_CONTROLLER_ENV_VARS),
+            )
+        )
+        job_controller_container.env.extend(
+            exposed_user_secrets.get_env_secrets_as_k8s_spec()
+        )
+        job_controller_container.env.append(
+            {
+                "name": "REANA_USER_SECRETS_TYPES",
+                "value": json.dumps(exposed_user_secrets.get_secret_types()),
+            }
+        )
+        self._add_job_controller_runtime_env_vars(job_controller_container.env)
+        job_controller_container.volume_mounts = self._job_controller_volume_mounts(
+            workspace_mount,
+            exposed_user_secrets,
+        )
+        job_controller_container.ports = [
+            {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
+        ]
+        return job_controller_container
+
+    def _pod_security_context(self):
+        """Return the pod security context for workflow pods."""
+        if not K8S_USE_SECURITY_CONTEXT:
+            return None
+
+        return client.V1PodSecurityContext(
+            fs_group=int(WORKFLOW_RUNTIME_USER_GID),
+            fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
+        )
+
+    def _pod_volumes(self, workspace_volume, exposed_user_secrets, kerberos):
+        """Return volumes for the workflow pod."""
+        volumes = [
+            workspace_volume,
+            {"name": NSS_WRAPPER_VOLUME_NAME, "emptyDir": {}},
+            {
+                "name": "uwsgi-config-reana-job-controller",
+                "configMap": {
+                    "defaultMode": 420,
+                    "name": "uwsgi-config-reana-job-controller",
+                },
+            },
+        ]
+        if exposed_user_secrets.has_file_secrets():
+            volumes.append(exposed_user_secrets.get_file_secrets_volume_as_k8s_specs())
+
+        if kerberos:
+            volumes += kerberos.volumes
+
+        return list({v["name"]: v for v in volumes}.values())
+
+    def _add_debug_code_volume_mounts(self, pod_spec):
+        """Add development code volume mounts when Flask debug mode is enabled."""
+        if os.getenv("FLASK_DEBUG", "").lower() not in ("1", "true"):
+            return
+
+        code_volume_name = "reana-code"
+        code_mount_path = "/code"
+        k8s_code_volume = client.V1Volume(name=code_volume_name)
+        k8s_code_volume.host_path = client.V1HostPathVolumeSource(code_mount_path)
+        pod_spec.volumes.append(k8s_code_volume)
+
+        for container in pod_spec.containers:
+            # container.env.extend(current_app.config["DEBUG_ENV_VARS"])
+            sub_path = f"reana-{container.name}"
+            if container.name == "workflow-engine":
+                sub_path += f"-{self.workflow.type_}"
+            container.volume_mounts.append(
+                {
+                    "name": code_volume_name,
+                    "mountPath": code_mount_path,
+                    "subPath": sub_path,
+                }
+            )
+
+    def _create_pod_spec(
+        self,
+        containers,
+        workflow_metadata,
+        workspace_volume,
+        exposed_user_secrets,
+        kerberos,
+    ):
+        """Create the workflow pod spec."""
+        pod_spec = client.V1PodSpec(
+            containers=containers,
+            node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
+            init_containers=[],
+            security_context=self._pod_security_context(),
+            termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
+        )
+        pod_spec.service_account_name = REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
+        pod_spec.volumes = self._pod_volumes(
+            workspace_volume,
+            exposed_user_secrets,
+            kerberos,
+        )
+
+        if kerberos:
+            pod_spec.init_containers.append(kerberos.init_container)
+
+        self._add_debug_code_volume_mounts(pod_spec)
+
+        if kerberos:
+            pod_spec.containers.append(kerberos.renew_container)
+
+        return client.V1PodTemplateSpec(
+            metadata=workflow_metadata,
+            spec=pod_spec,
+        )
+
     def _create_job_spec(
         self,
         name,
@@ -665,342 +1132,48 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             overwrite_input_parameters=overwrite_input_parameters,
             overwrite_operational_options=overwrite_operational_options,
         )
-        workflow_engine_env_vars = env_vars or self._workflow_engine_env_vars()
         owner_id = str(self.workflow.owner_id)
+        workflow_engine_env_vars = env_vars or self._workflow_engine_env_vars()
         command = format_cmd(command)
         workspace_mount, workspace_volume = get_workspace_volume(
             self.workflow.workspace_path
         )
 
-        labels = {
-            "reana_workflow_mode": "batch",
-            "reana-run-batch-workflow-uuid": str(self.workflow.id_),
-            "user-uuid": owner_id,
-        }
-
-        if KUEUE_ENABLED:
-            labels["kueue.x-k8s.io/queue-name"] = KUEUE_LOCAL_QUEUE_NAME
-
-        workflow_metadata = client.V1ObjectMeta(
-            name=name,
-            labels=labels,
-            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        workflow_metadata = self._create_workflow_metadata(name, owner_id)
+        workflow_engine_user_secrets, exposed_user_secrets = (
+            self._get_workflow_user_secrets(owner_id)
         )
-
-        user_secrets = UserSecretsStore.fetch(owner_id)
-        kerberos = None
-        if self.requires_kerberos():
-            kerberos = get_compatible_kerberos_k8s_config(
-                user_secrets,
-                kubernetes_uid=WORKFLOW_RUNTIME_USER_UID,
-            )
+        kerberos = self._get_kerberos_config(workflow_engine_user_secrets)
 
         job = client.V1Job()
         job.api_version = "batch/v1"
         job.kind = "Job"
         job.metadata = workflow_metadata
-        spec = client.V1JobSpec(template=client.V1PodTemplateSpec())
-        spec.template.metadata = workflow_metadata
 
-        workflow_engine_container = client.V1Container(
-            name=current_app.config["WORKFLOW_ENGINE_NAME"],
+        workflow_engine_container = self._create_workflow_engine_container(
             image=image,
-            image_pull_policy="IfNotPresent",
-            env=[],
-            volume_mounts=[],
-            command=["/bin/bash", "-c"],
-            args=command,
+            command=command,
+            workflow_engine_env_vars=workflow_engine_env_vars,
+            workspace_mount=workspace_mount,
+            kerberos=kerberos,
+        )
+        job_controller_container = self._create_job_controller_container(
+            owner_id=owner_id,
+            exposed_user_secrets=exposed_user_secrets,
+            workspace_mount=workspace_mount,
         )
 
-        workflow_engine_env_vars.extend(
-            [
-                {
-                    "name": "REANA_JOB_CONTROLLER_SERVICE_PORT_HTTP",
-                    "value": str(current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]),
-                },
-                {"name": "REANA_JOB_CONTROLLER_SERVICE_HOST", "value": "localhost"},
-                {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
-                {
-                    "name": "REANA_COMPONENT_NAMING_SCHEME",
-                    "value": REANA_COMPONENT_NAMING_SCHEME,
-                },
-                {
-                    "name": "REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE",
-                    "value": REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
-                },
-                {
-                    "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
-                    "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
-                },
-                {
-                    "name": "REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP",
-                    "value": str(REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP),
-                },
-            ]
-        )
-        workflow_engine_container.env.extend(workflow_engine_env_vars)
-        if K8S_USE_SECURITY_CONTEXT:
-            workflow_engine_container.security_context = _restricted_security_context(
-                WORKFLOW_RUNTIME_USER_UID,
-                WORKFLOW_RUNTIME_USER_GID,
-            )
-        workflow_engine_container.volume_mounts = [workspace_mount]
-
-        if kerberos:
-            workflow_engine_container.volume_mounts += kerberos.volume_mounts
-            workflow_engine_container.env += kerberos.env
-
-        job_controller_env_secrets = user_secrets.get_env_secrets_as_k8s_spec()
-
-        user_secret = user_secrets.get_secret("CERN_USER")
-        user = user_secret.value_str if user_secret else WORKFLOW_RUNTIME_USER_NAME
-
-        job_controller_container = client.V1Container(
-            name=current_app.config["JOB_CONTROLLER_NAME"],
-            image=current_app.config["JOB_CONTROLLER_IMAGE"],
-            image_pull_policy="IfNotPresent",
-            env=[],
-            volume_mounts=[],
-            command=["/bin/bash", "-c"],
-            args=self._create_job_controller_startup_cmd(),
-            ports=[],
-            # Make sure that all the jobs are stopped before the deletion of the run-batch pod
-            lifecycle=client.V1Lifecycle(
-                pre_stop=client.V1LifecycleHandler(
-                    http_get=client.V1HTTPGetAction(
-                        port=JOB_CONTROLLER_CONTAINER_PORT,
-                        path=JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
-                    )
-                )
-            ),
-        )
-        if K8S_USE_SECURITY_CONTEXT:
-            job_controller_container.security_context = _restricted_security_context(
-                WORKFLOW_RUNTIME_USER_UID,
-                WORKFLOW_RUNTIME_USER_GID,
-            )
-
-        job_controller_container.env.extend(
-            [
-                {"name": "REANA_USER_ID", "value": owner_id},
-                {"name": "CERN_USER", "value": user},
-                {"name": "USER", "value": user},  # Required by HTCondor
-                {
-                    "name": "K8S_USE_SECURITY_CONTEXT",
-                    "value": str(K8S_USE_SECURITY_CONTEXT),
-                },
-                {"name": "K8S_CERN_EOS_AVAILABLE", "value": K8S_CERN_EOS_AVAILABLE},
-                {
-                    "name": "NSS_WRAPPER_GROUP",
-                    "value": NSS_WRAPPER_GROUP_PATH,
-                },
-                {
-                    "name": "NSS_WRAPPER_PASSWD",
-                    "value": NSS_WRAPPER_PASSWD_PATH,
-                },
-                {"name": "IMAGE_PULL_SECRETS", "value": ",".join(IMAGE_PULL_SECRETS)},
-                {"name": "KUEUE_ENABLED", "value": str(KUEUE_ENABLED)},
-                {
-                    "name": "REANA_SQLALCHEMY_DATABASE_URI",
-                    "value": SQLALCHEMY_DATABASE_URI,
-                },
-                # reduce the number of open database connections kept in the pool
-                {"name": "SQLALCHEMY_POOL_SIZE", "value": "1"},
-                {"name": "REANA_STORAGE_BACKEND", "value": REANA_STORAGE_BACKEND},
-                {"name": "REANA_COMPONENT_PREFIX", "value": REANA_COMPONENT_PREFIX},
-                {
-                    "name": "REANA_COMPONENT_NAMING_SCHEME",
-                    "value": REANA_COMPONENT_NAMING_SCHEME,
-                },
-                {
-                    "name": "REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE",
-                    "value": REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
-                },
-                {
-                    "name": "REANA_RUNTIME_KUBERNETES_NAMESPACE",
-                    "value": REANA_RUNTIME_KUBERNETES_NAMESPACE,
-                },
-                {
-                    "name": "WORKFLOW_RUNTIME_GROUP_NAME",
-                    "value": WORKFLOW_RUNTIME_GROUP_NAME,
-                },
-                {
-                    "name": "WORKFLOW_RUNTIME_USER_GID",
-                    "value": str(WORKFLOW_RUNTIME_USER_GID),
-                },
-                {
-                    "name": "WORKFLOW_RUNTIME_USER_NAME",
-                    "value": WORKFLOW_RUNTIME_USER_NAME,
-                },
-                {
-                    "name": "WORKFLOW_RUNTIME_USER_UID",
-                    "value": str(WORKFLOW_RUNTIME_USER_UID),
-                },
-                {
-                    "name": "REANA_JOB_HOSTPATH_MOUNTS",
-                    "value": json.dumps(REANA_JOB_HOSTPATH_MOUNTS),
-                },
-                {
-                    "name": "REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES",
-                    "value": ",".join(
-                        REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES
-                    ),
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_CPU_REQUEST",
-                    "value": REANA_KUBERNETES_JOBS_CPU_REQUEST,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_CPU_LIMIT",
-                    "value": REANA_KUBERNETES_JOBS_CPU_LIMIT,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MEMORY_REQUEST",
-                    "value": REANA_KUBERNETES_JOBS_MEMORY_REQUEST,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MEMORY_LIMIT",
-                    "value": REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST",
-                    "value": REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT",
-                    "value": REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST",
-                    "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT",
-                    "value": REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT",
-                    "value": REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
-                },
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT",
-                    "value": REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
-                },
-                {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
-            ]
-        )
-        if REANA_KUBERNETES_JOBS_MIN_USER_UID:
-            job_controller_container.env.append(
-                {
-                    "name": "REANA_KUBERNETES_JOBS_MIN_USER_UID",
-                    "value": REANA_KUBERNETES_JOBS_MIN_USER_UID,
-                },
-            )
-        job_controller_container.env.extend(
-            _filter_job_controller_env_var_collisions(
-                job_controller_container.env,
-                copy.deepcopy(JOB_CONTROLLER_ENV_VARS),
+        spec = client.V1JobSpec(
+            template=self._create_pod_spec(
+                containers=[workflow_engine_container, job_controller_container],
+                workflow_metadata=workflow_metadata,
+                workspace_volume=workspace_volume,
+                exposed_user_secrets=exposed_user_secrets,
+                kerberos=kerberos,
             )
         )
-        job_controller_container.env.extend(job_controller_env_secrets)
-        if REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL:
-            job_controller_container.env.append(
-                {
-                    "name": "REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL",
-                    "value": os.getenv("REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL"),
-                },
-            )
-        if requires_dask(self.workflow):
-            job_controller_container.env.append(
-                {
-                    "name": "DASK_SCHEDULER_URI",
-                    "value": get_dask_component_name(
-                        self.workflow.id_,
-                        "dashboard_service_uri",
-                        REANA_RUNTIME_KUBERNETES_NAMESPACE,
-                    ),
-                },
-            )
-
-        secrets_volume_mount = user_secrets.get_secrets_volume_mount_as_k8s_spec()
-        uwsgi_config_mount = {
-            "name": "uwsgi-config-reana-job-controller",
-            "mountPath": "/var/reana/uwsgi",
-        }
-        job_controller_container.volume_mounts = [
-            workspace_mount,
-            secrets_volume_mount,
-            uwsgi_config_mount,
-            {"name": NSS_WRAPPER_VOLUME_NAME, "mountPath": NSS_WRAPPER_MOUNT_PATH},
-        ]
-
-        job_controller_container.ports = [
-            {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
-        ]
-        containers = [workflow_engine_container, job_controller_container]
-        pod_security_context = None
-        if K8S_USE_SECURITY_CONTEXT:
-            pod_security_context = client.V1PodSecurityContext(
-                fs_group=int(WORKFLOW_RUNTIME_USER_GID),
-                fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
-            )
-        spec.template.spec = client.V1PodSpec(
-            containers=containers,
-            node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
-            init_containers=[],
-            security_context=pod_security_context,
-            termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
-        )
-        spec.template.spec.service_account_name = (
-            REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
-        )
-        uwsgi_config_volume = {
-            "name": "uwsgi-config-reana-job-controller",
-            "configMap": {
-                "defaultMode": 420,
-                "name": "uwsgi-config-reana-job-controller",
-            },
-        }
-        volumes = [
-            workspace_volume,
-            {"name": NSS_WRAPPER_VOLUME_NAME, "emptyDir": {}},
-            user_secrets.get_file_secrets_volume_as_k8s_specs(),
-            uwsgi_config_volume,
-        ]
-
-        if kerberos:
-            volumes += kerberos.volumes
-            spec.template.spec.init_containers.append(kerberos.init_container)
-
-        # filter out volumes with the same name
-        spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
-
-        if os.getenv("FLASK_DEBUG", "").lower() in ("1", "true"):
-            code_volume_name = "reana-code"
-            code_mount_path = "/code"
-            k8s_code_volume = client.V1Volume(name=code_volume_name)
-            k8s_code_volume.host_path = client.V1HostPathVolumeSource(code_mount_path)
-            spec.template.spec.volumes.append(k8s_code_volume)
-
-            for container in spec.template.spec.containers:
-                # container.env.extend(current_app.config["DEBUG_ENV_VARS"])
-                sub_path = f"reana-{container.name}"
-                if container.name == "workflow-engine":
-                    sub_path += f"-{self.workflow.type_}"
-                container.volume_mounts.append(
-                    {
-                        "name": code_volume_name,
-                        "mountPath": code_mount_path,
-                        "subPath": sub_path,
-                    }
-                )
-
-        if kerberos:
-            spec.template.spec.containers.append(kerberos.renew_container)
-
         job.spec = spec
         job.spec.template.spec.restart_policy = "Never"
-
         job.spec.backoff_limit = 0
         return job
 

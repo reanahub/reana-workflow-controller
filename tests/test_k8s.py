@@ -180,3 +180,73 @@ def test_get_compatible_kerberos_k8s_config_backfills_partial_security_context(
     assert (
         kerberos_config.renew_container["securityContext"] == expected_security_context
     )
+
+
+def test_interactive_deployment_k8s_builder_filtered_user_secrets(monkeypatch):
+    """Expose only the explicitly allowed user secrets in interactive sessions."""
+    user_id = uuid4()
+    user_secrets = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="k8s-secret",
+        secrets=[
+            Secret(name="wanted_env", type_="env", value="1"),
+            Secret(name="other_env", type_="env", value="2"),
+            Secret(name="wanted_file", type_="file", value="secret file"),
+        ],
+    )
+    monkeypatch.setattr(
+        UserSecretsStore,
+        "fetch",
+        lambda _: user_secrets,
+    )
+
+    builder = InteractiveDeploymentK8sBuilder(
+        "name", "workflow_id", "owner_id", "workspace", "docker_image", "port", "path"
+    )
+
+    builder.add_command_arguments(["args"])
+    builder.add_reana_shared_storage()
+    builder.add_user_secrets(secret_names=["wanted_env", "wanted_file"])
+    objs = builder.get_deployment_objects()
+
+    pod = objs["deployment"].spec.template.spec
+    secret_volume = next(
+        volume for volume in pod.volumes if volume["name"] == "k8s-secret"
+    )
+    env_names = {env_var["name"] for env_var in pod.containers[0].env}
+
+    assert "wanted_env" in env_names
+    assert "other_env" not in env_names
+    assert secret_volume["secret"]["items"] == [
+        {"key": "wanted_file", "path": "wanted_file"}
+    ]
+
+
+def test_interactive_deployment_k8s_builder_without_user_secrets(monkeypatch):
+    """Expose no user secrets when the allowlist is explicitly empty."""
+    user_id = uuid4()
+    user_secrets = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="k8s-secret",
+        secrets=[Secret(name="wanted_env", type_="env", value="1")],
+    )
+    monkeypatch.setattr(
+        UserSecretsStore,
+        "fetch",
+        lambda _: user_secrets,
+    )
+
+    builder = InteractiveDeploymentK8sBuilder(
+        "name", "workflow_id", "owner_id", "workspace", "docker_image", "port", "path"
+    )
+
+    builder.add_command_arguments(["args"])
+    builder.add_reana_shared_storage()
+    builder.add_user_secrets(secret_names=[])
+    objs = builder.get_deployment_objects()
+
+    pod = objs["deployment"].spec.template.spec
+
+    assert not any(v["name"] == "k8s-secret" for v in pod.volumes)
+    assert not any(vm["name"] == "k8s-secret" for vm in pod.containers[0].volume_mounts)
+    assert not any(e["name"] == "wanted_env" for e in pod.containers[0].env)
