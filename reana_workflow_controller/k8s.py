@@ -6,6 +6,8 @@
 
 """REANA Workflow Controller Kubernetes utils."""
 
+import logging
+
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
@@ -36,6 +38,49 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS,
 )
+from reana_workflow_controller.errors import (
+    REANAInteractiveSessionError,
+    ReservedEnvironmentVariableError,
+)
+
+LOGGER = logging.getLogger(__name__)
+
+RESERVED_SESSION_ENV_VARS = {
+    "NOTEBOOK_ARGS",
+    "NB_GID",
+    "NB_UMASK",
+    "REANA_WORKSPACE",
+}
+"""Interactive-session environment variables owned by the controller.
+
+``NOTEBOOK_ARGS`` carries the per-session notebook token, so a user value must
+never win: Kubernetes resolves duplicate names to the last entry, and user
+secrets are appended after the managed ones.
+"""
+
+
+def _filter_reserved_session_env_var_collisions(env_vars):
+    """Reject user env secrets that collide with controller-managed variables.
+
+    Silently dropping a colliding secret is invisible to both the user and
+    the admin: the REST response reports success either way, so a user whose
+    secret happens to be named e.g. ``REANA_WORKSPACE`` would have it
+    permanently and silently excluded from every interactive session with no
+    signal to notice, let alone fix, the collision.
+    """
+    colliding_names = sorted(
+        env_var["name"]
+        for env_var in env_vars
+        if env_var["name"] in RESERVED_SESSION_ENV_VARS
+    )
+    if colliding_names:
+        raise ReservedEnvironmentVariableError(
+            "Cannot start interactive session: secret name(s) "
+            f"{', '.join(colliding_names)} are reserved for REANA-managed "
+            "interactive-session configuration. Please rename the "
+            "conflicting secret(s) and try again."
+        )
+    return env_vars
 
 
 def _restricted_session_pod_security_context() -> client.V1PodSecurityContext | None:
@@ -317,6 +362,58 @@ class InteractiveDeploymentK8sBuilder(object):
         env_var = client.V1EnvVar(name, str(value))
         self._session_container.env.append(env_var)
 
+    def add_secret_environment_variable(self, name, secret_name, secret_key):
+        """Add an environment variable sourced from a Kubernetes Secret."""
+        self._session_container.env.append(
+            client.V1EnvVar(
+                name=name,
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name=secret_name,
+                        key=secret_key,
+                    )
+                ),
+            )
+        )
+
+    def add_session_secret(self, session_secret):
+        """Expose a notebook token through a per-session Kubernetes Secret."""
+        secret_name = "{}-auth".format(self.deployment_name)
+        secret = client.V1Secret(
+            api_version="v1",
+            kind="Secret",
+            metadata=client.V1ObjectMeta(
+                name=secret_name,
+                labels={
+                    "reana_workflow_mode": "session",
+                    "reana-run-session-workflow-uuid": str(self.workflow_id),
+                    "user-uuid": str(self.owner_id),
+                },
+            ),
+            # Jupyter Docker Stacks' start-notebook.py reads NOTEBOOK_ARGS and
+            # shlex-splits it before starting Jupyter. Keeping the complete
+            # argument in the Secret avoids materialising the token in the Pod
+            # or Deployment specification.
+            string_data={
+                "notebook_args": "--NotebookApp.token={}".format(session_secret)
+            },
+            type="Opaque",
+        )
+        # Keep the Ingress first: instantiate_chained_k8s_objects uses the
+        # first object as the owner root and session shutdown deletes it to
+        # cascade cleanup.  The Secret can still be created before the
+        # Deployment while retaining that ownership chain.
+        objects = {"ingress": self.kubernetes_objects["ingress"], "secret": secret}
+        objects.update(
+            (name, value)
+            for name, value in self.kubernetes_objects.items()
+            if name != "ingress"
+        )
+        self.kubernetes_objects = objects
+        self.add_secret_environment_variable(
+            "NOTEBOOK_ARGS", secret_name, "notebook_args"
+        )
+
     def add_run_with_runtime_user_permissions(self):
         """Run interactive session with the default non-root REANA user."""
         self._session_container.security_context = (
@@ -326,6 +423,9 @@ class InteractiveDeploymentK8sBuilder(object):
     def add_user_secrets(self):
         """Mount the "file" secrets and set the "env" secrets in the container."""
         user_secrets = UserSecretsStore.fetch(self.owner_id)
+        environment_secrets = _filter_reserved_session_env_var_collisions(
+            user_secrets.get_env_secrets_as_k8s_spec()
+        )
 
         # mount file secrets
         secrets_volume = user_secrets.get_file_secrets_volume_as_k8s_specs()
@@ -334,7 +434,7 @@ class InteractiveDeploymentK8sBuilder(object):
         self._session_container.volume_mounts.append(secrets_volume_mount)
 
         # set environment secrets
-        self._session_container.env += user_secrets.get_env_secrets_as_k8s_spec()
+        self._session_container.env += environment_secrets
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
@@ -346,7 +446,7 @@ def build_interactive_jupyter_deployment_k8s_objects(
     workspace,
     access_path,
     image,
-    access_token=None,
+    session_secret,
     cvmfs_repos=None,
     owner_id=None,
     workflow_id=None,
@@ -368,6 +468,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
         a ``404``.
     :param image: Jupyter Notebook image to use, i.e.
         ``jupyter/tensorflow-notebook`` to enable ``tensorflow``.
+    :param session_secret: Random per-session secret used as the notebook
+        access token (never a user credential).
     :param cvmfs_mounts: List of CVMFS repos to make available.
     :param owner_id: Owner of the interactive session.
     :param workflow_id: UUID of the workflow to which the interactive
@@ -375,6 +477,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
     :param expose_secrets: If true, mount the "file" secrets and set the
         "env" secrets in jupyter's pod.
     """
+    if not session_secret:
+        raise ValueError("An interactive session secret is required.")
     cvmfs_repos = cvmfs_repos or []
     port = JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT
     deployment_builder = InteractiveDeploymentK8sBuilder(
@@ -386,11 +490,8 @@ def build_interactive_jupyter_deployment_k8s_objects(
         "--notebook-dir='{workflow_workspace}'".format(workflow_workspace=workspace),
         f'--NotebookApp.terminado_settings={{"shell_command": ["/usr/bin/bash", "-c", "cd \'{workspace}\' && bash"]}}',
     ]
-    if access_token:
-        command_args.append(
-            "--NotebookApp.token='{access_token}'".format(access_token=access_token)
-        )
     deployment_builder.add_command_arguments(command_args)
+    deployment_builder.add_session_secret(session_secret)
     deployment_builder.add_reana_shared_storage()
     if cvmfs_repos:
         deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
@@ -419,6 +520,7 @@ def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
     :param namespace: Kubernetes namespace where the objects will be deployed.
     """
     instantiate_k8s_object = {
+        "secret": current_k8s_corev1_api_client.create_namespaced_secret,
         "deployment": current_k8s_appsv1_api_client.create_namespaced_deployment,
         "service": current_k8s_corev1_api_client.create_namespaced_service,
         "ingress": current_k8s_networking_api_client.create_namespaced_ingress,
@@ -459,6 +561,7 @@ def delete_k8s_objects_if_exist(kubernetes_objects, namespace):
         from.
     """
     delete_k8s_object = {
+        "secret": current_k8s_corev1_api_client.delete_namespaced_secret,
         "deployment": current_k8s_appsv1_api_client.delete_namespaced_deployment,
         "service": current_k8s_corev1_api_client.delete_namespaced_service,
         "ingress": current_k8s_networking_api_client.delete_namespaced_ingress,

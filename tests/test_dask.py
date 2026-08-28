@@ -17,7 +17,7 @@ from reana_commons.config import (
 )
 
 from reana_workflow_controller.config import REANA_RUNTIME_FS_GROUP_CHANGE_POLICY
-from reana_workflow_controller.dask import requires_dask
+from reana_workflow_controller.dask import create_dask_dashboard_ingress, requires_dask
 
 
 @pytest.mark.parametrize(
@@ -575,3 +575,53 @@ def test_prepare_cluster_skips_security_context_when_disabled(dask_resource_mana
                 "containers"
             ][0]
         )
+
+
+def test_create_dask_dashboard_ingress_appends_to_existing_middlewares(
+    mock_k8s_client,
+):
+    """The dashboard's own middleware must not clobber a pre-existing one.
+
+    REANA_INGRESS_ANNOTATIONS can already carry a router.middlewares value
+    (e.g. the chart's auth-rework Referrer-Policy middleware, or an
+    administrator-configured one) -- the dashboard ingress must append its
+    own middleware reference to that value, not replace it via a dict
+    literal.
+    """
+    with patch(
+        "reana_workflow_controller.dask.REANA_INGRESS_ANNOTATIONS",
+        {
+            "traefik.ingress.kubernetes.io/router.middlewares": "default-existing@kubernetescrd"
+        },
+    ), patch(
+        "reana_workflow_controller.dask.current_k8s_networking_api_client"
+    ) as mock_networking_client:
+        create_dask_dashboard_ingress(workflow_id="wf-123", user_id="user-123")
+
+    created_ingress = mock_networking_client.create_namespaced_ingress.call_args.kwargs[
+        "body"
+    ]
+    middlewares = created_ingress.metadata.annotations[
+        "traefik.ingress.kubernetes.io/router.middlewares"
+    ]
+    assert middlewares.startswith("default-existing@kubernetescrd,")
+    assert middlewares.count(",") == 1
+
+
+def test_create_dask_dashboard_ingress_sets_middleware_when_none_configured(
+    mock_k8s_client,
+):
+    """No pre-existing router.middlewares value: the dashboard's own is used alone."""
+    with patch("reana_workflow_controller.dask.REANA_INGRESS_ANNOTATIONS", {}), patch(
+        "reana_workflow_controller.dask.current_k8s_networking_api_client"
+    ) as mock_networking_client:
+        create_dask_dashboard_ingress(workflow_id="wf-456", user_id="user-456")
+
+    created_ingress = mock_networking_client.create_namespaced_ingress.call_args.kwargs[
+        "body"
+    ]
+    middlewares = created_ingress.metadata.annotations[
+        "traefik.ingress.kubernetes.io/router.middlewares"
+    ]
+    assert "," not in middlewares
+    assert middlewares.endswith("@kubernetescrd")

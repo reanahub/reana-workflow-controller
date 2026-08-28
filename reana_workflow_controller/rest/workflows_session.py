@@ -16,6 +16,7 @@ from webargs.flaskparser import use_kwargs
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_db.models import WorkflowSession, InteractiveSessionType, RunStatus
 
+from reana_workflow_controller.errors import ReservedEnvironmentVariableError
 from reana_workflow_controller.workflow_run_manager import KubernetesWorkflowRunManager
 
 blueprint = Blueprint("workflows_session", __name__)
@@ -142,6 +143,8 @@ def open_interactive_session(
     except (KeyError, ValueError) as e:
         status_code = 400 if workflow else 404
         return jsonify({"message": str(e)}), status_code
+    except ReservedEnvironmentVariableError as e:
+        return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 

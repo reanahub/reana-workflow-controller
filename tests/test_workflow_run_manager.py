@@ -29,6 +29,7 @@ from reana_db.models import (
 
 from reana_workflow_controller.config import (
     REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+    REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
 )
 from reana_workflow_controller.errors import REANAInteractiveSessionError
@@ -336,6 +337,27 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
     assert job_controller.security_context.capabilities.drop == ["ALL"]
     assert job_controller.security_context.seccomp_profile.type == "RuntimeDefault"
     assert job_controller.args == ["exec python3 -m reana_job_controller.nss_wrapper"]
+    assert job_controller.lifecycle.pre_stop.http_get is None
+    shutdown_command = job_controller.lifecycle.pre_stop._exec.command
+    assert shutdown_command[:2] == ["python3", "-c"]
+    assert "http://127.0.0.1:5000/shutdown" in shutdown_command[2]
+    # The loopback shutdown call must not honour a site-injected proxy env
+    # var (HTTP_PROXY/http_proxy) -- it must use an opener with an explicit
+    # empty ProxyHandler, not the bare (proxy-aware) urlopen default.
+    assert "urllib.request.ProxyHandler({})" in shutdown_command[2]
+    assert "urllib.request.urlopen(" not in shutdown_command[2]
+    # The timeout must match the pod's own termination grace period, not a
+    # shorter hardcoded value that could cut /shutdown off before it
+    # finished stopping every job.
+    assert (
+        f"timeout={REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD})"
+        in shutdown_command[2]
+    )
+    # A failure here (e.g. job-controller already gone, a common, benign
+    # teardown case) must not fail the hook -- the pod deletion it guards
+    # must proceed regardless.
+    assert "except Exception" in shutdown_command[2]
+    compile(shutdown_command[2], "<pre_stop_exec>", "exec")
     assert env_vars["USER"] == "reana"
     assert env_vars["CERN_USER"] == "reana"
     assert env_vars["K8S_USE_SECURITY_CONTEXT"] == "True"
@@ -348,6 +370,25 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
     assert "nss-wrapper" in volumes
     assert volumes["nss-wrapper"]["emptyDir"] == {}
     assert "uwsgi-config-reana-job-controller" in volumes
+    assert job.spec.template.spec.automount_service_account_token is False
+    assert "job-controller-service-account" not in {
+        mount["name"] for mount in workflow_engine.volume_mounts
+    }
+    assert volume_mounts["job-controller-service-account"] == (
+        "/var/run/secrets/kubernetes.io/serviceaccount"
+    )
+    projected_sources = volumes["job-controller-service-account"]["projected"][
+        "sources"
+    ]
+    assert volumes["job-controller-service-account"]["projected"]["defaultMode"] == 420
+    assert projected_sources[0]["serviceAccountToken"] == {
+        "path": "token",
+        "expirationSeconds": 3600,
+    }
+    assert projected_sources[1]["configMap"]["name"] == "kube-root-ca.crt"
+    # An absent ConfigMap must not wedge every batch pod in ContainerCreating.
+    assert projected_sources[1]["configMap"]["optional"] is True
+    assert projected_sources[2]["downwardAPI"]["items"][0]["path"] == "namespace"
     assert volume_mounts["nss-wrapper"] == "/var/run/nss_wrapper"
     assert volume_mounts["uwsgi-config-reana-job-controller"] == "/var/reana/uwsgi"
 
@@ -423,3 +464,39 @@ def test_create_job_spec_drops_colliding_job_controller_env_vars(
     assert not any(
         "workflow_runtime_user_uid" in message for message in warning_messages
     )
+
+
+def test_interactive_session_uses_per_session_secret(sample_serial_workflow_in_db):
+    """Per-session token is stored in a Secret, not in the pod arguments."""
+    with patch.multiple(
+        "reana_workflow_controller.k8s",
+        current_k8s_corev1_api_client=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_appsv1_api_client=DEFAULT,
+    ) as mocks:
+        kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+        kwrm.start_interactive_session(
+            InteractiveSessionType(0).name, expose_secrets=False
+        )
+        int_session = sample_serial_workflow_in_db.sessions[0]
+        secret = int_session.session_secret
+        assert secret
+        assert len(secret) >= 32
+        secret_call = mocks[
+            "current_k8s_corev1_api_client"
+        ].create_namespaced_secret.call_args
+        secret_object = secret_call.args[1]
+        assert secret_object.string_data == {
+            "notebook_args": "--NotebookApp.token={}".format(secret)
+        }
+        deployment_call = mocks[
+            "current_k8s_appsv1_api_client"
+        ].create_namespaced_deployment.call_args
+        deployment = deployment_call.args[1]
+        container = deployment.spec.template.spec.containers[0]
+        assert secret not in repr(deployment)
+        assert all("NotebookApp.token" not in arg for arg in container.args)
+        token_env = next(env for env in container.env if env.name == "NOTEBOOK_ARGS")
+        assert token_env.value is None
+        assert token_env.value_from.secret_key_ref.name == secret_object.metadata.name
+        assert token_env.value_from.secret_key_ref.key == "notebook_args"
