@@ -29,6 +29,7 @@ from reana_db.models import (
 
 from reana_workflow_controller.config import (
     REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+    REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
 )
 from reana_workflow_controller.errors import REANAInteractiveSessionError
@@ -345,6 +346,17 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
     # empty ProxyHandler, not the bare (proxy-aware) urlopen default.
     assert "urllib.request.ProxyHandler({})" in shutdown_command[2]
     assert "urllib.request.urlopen(" not in shutdown_command[2]
+    # The timeout must match the pod's own termination grace period, not a
+    # shorter hardcoded value that could cut /shutdown off before it
+    # finished stopping every job.
+    assert (
+        f"timeout={REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD})"
+        in shutdown_command[2]
+    )
+    # A failure here (e.g. job-controller already gone, a common, benign
+    # teardown case) must not fail the hook -- the pod deletion it guards
+    # must proceed regardless.
+    assert "except Exception" in shutdown_command[2]
     compile(shutdown_command[2], "<pre_stop_exec>", "exec")
     assert env_vars["USER"] == "reana"
     assert env_vars["CERN_USER"] == "reana"
@@ -374,6 +386,8 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
         "expirationSeconds": 3600,
     }
     assert projected_sources[1]["configMap"]["name"] == "kube-root-ca.crt"
+    # An absent ConfigMap must not wedge every batch pod in ContainerCreating.
+    assert projected_sources[1]["configMap"]["optional"] is True
     assert projected_sources[2]["downwardAPI"]["items"][0]["path"] == "namespace"
     assert volume_mounts["nss-wrapper"] == "/var/run/nss_wrapper"
     assert volume_mounts["uwsgi-config-reana-job-controller"] == "/var/reana/uwsgi"

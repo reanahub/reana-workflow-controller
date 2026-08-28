@@ -812,15 +812,28 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                                 # proxy, and a NO_PROXY entry covering
                                 # 127.0.0.1 is not guaranteed. Build an
                                 # opener with an explicit empty ProxyHandler
-                                # to always bypass it.
-                                "import urllib.request; "
-                                "urllib.request.build_opener("
+                                # to always bypass it. The timeout matches
+                                # the pod's own termination grace period
+                                # (previously a hardcoded 10s, which could
+                                # cut off /shutdown before it finished
+                                # stopping every job). A ConnectionRefused
+                                # (job-controller already gone, a common,
+                                # benign teardown case) or any other error
+                                # here must not fail this hook -- the pod
+                                # deletion this guards must proceed either
+                                # way.
+                                "import urllib.request\n"
+                                "try:\n"
+                                "    urllib.request.build_opener("
                                 "urllib.request.ProxyHandler({{}})"
                                 ").open("
-                                "'http://127.0.0.1:{}{}', timeout=10).read()"
+                                "'http://127.0.0.1:{}{}', timeout={}).read()\n"
+                                "except Exception:\n"
+                                "    pass"
                             ).format(
                                 JOB_CONTROLLER_CONTAINER_PORT,
                                 JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
+                                REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
                             ),
                         ]
                     )
@@ -1040,6 +1053,14 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                         "configMap": {
                             "name": "kube-root-ca.crt",
                             "items": [{"key": "ca.crt", "path": "ca.crt"}],
+                            # An absent ConfigMap (a non-standard cluster
+                            # setup, or a namespace where it hasn't been
+                            # provisioned yet) must not wedge every batch
+                            # pod in ContainerCreating; this projection is
+                            # a best-effort convenience, not a hard
+                            # requirement for the job-controller container
+                            # to run.
+                            "optional": True,
                         }
                     },
                     {
