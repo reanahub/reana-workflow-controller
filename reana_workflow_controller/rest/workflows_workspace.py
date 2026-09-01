@@ -34,6 +34,7 @@ from reana_db.utils import (
 
 from reana_workflow_controller.errors import (
     REANAWorkflowControllerError,
+    user_id_does_not_exist,
 )
 from reana_workflow_controller.rest.utils import (
     get_workflow_name,
@@ -251,7 +252,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         user_uuid = request.args["user"]
         user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify({"message": "User {} does not exist".format(user)}), 404
+            return jsonify({"message": user_id_does_not_exist(user_uuid)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
         workflow_name = workflow.get_full_workflow_name()
@@ -340,7 +341,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         user_uuid = request.args["user"]
         user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify({"message": "User {} does not exist".format(user)}), 404
+            return jsonify({"message": user_id_does_not_exist(user_uuid)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid)
         deleted = remove_files_recursive_wildcard(workflow.workspace_path, file_name)
@@ -474,7 +475,7 @@ def get_files(workflow_id_or_name, paginate=None):  # noqa
         search = request.args.get("search")
         user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify({"message": "User {} does not exist".format(user)}), 404
+            return jsonify({"message": user_id_does_not_exist(user_uuid)}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, user_uuid, True)
         file_name = request.args.get("file_name")
