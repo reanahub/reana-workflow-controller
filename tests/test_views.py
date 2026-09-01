@@ -22,7 +22,6 @@ from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
     Job,
-    JobCache,
     RunStatus,
     Workflow,
     WorkspaceRetentionRule,
@@ -1775,14 +1774,6 @@ def test_workspace_deletion(
         )
         assert workflow
 
-        # create a job for the workflow
-        workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
-        job_cache_entry = JobCache(job_id=workflow_job.id_)
-        session.add(workflow_job)
-        session.commit()
-        session.add(job_cache_entry)
-        session.commit()
-
         # check that the workflow workspace exists
         assert os.path.exists(workflow.workspace_path)
         with app.test_client() as client:
@@ -1797,13 +1788,6 @@ def test_workspace_deletion(
             assert res.status_code == 200
         if workspace:
             assert not os.path.exists(workflow.workspace_path)
-
-        # check that all cache entries for jobs
-        # of the deleted workflow are removed
-        cache_entries_after_delete = (
-            Session.query(JobCache).filter_by(job_id=workflow_job.id_).all()
-        )
-        assert not cache_entries_after_delete
 
 
 def test_deletion_of_workspace_of_an_already_deleted_workflow(

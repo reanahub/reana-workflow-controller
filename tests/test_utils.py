@@ -21,8 +21,6 @@ from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
     InteractiveSessionType,
-    Job,
-    JobCache,
     RunStatus,
     Workflow,
 )
@@ -158,27 +156,8 @@ def test_workspace_deletion(
     store_workflow_disk_quota(sample_yadage_workflow_in_db)
     update_users_disk_quota(sample_yadage_workflow_in_db.owner)
 
-    # create a job for the workflow
-    workflow_job = Job(id_=uuid.uuid4(), workflow_uuid=workflow.id_)
-    job_cache_entry = JobCache(job_id=workflow_job.id_)
-    session.add(workflow_job)
-    session.commit()
-    session.add(job_cache_entry)
-    session.commit()
-
-    # create cached workspace
-    cache_dir_path = os.path.join(
-        sample_yadage_workflow_in_db.workspace_path,
-        "..",
-        "archive",
-        str(workflow_job.id_),
-    )
-
-    os.makedirs(cache_dir_path)
-
     # check that the workflow workspace exists
     assert os.path.exists(sample_yadage_workflow_in_db.workspace_path)
-    assert os.path.exists(cache_dir_path)
     delete_workflow(workflow, workspace=workspace)
     if workspace:
         assert not os.path.exists(sample_yadage_workflow_in_db.workspace_path)
@@ -195,14 +174,6 @@ def test_workspace_deletion(
     else:
         assert not mock_update_user_quota.called
         assert not mock_update_workflow_quota.called
-
-    # check that all cache entries for jobs
-    # of the deleted workflow are removed
-    cache_entries_after_delete = (
-        Session.query(JobCache).filter_by(job_id=workflow_job.id_).all()
-    )
-    assert not cache_entries_after_delete
-    assert not os.path.exists(cache_dir_path)
 
 
 def test_deletion_of_workspace_of_an_already_deleted_workflow(

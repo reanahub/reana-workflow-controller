@@ -42,7 +42,6 @@ from reana_commons.utils import (
 from reana_db.database import Session
 from reana_db.models import (
     Job,
-    JobCache,
     ResourceType,
     ResourceUnit,
     RunStatus,
@@ -214,20 +213,6 @@ def build_workflow_logs(workflow, steps=None, paginate=None):
     return all_logs
 
 
-def remove_workflow_jobs_from_cache(workflow):
-    """Remove any cached jobs from given workflow.
-
-    :param workflow: The workflow object that spawned the jobs.
-    :return: None.
-    """
-    jobs = Session.query(Job).filter_by(workflow_uuid=workflow.id_).all()
-    for job in jobs:
-        job_path = os.path.join(workflow.workspace_path, "..", "archive", str(job.id_))
-        Session.query(JobCache).filter_by(job_id=job.id_).delete()
-        remove_workflow_workspace(job_path)
-    Session.commit()
-
-
 def delete_workflow(workflow, all_runs=False, workspace=False):
     """Delete workflow."""
     if "delete" in FORCE_GARBAGE_COLLECTION:
@@ -298,8 +283,6 @@ def delete_workflow(workflow, all_runs=False, workspace=False):
 
                 # 5. set the workflow as deleted in the database
                 _mark_workflow_as_deleted_in_db(workflow)
-                remove_workflow_jobs_from_cache(workflow)
-
             if all_runs:
                 message = "All workflows named {0} successfully deleted.".format(
                     workflow.name
