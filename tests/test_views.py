@@ -96,6 +96,9 @@ def test_get_workflows_wrong_user(app):
             query_string={"user": random_user_uuid, "type": "batch"},
         )
         assert res.status_code == 404
+        assert res.get_json()["message"] == (
+            f"User with id '{random_user_uuid}' does not exist."
+        )
 
 
 def test_get_workflows_missing_user(app):
@@ -467,6 +470,9 @@ def test_create_workflow_wrong_user(
 
         assert res.status_code == 404
         response_data = json.loads(res.get_data(as_text=True))
+        assert response_data["message"] == (
+            f"User with id '{random_user_uuid}' does not exist."
+        )
         workflow = (
             Session.query(Workflow)
             .filter(Workflow.id_ == response_data.get("workflow_id"))
@@ -474,6 +480,33 @@ def test_create_workflow_wrong_user(
         )
         # workflow exists in DB
         assert not workflow
+
+
+@pytest.mark.parametrize(
+    "endpoint,method,route_values",
+    [
+        ("workspaces.download_file", "GET", {"file_name": "input.csv"}),
+        ("workspaces.delete_file", "DELETE", {"file_name": "input.csv"}),
+        ("workspaces.get_files", "GET", {}),
+    ],
+)
+def test_workspace_operations_wrong_user(app, endpoint, method, route_values):
+    """Test workspace operations for an unknown user."""
+    user_id = uuid.uuid4()
+
+    with app.test_client() as client:
+        res = client.open(
+            url_for(
+                endpoint,
+                workflow_id_or_name=uuid.uuid4(),
+                **route_values,
+            ),
+            method=method,
+            query_string={"user": user_id},
+        )
+
+    assert res.status_code == 404
+    assert res.get_json()["message"] == f"User with id '{user_id}' does not exist."
 
 
 def test_download_missing_file(
@@ -2216,6 +2249,28 @@ def test_share_workflow(
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
 
 
+def test_share_workflow_with_non_existent_sharer(
+    app, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test sharing a workflow with a non-existent sharer."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    user_id = uuid.uuid4()
+
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.share_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user_id)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+
+    assert res.status_code == 404
+    assert res.get_json()["message"] == f"User with id '{user_id}' does not exist."
+
+
 def test_share_workflow_with_message_and_valid_until(
     app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
 ):
@@ -2595,6 +2650,29 @@ def test_unshare_workflow(
         assert (
             response_data["message"] == "The workflow has been unshared with the user."
         )
+
+
+def test_unshare_workflow_with_non_existent_sharer(
+    app, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test unsharing a workflow with a non-existent sharer."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    user_id = uuid.uuid4()
+
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.unshare_workflow",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={
+                "user": str(user_id),
+                "user_email_to_unshare_with": user2.email,
+            },
+        )
+
+    assert res.status_code == 404
+    assert res.get_json()["message"] == f"User with id '{user_id}' does not exist."
 
 
 def test_unshare_workflow_not_shared(
