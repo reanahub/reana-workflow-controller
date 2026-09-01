@@ -1235,8 +1235,8 @@ def share_workflow(
                 404,
             )
 
-        if valid_until and valid_until < datetime.date.today():
-            raise ValueError("The 'valid_until' date cannot be in the past.")
+        if valid_until and valid_until <= datetime.date.today():
+            raise ValueError("The 'valid_until' date must be in the future.")
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, sharer.id_)
 
