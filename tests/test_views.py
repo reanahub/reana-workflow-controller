@@ -7,6 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller module tests."""
 
+import datetime
 import io
 import json
 import os
@@ -2455,14 +2456,22 @@ def test_share_workflow_already_shared(
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
 
 
-def test_share_workflow_with_past_valid_until_date(
-    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+@pytest.mark.parametrize(
+    "valid_until",
+    [
+        datetime.date.today() - datetime.timedelta(days=1),
+        datetime.date.today(),
+    ],
+    ids=["past", "today"],
+)
+def test_share_workflow_with_non_future_valid_until_date(
+    valid_until, app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
 ):
-    """Test share workflow with a 'valid_until' date in the past."""
+    """Test sharing a workflow with a non-future expiration date."""
     workflow = sample_serial_workflow_in_db_owned_by_user1
     share_details = {
         "user_email_to_share_with": user2.email,
-        "valid_until": "2021-01-01",  # A date in the past
+        "valid_until": valid_until.isoformat(),
     }
     with app.test_client() as client:
         res = client.post(
@@ -2479,7 +2488,7 @@ def test_share_workflow_with_past_valid_until_date(
         assert res.status_code == 400
         response_data = res.get_json()
         assert (
-            response_data["message"] == "The 'valid_until' date cannot be in the past."
+            response_data["message"] == "The 'valid_until' date must be in the future."
         )
 
 
