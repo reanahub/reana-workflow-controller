@@ -22,6 +22,7 @@ import zipfile
 import shutil
 from collections import OrderedDict
 from datetime import datetime
+from fnmatch import fnmatchcase
 from functools import wraps
 from io import BytesIO
 from pathlib import Path
@@ -80,6 +81,18 @@ WORKSPACE_FILE_LISTING_FILTER_HINT = (
     "Available filters: file name, size, or last-modified."
 )
 """Neutral filter hint shown when workspace listings exceed the display limit."""
+
+HTCONDOR_FILE_TRANSFER_DIRECTORY_PATTERN = "reana_job.*.filetransfer"
+"""Name pattern used for per-job HTCondor file-transfer directories."""
+
+
+def is_htcondor_file_transfer_path(path: Union[str, os.PathLike]) -> bool:
+    """Return whether a path addresses an internal HTCondor transfer directory."""
+    normalised_path = remove_upper_level_references(os.fspath(path))
+    path_parts = Path(normalised_path).parts
+    return bool(path_parts) and fnmatchcase(
+        path_parts[0], HTCONDOR_FILE_TRANSFER_DIRECTORY_PATTERN
+    )
 
 
 def start_workflow(workflow, parameters):
@@ -452,6 +465,8 @@ def list_directory_files(
         gc.collect()
     file_list = []
     for file_name in workspace.walk(workspace_path, include_dirs=False):
+        if is_htcondor_file_transfer_path(file_name):
+            continue
         if len(file_list) >= WORKSPACE_DISPLAY_FILE_LIMIT:
             raise BadRequest(
                 "Too many files to display "
@@ -520,6 +535,8 @@ def list_files_recursive_wildcard(workspace_path, path_or_pattern, search=None):
         gc.collect()
     list_files_recursive = []
     for path in workspace.glob_or_walk_directory(workspace_path, path_or_pattern):
+        if is_htcondor_file_transfer_path(path):
+            continue
         if len(list_files_recursive) >= WORKSPACE_DISPLAY_FILE_LIMIT:
             raise BadRequest(
                 "Too many files to display "
@@ -601,8 +618,18 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path_or_pat
             if dir_path:
                 if len(list(dir_path.iterdir())):
                     for root, dirs, files in os.walk(dir_path):
+                        relative_root = Path(root).relative_to(Path(workspace_path))
+                        dirs[:] = [
+                            directory
+                            for directory in dirs
+                            if not is_htcondor_file_transfer_path(
+                                relative_root / directory
+                            )
+                        ]
                         for file in files:
                             relative_path = Path(root, file).relative_to(workspace_path)
+                            if is_htcondor_file_transfer_path(relative_path):
+                                continue
                             with workspace.open_file(
                                 workspace_path, relative_path, mode="rb"
                             ) as f:
@@ -611,6 +638,8 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path_or_pat
                     raise NotFound("The provided directory is empty.")
             elif file_paths:
                 for path in file_paths:
+                    if is_htcondor_file_transfer_path(path):
+                        continue
                     with workspace.open_file(workspace_path, path, mode="rb") as f:
                         zipf.writestr(str(path), f.read())
             else:
@@ -641,14 +670,21 @@ def download_files_recursive_wildcard(workflow_name, workspace_path, path_or_pat
             200,
         )
 
+    if is_htcondor_file_transfer_path(path_or_pattern):
+        raise NotFound("The provided path is internal to REANA.")
+
     full_path_dir = is_directory(workspace_path, path_or_pattern)
     if full_path_dir:
         return _send_zipped_dir_or_files(workflow_name, dir_path=full_path_dir)
 
     else:
-        paths = list(
-            workspace.glob(workspace_path, path_or_pattern, include_dirs=False)
-        )
+        paths = [
+            path
+            for path in workspace.glob(
+                workspace_path, path_or_pattern, include_dirs=False
+            )
+            if not is_htcondor_file_transfer_path(path)
+        ]
         # if it's a single file, serve it directly
         if len(paths) == 1:
             relative_file_path = paths[0]
@@ -695,6 +731,7 @@ def get_workspace_diff(workflow_a, workflow_b, brief=False, context_lines=5):
             "diff",
             "--unified={}".format(context_lines),
             "-r",
+            "--exclude={}".format(HTCONDOR_FILE_TRANSFER_DIRECTORY_PATTERN),
             workspace_a,
             workspace_b,
         ]
