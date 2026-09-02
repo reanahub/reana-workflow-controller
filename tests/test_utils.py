@@ -7,6 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller utility tests."""
 
+import io
 import json
 import os
 import stat
@@ -14,6 +15,7 @@ import uuid
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
 from typing import ContextManager
+from zipfile import ZipFile
 
 import mock
 import pytest
@@ -36,11 +38,15 @@ from reana_workflow_controller.config import compose_reana_url
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
     delete_workflow,
+    download_files_recursive_wildcard,
     get_previewable_mime_type,
+    is_htcondor_file_transfer_path,
+    list_directory_files,
     list_files_recursive_wildcard,
     mv_files,
     remove_files_recursive_wildcard,
 )
+from werkzeug.exceptions import NotFound
 
 
 @pytest.mark.parametrize(
@@ -269,6 +275,91 @@ def test_list_recursive_wildcard(tmp_shared_volume_path):
     listed_files = list_files_recursive_wildcard(directory_path, "*.txt")
     listed_files_names = set(file["name"] for file in listed_files)
     assert listed_files_names == set(["file3.txt"])
+
+
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("reana_job.123.filetransfer", True),
+        ("reana_job.123.filetransfer/credential.cc", True),
+        ("./reana_job.123.filetransfer/credential.cc", True),
+        ("output/../reana_job.123.filetransfer/credential.cc", True),
+        ("../reana_job.123.filetransfer/credential.cc", True),
+        ("output/reana_job.123.filetransfer/result.txt", False),
+        ("reana_job.123.filetransfer.txt", False),
+        ("result.txt", False),
+    ],
+)
+def test_is_htcondor_file_transfer_path(path, expected):
+    """Test recognising internal HTCondor file-transfer paths."""
+    assert is_htcondor_file_transfer_path(path) is expected
+
+
+def test_workspace_file_listings_hide_htcondor_file_transfer_directory(
+    tmp_shared_volume_path,
+):
+    """Test hiding internal HTCondor file-transfer directories from listings."""
+    workspace_path = Path(tmp_shared_volume_path, "htcondor-listing-test")
+    visible_file = workspace_path / "result.txt"
+    internal_file = workspace_path / "reana_job.123.filetransfer" / "credential.cc"
+    nested_file = (
+        workspace_path / "output" / "reana_job.123.filetransfer" / "user-result.txt"
+    )
+    for path in (visible_file, internal_file, nested_file):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(path.name)
+
+    listed_files = list_directory_files(workspace_path)
+    listed_names = {file_["name"] for file_ in listed_files}
+    assert listed_names == {
+        "result.txt",
+        "output/reana_job.123.filetransfer/user-result.txt",
+    }
+
+    listed_files = list_files_recursive_wildcard(workspace_path, "**/*")
+    listed_names = {file_["name"] for file_ in listed_files}
+    assert listed_names == {
+        "output",
+        "output/reana_job.123.filetransfer",
+        "output/reana_job.123.filetransfer/user-result.txt",
+        "result.txt",
+    }
+
+
+def test_workspace_downloads_hide_htcondor_file_transfer_directory(
+    app, tmp_shared_volume_path
+):
+    """Test excluding internal HTCondor file-transfer files from downloads."""
+    workspace_path = Path(tmp_shared_volume_path, "htcondor-download-test")
+    files = {
+        "first.txt": b"first result",
+        "second.txt": b"second result",
+        "reana_job.123.filetransfer/credential.cc": b"kerberos credential",
+    }
+    for file_name, contents in files.items():
+        path = workspace_path / file_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+
+    with app.test_request_context("/?preview=false"):
+        response = download_files_recursive_wildcard("workflow.1", workspace_path, "")
+        response.direct_passthrough = False
+        with ZipFile(io.BytesIO(response.get_data())) as archive:
+            assert set(archive.namelist()) == {"first.txt", "second.txt"}
+
+        response = download_files_recursive_wildcard(
+            "workflow.1", workspace_path, "**/*"
+        )
+        response.direct_passthrough = False
+        with ZipFile(io.BytesIO(response.get_data())) as archive:
+            assert set(archive.namelist()) == {"first.txt", "second.txt"}
+
+        with pytest.raises(NotFound):
+            download_files_recursive_wildcard(
+                "workflow.1",
+                workspace_path,
+                "reana_job.123.filetransfer/credential.cc",
+            )
 
 
 def test_workspace_permissions(

@@ -720,6 +720,70 @@ def test_get_files(app, session, user0, tmp_shared_volume_path, cwl_workflow_wit
             assert file_.get("name") in test_files
 
 
+def test_htcondor_file_transfer_directory_is_hidden_from_workspace_readers(
+    app,
+    session,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+):
+    """Test hiding internal HTCondor transfer files from workspace readers."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    session.add(UserWorkflow(workflow_id=workflow.id_, user_id=user2.id_))
+    session.commit()
+
+    files = {
+        "first.txt": b"first result",
+        "second.txt": b"second result",
+        "reana_job.123.filetransfer/credential.cc": b"kerberos credential",
+    }
+    for file_name, contents in files.items():
+        file_path = os.path.join(workflow.workspace_path, file_name)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as workspace_file:
+            workspace_file.write(contents)
+
+    with app.test_client() as client:
+        for user in (user1, user2):
+            response = client.get(
+                url_for("workspaces.get_files", workflow_id_or_name=workflow.id_),
+                query_string={"user": user.id_},
+            )
+            assert response.status_code == 200
+            listed_names = {file_["name"] for file_ in response.get_json()["items"]}
+            assert listed_names == {"first.txt", "second.txt"}
+
+            response = client.get(
+                url_for("workspaces.get_files", workflow_id_or_name=workflow.id_),
+                query_string={"user": user.id_, "file_name": "**/*"},
+            )
+            assert response.status_code == 200
+            listed_names = {file_["name"] for file_ in response.get_json()["items"]}
+            assert listed_names == {"first.txt", "second.txt"}
+
+            response = client.get(
+                url_for(
+                    "workspaces.download_file",
+                    workflow_id_or_name=workflow.id_,
+                    file_name="**/*",
+                ),
+                query_string={"user": user.id_},
+            )
+            assert response.status_code == 200
+            with ZipFile(io.BytesIO(response.data)) as archive:
+                assert set(archive.namelist()) == {"first.txt", "second.txt"}
+
+            response = client.get(
+                url_for(
+                    "workspaces.download_file",
+                    workflow_id_or_name=workflow.id_,
+                    file_name="reana_job.123.filetransfer/credential.cc",
+                ),
+                query_string={"user": user.id_},
+            )
+            assert response.status_code == 404
+
+
 def test_get_files_deleted_workflow(
     app, user0, tmp_shared_volume_path, cwl_workflow_with_name
 ):
@@ -1243,6 +1307,32 @@ def test_delete_file(app, user0, sample_serial_workflow_in_db):
         )
         assert res.status_code == 200
         assert not os.path.exists(abs_path_to_file)
+
+
+def test_owner_can_delete_htcondor_file_transfer_cache(
+    app, user0, sample_serial_workflow_in_db
+):
+    """Test that owners can delete internal HTCondor transfer files."""
+    workflow = sample_serial_workflow_in_db
+    directory_name = "reana_job.123.filetransfer"
+    directory_path = os.path.join(workflow.workspace_path, directory_name)
+    os.makedirs(directory_path)
+    cache_path = os.path.join(directory_path, "credential.cc")
+    with open(cache_path, "wb") as cache:
+        cache.write(b"kerberos credential")
+
+    with app.test_client() as client:
+        res = client.delete(
+            url_for(
+                "workspaces.delete_file",
+                workflow_id_or_name=workflow.id_,
+                file_name=os.path.join(directory_name, "credential.cc"),
+            ),
+            query_string={"user": user0.id_},
+        )
+
+    assert res.status_code == 200
+    assert not os.path.exists(cache_path)
 
 
 @pytest.mark.parametrize(
@@ -1920,6 +2010,10 @@ def test_get_workspace_diff(
             f.write(os.linesep)
             f.write(csv_line)
             f.flush()
+        internal_directory = os.path.join(workspace, "reana_job.123.filetransfer")
+        os.makedirs(internal_directory)
+        with open(os.path.join(internal_directory, "credential.cc"), "w") as cache:
+            cache.write("secret credential {}".format(index))
     with app.test_client() as client:
         res = client.get(
             url_for(
@@ -1933,6 +2027,8 @@ def test_get_workspace_diff(
         assert res.status_code == 200
         response_data = json.loads(res.get_data(as_text=True))
         assert "# File" in response_data["workspace_listing"]
+        assert "reana_job.123.filetransfer" not in response_data["workspace_listing"]
+        assert "secret credential" not in response_data["workspace_listing"]
 
 
 def test_create_interactive_session(
