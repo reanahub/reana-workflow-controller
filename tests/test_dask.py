@@ -15,9 +15,10 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_UID,
 )
+from reana_commons.k8s.secrets import Secret, UserSecrets, UserSecretsStore
 
 from reana_workflow_controller.config import REANA_RUNTIME_FS_GROUP_CHANGE_POLICY
-from reana_workflow_controller.dask import requires_dask
+from reana_workflow_controller.dask import DaskResourceManager, requires_dask
 
 
 @pytest.mark.parametrize(
@@ -401,7 +402,7 @@ def test_prepare_cluster(dask_resource_manager):
     ) as mock_add_shared_volume, patch.object(
         dask_resource_manager, "_add_eos_volume"
     ) as mock_add_eos_volume, patch.object(
-        dask_resource_manager.secrets_store, "get_file_secrets_volume_as_k8s_specs"
+        dask_resource_manager.exposed_secrets, "get_file_secrets_volume_as_k8s_specs"
     ) as mock_get_file_secrets_volume:
 
         mock_get_file_secrets_volume.return_value = {"name": "secrets-volume"}
@@ -530,7 +531,7 @@ def test_prepare_cluster_skips_security_context_when_disabled(dask_resource_mana
     ), patch.object(
         dask_resource_manager, "_add_eos_volume"
     ), patch.object(
-        dask_resource_manager.secrets_store, "get_file_secrets_volume_as_k8s_specs"
+        dask_resource_manager.exposed_secrets, "get_file_secrets_volume_as_k8s_specs"
     ) as mock_get_file_secrets_volume, patch(
         "reana_workflow_controller.dask.K8S_USE_SECURITY_CONTEXT", False
     ):
@@ -575,3 +576,84 @@ def test_prepare_cluster_skips_security_context_when_disabled(dask_resource_mana
                 "containers"
             ][0]
         )
+
+
+def test_dask_resource_manager_filters_secret_names(monkeypatch):
+    """Dask workers should expose only the requested user secrets."""
+    user_id = str(uuid4())
+    user_secrets = UserSecrets(
+        user_id=user_id,
+        k8s_secret_name="k8s-secret",
+        secrets=[
+            Secret(name="wanted_env", type_="env", value="1"),
+            Secret(name="other_env", type_="env", value="2"),
+            Secret(name="wanted_file", type_="file", value="3"),
+        ],
+    )
+    monkeypatch.setattr(UserSecretsStore, "fetch", lambda _: user_secrets)
+
+    manager = DaskResourceManager(
+        workflow_id="9eef9a08-5629-420d-8e97-29d498d88e20",
+        workflow_spec={
+            "resources": {
+                "secret_names": ["other_env"],
+                "dask": {
+                    "image": "coffeateam/coffea-dask-almalinux8",
+                    "secret_names": ["wanted_env", "wanted_file"],
+                },
+            }
+        },
+        workflow_workspace="/path/to/workspace",
+        user_id=user_id,
+        num_of_workers=2,
+        num_of_threads=8,
+        single_worker_memory="256Mi",
+    )
+
+    assert [env["name"] for env in manager.secret_env_vars] == ["wanted_env"]
+    assert manager.exposed_secrets.get_file_secrets_volume_as_k8s_specs()["secret"][
+        "items"
+    ] == [{"key": "wanted_file", "path": "wanted_file"}]
+
+
+def test_dask_resource_manager_keeps_feature_secrets_with_kerberos(monkeypatch):
+    """Kerberos-enabled Dask clusters still mount only the required feature secrets."""
+    user_id = str(uuid4())
+    user_secrets = UserSecrets(
+        user_id=user_id,
+        k8s_secret_name="k8s-secret",
+        secrets=[
+            Secret(name="ordinary", type_="env", value="1"),
+            Secret(name="CERN_USER", type_="env", value="user"),
+            Secret(name="CERN_KEYTAB", type_="env", value=".keytab"),
+            Secret(name=".keytab", type_="file", value="secret"),
+        ],
+    )
+    monkeypatch.setattr(UserSecretsStore, "fetch", lambda _: user_secrets)
+
+    manager = DaskResourceManager(
+        workflow_id="9eef9a08-5629-420d-8e97-29d498d88e20",
+        workflow_spec={
+            "resources": {
+                "secret_names": [],
+                "dask": {
+                    "image": "coffeateam/coffea-dask-almalinux8",
+                },
+            }
+        },
+        workflow_workspace="/path/to/workspace",
+        user_id=user_id,
+        num_of_workers=2,
+        num_of_threads=8,
+        single_worker_memory="256Mi",
+        kerberos=True,
+    )
+
+    assert [env["name"] for env in manager.secret_env_vars] == [
+        "CERN_USER",
+        "CERN_KEYTAB",
+    ]
+    assert "ordinary" not in [env["name"] for env in manager.secret_env_vars]
+    assert manager.exposed_secrets.get_file_secrets_volume_as_k8s_specs()["secret"][
+        "items"
+    ] == [{"key": ".keytab", "path": ".keytab"}]

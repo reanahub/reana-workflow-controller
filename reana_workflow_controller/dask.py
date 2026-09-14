@@ -28,11 +28,11 @@ from reana_commons.config import (
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
 )
+from reana_commons.k8s.secrets import UserSecretsStore, resolve_secret_names
 from reana_commons.k8s.api_client import (
     current_k8s_networking_api_client,
     current_k8s_custom_objects_api_client,
 )
-from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     get_workspace_volume,
     get_reana_shared_volume,
@@ -114,7 +114,8 @@ class DaskResourceManager:
         self.workflow_id = str(workflow_id)
         self.user_id = str(user_id)
 
-        self.cluster_spec = workflow_spec.get("resources", {}).get("dask", [])
+        self.workflow_resources = workflow_spec.get("resources", {}) or {}
+        self.cluster_spec = self.workflow_resources.get("dask", {})
         self.cluster_body = self._load_dask_cluster_template()
         self.cluster_image = self.cluster_spec["image"]
         self.dask_scheduler_uri = get_dask_component_name(
@@ -122,15 +123,24 @@ class DaskResourceManager:
         )
 
         self.secrets_store = UserSecretsStore.fetch(self.user_id)
-        self.secret_env_vars = self.secrets_store.get_env_secrets_as_k8s_spec()
-        self.secrets_volume_mount = (
-            self.secrets_store.get_secrets_volume_mount_as_k8s_spec()
-        )
         self.kubernetes_uid = int(WORKFLOW_RUNTIME_USER_UID)
 
         self.kerberos = kerberos
         self.voms_proxy = voms_proxy
         self.rucio = rucio
+        self.secret_names = resolve_secret_names(
+            self.cluster_spec.get("secret_names"), self.workflow_resources
+        )
+        self.exposed_secrets = self.secrets_store.get_scoped_secrets(
+            self.secret_names,
+            kerberos=self.kerberos,
+            voms_proxy=self.voms_proxy,
+            rucio=self.rucio,
+        )
+        self.secret_env_vars = self.exposed_secrets.get_env_secrets_as_k8s_spec()
+        self.secrets_volume_mount = (
+            self.exposed_secrets.get_secrets_volume_mount_as_k8s_spec()
+        )
 
         if DASK_AUTOSCALER_ENABLED:
             self.autoscaler_name = get_dask_component_name(workflow_id, "autoscaler")
@@ -258,17 +268,19 @@ class DaskResourceManager:
             ] = _restricted_container_security_context()
 
         # Add secrets
-        self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["env"].extend(
-            self.secret_env_vars
-        )
+        if self.exposed_secrets.get_secrets():
+            self.cluster_body["spec"]["worker"]["spec"]["containers"][0]["env"].extend(
+                self.secret_env_vars
+            )
 
-        self.cluster_body["spec"]["worker"]["spec"]["containers"][0][
-            "volumeMounts"
-        ].append(self.secrets_volume_mount)
+        if self.exposed_secrets.has_file_secrets():
+            self.cluster_body["spec"]["worker"]["spec"]["containers"][0][
+                "volumeMounts"
+            ].append(self.secrets_volume_mount)
 
-        self.cluster_body["spec"]["worker"]["spec"]["volumes"].append(
-            self.secrets_store.get_file_secrets_volume_as_k8s_specs()
-        )
+            self.cluster_body["spec"]["worker"]["spec"]["volumes"].append(
+                self.exposed_secrets.get_file_secrets_volume_as_k8s_specs()
+            )
 
         if self.kerberos:
             self._add_krb5_containers()
