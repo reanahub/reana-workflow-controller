@@ -106,7 +106,7 @@ from reana_workflow_controller.config import (  # isort:skip
     KUEUE_ENABLED,
     KUEUE_LOCAL_QUEUE_NAME,
     REANA_RUNTIME_JOBS_KUBERNETES_TOLERATIONS,
-    REANA_JOB_CONTROLLER_SECRET,
+    JOB_CONTROLLER_IMAGE_PULL_SECRET,
     REANA_DATASTORE_IMAGE,
     REANA_DATASTORE_ENABLED,
     REANA_DATASTORE_SECRET,
@@ -1009,9 +1009,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             volumes += kerberos.volumes
             spec.template.spec.init_containers.append(kerberos.init_container)
 
-        if REANA_JOB_CONTROLLER_SECRET:
+        if JOB_CONTROLLER_IMAGE_PULL_SECRET:
             spec.template.spec.image_pull_secrets.append(
-                client.V1LocalObjectReference(name=REANA_JOB_CONTROLLER_SECRET)
+                client.V1LocalObjectReference(name=JOB_CONTROLLER_IMAGE_PULL_SECRET)
             )
 
         # filter out volumes with the same name

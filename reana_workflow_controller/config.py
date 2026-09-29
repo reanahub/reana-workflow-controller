@@ -335,8 +335,10 @@ JOB_CONTROLLER_IMAGE = os.getenv(
 )
 """Default image for REANA Job Controller sidecar."""
 
-REANA_JOB_CONTROLLER_SECRET = os.getenv("REANA_JOB_CONTROLLER_SECRET")
-"""DOptional secret for REANA Job Controller sidecar."""
+JOB_CONTROLLER_IMAGE_PULL_SECRET = os.getenv(
+    "REANA_JOB_CONTROLLER_IMAGE_PULL_SECRET"
+)
+"""Image pull Secret for pulling the REANA Job Controller image inside job pods."""
 
 JOB_CONTROLLER_ENV_VARS = _env_vars_dict_to_k8s_list(
     json.loads(os.getenv("REANA_JOB_CONTROLLER_ENV_VARS", "{}"))
