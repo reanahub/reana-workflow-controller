@@ -89,7 +89,7 @@ CMD ["/bin/sh", "-c", "case \"$(printf '%s' \"${FLASK_DEBUG}\" | tr '[:upper:]' 
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"
-LABEL org.opencontainers.image.created="2026-06-07"
+LABEL org.opencontainers.image.created="2026-09-30"
 LABEL org.opencontainers.image.description="REANA reproducible analysis platform - workflow controller component"
 LABEL org.opencontainers.image.documentation="https://reana-workflow-controller.readthedocs.io/"
 LABEL org.opencontainers.image.licenses="MIT"
@@ -98,5 +98,5 @@ LABEL org.opencontainers.image.title="reana-workflow-controller"
 LABEL org.opencontainers.image.url="https://github.com/reanahub/reana-workflow-controller"
 LABEL org.opencontainers.image.vendor="reanahub"
 # x-release-please-start-version
-LABEL org.opencontainers.image.version="0.95.0-alpha.7"
+LABEL org.opencontainers.image.version="0.95.0-alpha.8"
 # x-release-please-end
