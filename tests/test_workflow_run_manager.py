@@ -707,3 +707,40 @@ def test_create_job_spec_read_only_without_security_context(
     assert engine.security_context.read_only_root_filesystem is True
     assert engine.security_context.run_as_user is None
     assert sidecar.security_context is None
+
+
+@pytest.mark.parametrize(
+    "environment,declared_repos,uses_cvmfs_images",
+    [
+        ("docker.io/library/busybox", [], False),
+        ("docker.io/library/busybox", ["sft.cern.ch"], False),
+        (
+            "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/library/python:3.11",
+            [],
+            True,
+        ),
+        (
+            "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/library/python:3.11",
+            ["sft.cern.ch"],
+            True,
+        ),
+        ("images/my_tool.sif", [], False),
+    ],
+)
+def test_unpacked_cvmfs_images_need_only_the_volume_claim(
+    environment, declared_repos, uses_cvmfs_images
+):
+    """Test that unpacked CVMFS images do not add repositories to all jobs."""
+    workflow = Mock()
+    workflow.reana_specification = {
+        "workflow": {
+            "type": "serial",
+            "resources": {"cvmfs": declared_repos},
+            "specification": {
+                "steps": [{"environment": environment, "commands": ["ls"]}]
+            },
+        }
+    }
+    kwrm = KubernetesWorkflowRunManager(workflow)
+    assert kwrm.retrieve_required_cvmfs_repos() == declared_repos
+    assert kwrm.uses_cvmfs_images() is uses_cvmfs_images

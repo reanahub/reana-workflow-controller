@@ -45,6 +45,7 @@ from reana_commons.k8s.volumes import (
     create_cvmfs_persistent_volume_claim,
     get_workspace_volume,
 )
+from reana_commons.validation.images import extract_images
 from reana_commons.utils import (
     build_unique_component_name,
     format_cmd,
@@ -407,6 +408,17 @@ class WorkflowRunManager:
         )
         return required_resources.get("cvmfs", [])
 
+    def uses_cvmfs_images(self):
+        """Check if a step uses an unpacked container image from CVMFS.
+
+        The job controller mounts the repository of such an image in its job,
+        so only the CVMFS volume claim must exist.
+        """
+        return any(
+            image and image.startswith("/cvmfs/")
+            for image in extract_images(self.workflow.reana_specification)
+        )
+
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""
         env_vars = copy.deepcopy(
@@ -564,8 +576,8 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
             )
 
-            # Create PVC needed for CVMFS repos
-            if self.retrieve_required_cvmfs_repos():
+            # Create PVC needed for CVMFS repos and unpacked CVMFS images
+            if self.retrieve_required_cvmfs_repos() or self.uses_cvmfs_images():
                 create_cvmfs_persistent_volume_claim()
 
         except ApiException as e:
