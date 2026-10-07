@@ -42,8 +42,10 @@ from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_commons.k8s.volumes import (
     create_cvmfs_persistent_volume_claim,
+    extract_cvmfs_repository,
     get_workspace_volume,
 )
+from reana_commons.validation.images import extract_images
 from reana_commons.utils import (
     build_unique_component_name,
     format_cmd,
@@ -352,7 +354,17 @@ class WorkflowRunManager:
         required_resources = self.workflow.reana_specification["workflow"].get(
             "resources", {}
         )
-        return required_resources.get("cvmfs", [])
+        cvmfs_repos = list(required_resources.get("cvmfs", []))
+        # Unpacked container images living on CVMFS need their repository too
+        for image in extract_images(self.workflow.reana_specification):
+            if image and image.startswith("/cvmfs/"):
+                try:
+                    repository = extract_cvmfs_repository(image)
+                except ValueError:
+                    continue
+                if repository not in cvmfs_repos:
+                    cvmfs_repos.append(repository)
+        return cvmfs_repos
 
     def _workflow_engine_env_vars(self):
         """Return necessary environment variables for the workflow engine."""

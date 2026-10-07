@@ -500,3 +500,39 @@ def test_interactive_session_uses_per_session_secret(sample_serial_workflow_in_d
         assert token_env.value is None
         assert token_env.value_from.secret_key_ref.name == secret_object.metadata.name
         assert token_env.value_from.secret_key_ref.key == "notebook_args"
+
+
+@pytest.mark.parametrize(
+    "environment,declared_repos,expected_repos",
+    [
+        ("docker.io/library/busybox", [], []),
+        ("docker.io/library/busybox", ["sft.cern.ch"], ["sft.cern.ch"]),
+        (
+            "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/library/python:3.11",
+            [],
+            ["unpacked.cern.ch"],
+        ),
+        (
+            "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/library/python:3.11",
+            ["sft.cern.ch", "unpacked.cern.ch"],
+            ["sft.cern.ch", "unpacked.cern.ch"],
+        ),
+        ("images/my_tool.sif", [], []),
+    ],
+)
+def test_retrieve_required_cvmfs_repos_includes_unpacked_images(
+    environment, declared_repos, expected_repos
+):
+    """Test that CVMFS repositories of unpacked images are mounted automatically."""
+    workflow = Mock()
+    workflow.reana_specification = {
+        "workflow": {
+            "type": "serial",
+            "resources": {"cvmfs": declared_repos},
+            "specification": {
+                "steps": [{"environment": environment, "commands": ["ls"]}]
+            },
+        }
+    }
+    kwrm = KubernetesWorkflowRunManager(workflow)
+    assert kwrm.retrieve_required_cvmfs_repos() == expected_repos
