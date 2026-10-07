@@ -707,3 +707,39 @@ def test_create_job_spec_read_only_without_security_context(
     assert engine.security_context.read_only_root_filesystem is True
     assert engine.security_context.run_as_user is None
     assert sidecar.security_context is None
+
+
+@pytest.mark.parametrize(
+    "environment,declared_repos,expected_repos",
+    [
+        ("docker.io/library/busybox", [], []),
+        ("docker.io/library/busybox", ["sft.cern.ch"], ["sft.cern.ch"]),
+        (
+            "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/library/python:3.11",
+            [],
+            ["unpacked.cern.ch"],
+        ),
+        (
+            "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/library/python:3.11",
+            ["sft.cern.ch", "unpacked.cern.ch"],
+            ["sft.cern.ch", "unpacked.cern.ch"],
+        ),
+        ("images/my_tool.sif", [], []),
+    ],
+)
+def test_retrieve_required_cvmfs_repos_includes_unpacked_images(
+    environment, declared_repos, expected_repos
+):
+    """Test that CVMFS repositories of unpacked images are mounted automatically."""
+    workflow = Mock()
+    workflow.reana_specification = {
+        "workflow": {
+            "type": "serial",
+            "resources": {"cvmfs": declared_repos},
+            "specification": {
+                "steps": [{"environment": environment, "commands": ["ls"]}]
+            },
+        }
+    }
+    kwrm = KubernetesWorkflowRunManager(workflow)
+    assert kwrm.retrieve_required_cvmfs_repos() == expected_repos
