@@ -24,6 +24,7 @@ from reana_db.models import (
     InteractiveSession,
     Job,
     JobCache,
+    Notification,
     RunStatus,
     Workflow,
     WorkspaceRetentionRule,
@@ -2340,7 +2341,18 @@ def test_share_workflow(
         response_data = res.get_json()
         assert response_data["message"] == "The workflow has been shared with the user."
 
+    notification = (
+        session.query(Notification)
+        .filter_by(user_id=user2.id_, type_="workflow_shared")
+        .one()
+    )
+    assert notification.type_ == "workflow_shared"
+    assert notification.payload["workflow_id"] == str(workflow.id_)
+    assert notification.payload["sharer_email"] == user1.email
+
+    session.delete(notification)
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+    session.commit()
 
 
 def test_share_workflow_with_message_and_valid_until(
@@ -2369,7 +2381,17 @@ def test_share_workflow_with_message_and_valid_until(
         response_data = res.get_json()
         assert response_data["message"] == "The workflow has been shared with the user."
 
+    notification = (
+        session.query(Notification)
+        .filter_by(user_id=user2.id_, type_="workflow_shared")
+        .one()
+    )
+    assert notification.payload["message"] == share_details["message"]
+    assert notification.payload["valid_until"] == share_details["valid_until"]
+
+    session.delete(notification)
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+    session.commit()
 
 
 def test_share_workflow_invalid_email(
@@ -2690,7 +2712,7 @@ def test_share_multiple_workflows(
 
 
 def test_unshare_workflow(
-    app, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+    app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
 ):
     """Test unshare workflow."""
     workflow = sample_serial_workflow_in_db_owned_by_user1
@@ -2722,6 +2744,53 @@ def test_unshare_workflow(
         assert (
             response_data["message"] == "The workflow has been unshared with the user."
         )
+
+    notification = (
+        session.query(Notification)
+        .filter_by(user_id=user2.id_, type_="workflow_unshared")
+        .one()
+    )
+    assert notification.payload["workflow_id"] == str(workflow.id_)
+    assert notification.payload["workflow_name"] == workflow.get_full_workflow_name()
+    assert notification.payload["sharer_email"] == user1.email
+
+    session.query(Notification).filter_by(user_id=user2.id_).delete()
+    session.commit()
+
+
+def test_delete_shared_workflow_notifies_recipients(
+    app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test that deleting a shared workflow notifies the users it is shared with."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    session.add(UserWorkflow(user_id=user2.id_, workflow_id=workflow.id_))
+    session.commit()
+
+    with app.test_client() as client:
+        for _ in range(2):  # deleting twice must not notify twice
+            res = client.put(
+                url_for(
+                    "statuses.set_workflow_status",
+                    workflow_id_or_name=workflow.id_,
+                ),
+                query_string={"user": user1.id_, "status": "deleted"},
+                content_type="application/json",
+                data=json.dumps({}),
+            )
+            assert res.status_code == 200
+
+    notification = (
+        session.query(Notification)
+        .filter_by(user_id=user2.id_, type_="workflow_deleted")
+        .one()
+    )
+    assert notification.payload["workflow_id"] == str(workflow.id_)
+    assert notification.payload["sharer_email"] == user1.email
+    assert session.query(Notification).filter_by(user_id=user1.id_).count() == 0
+
+    session.delete(notification)
+    session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+    session.commit()
 
 
 def test_unshare_workflow_not_shared(
