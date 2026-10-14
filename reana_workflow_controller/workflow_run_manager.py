@@ -11,6 +11,7 @@ import copy
 import json
 import logging
 import os
+import re
 from typing import List, Optional
 
 from flask import current_app
@@ -130,6 +131,54 @@ def _restricted_security_context(uid: int, gid: int) -> client.V1SecurityContext
         capabilities=client.V1Capabilities(drop=["ALL"]),
         seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
     )
+
+
+JOB_CONTROLLER_USER_SECRET_ENV_ALLOW_LIST = frozenset(
+    {
+        "CERN_KEYTAB",
+        "HELMHOLTZ_TOP",
+        "RUCIO_AUTH_HOST",
+        "RUCIO_RUCIO_HOST",
+        "RUCIO_USERNAME",
+        "VOMSPROXY_FILE",
+        "VONAME",
+    }
+)
+"""User environment secrets that the job-controller sidecar itself consumes.
+
+Every other user secret stays out of the sidecar process environment. User
+jobs still receive all secrets, because the job controller builds their
+specification from the secret store and not from its own environment.
+``CERN_USER`` is not in this list, because the controller sets it itself.
+"""
+
+CERN_USER_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,31}$")
+"""Accepted format of the ``CERN_USER`` secret (a POSIX user name)."""
+
+
+def _filter_job_controller_user_secrets(env_secrets, managed_env_vars):
+    """Keep only the user env secrets that the job controller consumes."""
+    managed_names = {env_var["name"] for env_var in managed_env_vars}
+    return [
+        env_secret
+        for env_secret in env_secrets
+        if env_secret["name"] in JOB_CONTROLLER_USER_SECRET_ENV_ALLOW_LIST
+        and env_secret["name"] not in managed_names
+    ]
+
+
+def _get_runtime_user_name(user_secrets):
+    """Return the runtime user name, from a valid ``CERN_USER`` secret if set."""
+    user_secret = user_secrets.get_secret("CERN_USER")
+    if not user_secret:
+        return WORKFLOW_RUNTIME_USER_NAME
+    user_name = user_secret.value_str
+    if not CERN_USER_NAME_PATTERN.match(user_name):
+        LOGGER.warning(
+            "Ignoring the CERN_USER secret because it is not a valid user name."
+        )
+        return WORKFLOW_RUNTIME_USER_NAME
+    return user_name
 
 
 def _filter_job_controller_env_var_collisions(existing_env_vars, additional_env_vars):
@@ -796,8 +845,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
     def _get_job_controller_user(self, exposed_user_secrets):
         """Return the runtime user name for the job controller."""
-        user_secret = exposed_user_secrets.get_secret("CERN_USER")
-        return user_secret.value_str if user_secret else WORKFLOW_RUNTIME_USER_NAME
+        return _get_runtime_user_name(exposed_user_secrets)
 
     def _job_controller_base_env_vars(self, owner_id, user):
         """Return base environment variables for the job-controller sidecar."""
@@ -993,7 +1041,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             )
         )
         job_controller_container.env.extend(
-            exposed_user_secrets.get_env_secrets_as_k8s_spec()
+            _filter_job_controller_user_secrets(
+                exposed_user_secrets.get_env_secrets_as_k8s_spec(),
+                job_controller_container.env,
+            )
         )
         job_controller_container.env.append(
             {

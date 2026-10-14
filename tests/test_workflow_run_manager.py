@@ -24,6 +24,7 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_UID,
 )
 from reana_commons.errors import REANASecretDoesNotExist
+from reana_commons.k8s.secrets import Secret, UserSecrets, UserSecretsStore
 from reana_db.database import Session
 from reana_db.models import (
     RunStatus,
@@ -493,8 +494,18 @@ def test_create_job_spec_scopes_job_controller_sidecar(
         if container.name == "job-controller"
     )
     env_names = {env_var["name"] for env_var in job_controller_container.env}
+    env_vars = {
+        env_var["name"]: env_var["value"]
+        for env_var in job_controller_container.env
+        if "value" in env_var
+    }
+    manifest = json.loads(env_vars["REANA_USER_SECRETS_TYPES"])
 
-    assert "username" in env_names
+    # The scoping is carried by the manifest. The values of ordinary secrets
+    # stay out of the sidecar environment.
+    assert "username" in manifest
+    assert "password" not in manifest
+    assert "username" not in env_names
     assert "password" not in env_names
 
 
@@ -897,7 +908,8 @@ def test_create_job_spec_keeps_control_secret_manifest_authoritative(
         == "REANA_USER_SECRETS_TYPES"
     ]
 
-    assert len(manifest_entries) == 2
+    # The colliding user secret never reaches the sidecar environment.
+    assert len(manifest_entries) == 1
     last_entry = manifest_entries[-1]
     manifest_value = (
         last_entry.get("value") if isinstance(last_entry, dict) else last_entry.value
@@ -1002,3 +1014,107 @@ def test_create_job_spec_sidecar_manifest_includes_step_local_secret_overrides(
 
     assert manifest == {"common": "env", "global": "env", "fit": "env"}
     assert "unrelated" not in manifest
+
+
+def _user_secrets_with(monkeypatch, secrets):
+    """Make the secret store of the workflow owner return the given secrets."""
+    user_secrets = UserSecrets(
+        user_id="00000000-0000-0000-0000-000000000000",
+        k8s_secret_name="k8s-secret",
+        secrets=secrets,
+    )
+    monkeypatch.setattr(UserSecretsStore, "fetch", lambda _: user_secrets)
+    return user_secrets
+
+
+def test_create_job_spec_keeps_user_secrets_out_of_job_controller_env(
+    sample_serial_workflow_in_db, monkeypatch
+):
+    """Test that only supported credential secrets reach the trusted sidecar."""
+    _user_secrets_with(
+        monkeypatch,
+        [
+            Secret(name="BASH_ENV", type_="env", value="/var/reana/x.sh"),
+            Secret(name="LD_PRELOAD", type_="env", value="/var/reana/x.so"),
+            Secret(name="LIBNSS_WRAPPER_PATH", type_="env", value="/x.so"),
+            Secret(name="PYTHONPATH", type_="env", value="/var/reana"),
+            Secret(name="REANA_USER_ID", type_="env", value="victim-uuid"),
+            Secret(name="REANA_JOB_HOSTPATH_MOUNTS", type_="env", value="[]"),
+            Secret(name="K8S_USE_SECURITY_CONTEXT", type_="env", value="False"),
+            Secret(
+                name="REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT",
+                type_="env",
+                value="1000",
+            ),
+            Secret(name="MY_APP_TOKEN", type_="env", value="dummy"),
+            Secret(name="VONAME", type_="env", value="atlas"),
+            Secret(name="CERN_KEYTAB", type_="env", value="dummy.keytab"),
+            Secret(name="CERN_USER", type_="env", value="dummyuser"),
+            Secret(name="dummy.keytab", type_="file", value=b"dummy"),
+        ],
+    )
+    kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+    job = kwrm._create_job_spec("run-batch-test")
+
+    workflow_engine, job_controller = job.spec.template.spec.containers
+    env_names = [env["name"] for env in job_controller.env]
+    env_vars = {
+        env["name"]: env["value"] for env in job_controller.env if "value" in env
+    }
+    secret_env_names = {env["name"] for env in job_controller.env if "valueFrom" in env}
+
+    # Provenance, not only names: only allowed names come from the secret store.
+    assert secret_env_names == {"VONAME", "CERN_KEYTAB"}
+    for name in (
+        "BASH_ENV",
+        "LD_PRELOAD",
+        "LIBNSS_WRAPPER_PATH",
+        "PYTHONPATH",
+        "MY_APP_TOKEN",
+    ):
+        assert name not in env_names
+    for name in (
+        "REANA_USER_ID",
+        "REANA_JOB_HOSTPATH_MOUNTS",
+        "K8S_USE_SECURITY_CONTEXT",
+        "REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT",
+        "CERN_USER",
+    ):
+        assert env_names.count(name) == 1
+    assert env_vars["REANA_USER_ID"] == str(sample_serial_workflow_in_db.owner_id)
+    # The controller-owned manifest still names every secret, so that jobs
+    # can receive the other secrets from the store.
+    assert env_names.count("REANA_USER_SECRETS_TYPES") == 1
+    assert json.loads(env_vars["REANA_USER_SECRETS_TYPES"])["MY_APP_TOKEN"] == "env"
+    assert env_vars["K8S_USE_SECURITY_CONTEXT"] == "True"
+    assert env_vars["CERN_USER"] == "dummyuser"
+    assert env_vars["USER"] == "dummyuser"
+    # The workflow engine never receives user secrets.
+    assert not any("valueFrom" in env for env in workflow_engine.env)
+    # File secrets are still mounted for the job controller.
+    volumes = {volume["name"]: volume for volume in job.spec.template.spec.volumes}
+    assert volumes["k8s-secret"]["secret"]["items"] == [
+        {"key": "dummy.keytab", "path": "dummy.keytab"}
+    ]
+
+
+@pytest.mark.parametrize(
+    "cern_user",
+    ["bad:user", "bad\nroot:x:0:0::/:/bin/sh", "", "-rf", "a" * 33, "$(id)"],
+)
+def test_create_job_spec_ignores_invalid_cern_user(
+    sample_serial_workflow_in_db, monkeypatch, cern_user
+):
+    """Test that a malformed CERN_USER secret cannot reach passwd or HTCondor."""
+    _user_secrets_with(
+        monkeypatch, [Secret(name="CERN_USER", type_="env", value=cern_user)]
+    )
+    kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+    job = kwrm._create_job_spec("run-batch-test")
+
+    _, job_controller = job.spec.template.spec.containers
+    env_vars = {
+        env["name"]: env["value"] for env in job_controller.env if "value" in env
+    }
+    assert env_vars["CERN_USER"] == "reana"
+    assert env_vars["USER"] == "reana"
