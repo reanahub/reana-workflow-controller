@@ -52,6 +52,12 @@ from reana_workflow_controller.config import (
 from reana_workflow_controller.errors import (
     REANAWorkflowControllerError,
     REANAWorkflowNameError,
+    user_email_does_not_exist,
+    user_id_does_not_exist,
+    workflow_already_shared,
+    workflow_not_shared,
+    workflow_share_with_self,
+    workflow_unshare_with_self,
 )
 from reana_workflow_controller.rest.utils import (
     create_workflow_workspace,
@@ -287,8 +293,8 @@ def get_workflows(args, paginate=None):  # noqa
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 does not
-                            exist"
+                "message": "User with id
+                            '00000000-0000-0000-0000-000000000000' does not exist."
               }
         500:
           description: >-
@@ -324,7 +330,7 @@ def get_workflows(args, paginate=None):  # noqa
 
         user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
-            return jsonify({"message": "User {} does not exist".format(user_uuid)}), 404
+            return jsonify({"message": user_id_does_not_exist(user_uuid)}), 404
 
         owned_workflows = Session.query(Workflow).filter(Workflow.owner_id == user.id_)
         shared_with_me = (
@@ -603,8 +609,8 @@ def create_workflow():  # noqa
           examples:
             application/json:
               {
-                "message": "User 00000000-0000-0000-0000-000000000000 does not
-                            exist"
+                "message": "User with id
+                            '00000000-0000-0000-0000-000000000000' does not exist."
               }
     """
     try:
@@ -612,9 +618,7 @@ def create_workflow():  # noqa
         user = Session.query(User).filter(User.id_ == user_uuid).first()
         if not user:
             return (
-                jsonify(
-                    {"message": "User with id:{} does not exist".format(user_uuid)}
-                ),
+                jsonify({"message": user_id_does_not_exist(user_uuid)}),
                 404,
             )
         requested_workflow_uuid = request.json.get("workflow_id")
@@ -1212,12 +1216,12 @@ def share_workflow(
         sharer = Session.query(User).filter(User.id_ == user).first()
         if not sharer:
             return (
-                jsonify({"message": f"User with id '{user}' does not exist."}),
+                jsonify({"message": user_id_does_not_exist(user)}),
                 404,
             )
 
         if sharer.email == user_email_to_share_with:
-            raise ValueError("Unable to share a workflow with yourself.")
+            raise ValueError(workflow_share_with_self())
 
         user_to_share_with = (
             Session.query(User)
@@ -1228,9 +1232,7 @@ def share_workflow(
         if not user_to_share_with:
             return (
                 jsonify(
-                    {
-                        "message": f"User with email '{user_email_to_share_with}' does not exist."
-                    }
+                    {"message": user_email_does_not_exist(user_email_to_share_with)}
                 ),
                 404,
             )
@@ -1255,7 +1257,10 @@ def share_workflow(
             return (
                 jsonify(
                     {
-                        "message": f"{workflow.get_full_workflow_name()} is already shared with {user_email_to_share_with}."
+                        "message": workflow_already_shared(
+                            workflow.get_full_workflow_name(),
+                            user_email_to_share_with,
+                        )
                     }
                 ),
                 409,
@@ -1405,19 +1410,19 @@ def unshare_workflow(
         sharer = Session.query(User).filter(User.id_ == user).first()
         if not sharer:
             return (
-                jsonify({"message": f"User with id '{sharer}' does not exist."}),
+                jsonify({"message": user_id_does_not_exist(user)}),
                 404,
             )
 
         if sharer.email == user_email_to_unshare_with:
-            raise ValueError("Unable to unshare a workflow with yourself.")
+            raise ValueError(workflow_unshare_with_self())
 
         user_to_unshare_with = (
             Session.query(User).filter(User.email == user_email_to_unshare_with).first()
         )
 
         if not user_to_unshare_with:
-            message = f"User with email '{user_email_to_unshare_with}' does not exist."
+            message = user_email_does_not_exist(user_email_to_unshare_with)
             return jsonify({"message": message}), 404
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(sharer.id_))
@@ -1429,7 +1434,10 @@ def unshare_workflow(
         )
 
         if not existing_share:
-            message = f"{workflow.get_full_workflow_name()} is not shared with {user_email_to_unshare_with}."
+            message = workflow_not_shared(
+                workflow.get_full_workflow_name(),
+                user_email_to_unshare_with,
+            )
             return (jsonify({"message": message}), 409)
 
         Session.delete(existing_share)
