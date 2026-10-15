@@ -51,6 +51,7 @@ install_requires = [
     "Werkzeug>=3.0.0",
     "gitpython>=2.1",
     "jsonpickle>=0.9.6",
+    "kubernetes>=23.6.0,<37.0.0",
     "marshmallow>=3.5.0,<4.0.0",
     "opensearch-py>=2.7.0,<2.8.0",
     "packaging>=18.0",
