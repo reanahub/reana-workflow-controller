@@ -121,6 +121,41 @@ NSS_WRAPPER_PASSWD_PATH = f"{NSS_WRAPPER_MOUNT_PATH}/passwd"
 NSS_WRAPPER_GROUP_PATH = f"{NSS_WRAPPER_MOUNT_PATH}/group"
 LOGGER = logging.getLogger(__name__)
 
+PRE_STOP_TERMINATION_MARGIN_FRACTION = 4
+"""Fraction (1/N) of the grace period reserved for terminating the containers."""
+
+PRE_STOP_TERMINATION_MARGIN_MIN = 5
+"""Minimum number of seconds reserved for terminating the containers."""
+
+PRE_STOP_TERMINATION_MARGIN_MAX = 30
+"""Maximum number of seconds reserved for terminating the containers."""
+
+PRE_STOP_SHUTDOWN_TIMEOUT_MIN = 1
+"""Minimum timeout in seconds of the preStop shutdown request."""
+
+
+def _pre_stop_shutdown_timeout(grace_period: int) -> int:
+    """Return the timeout of the preStop shutdown request in seconds.
+
+    Kubernetes starts counting the termination grace period before running
+    the preStop hook, so the request must not use all of it: a margin is
+    reserved for the containers to terminate after the hook returns. The
+    margin is a quarter of the grace period, bounded so that it stays
+    meaningful for short grace periods and does not grow with long ones.
+    The timeout is always positive, even for a very short or zero grace
+    period, as a zero timeout would make the socket non-blocking.
+
+    :param grace_period: Termination grace period of the pod in seconds.
+    """
+    margin = min(
+        PRE_STOP_TERMINATION_MARGIN_MAX,
+        max(
+            PRE_STOP_TERMINATION_MARGIN_MIN,
+            grace_period // PRE_STOP_TERMINATION_MARGIN_FRACTION,
+        ),
+    )
+    return max(PRE_STOP_SHUTDOWN_TIMEOUT_MIN, grace_period - margin)
+
 
 def _restricted_security_context(uid: int, gid: int) -> client.V1SecurityContext:
     """Return a PSA-restricted container security context."""
@@ -899,11 +934,13 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                                 # proxy, and a NO_PROXY entry covering
                                 # 127.0.0.1 is not guaranteed. Build an
                                 # opener with an explicit empty ProxyHandler
-                                # to always bypass it. The timeout matches
-                                # the pod's own termination grace period
-                                # (previously a hardcoded 10s, which could
-                                # cut off /shutdown before it finished
-                                # stopping every job). A ConnectionRefused
+                                # to always bypass it. The timeout is derived
+                                # from the pod's own termination grace period
+                                # so that /shutdown has time to stop every
+                                # job, minus a margin reserved for the
+                                # containers to terminate afterwards, since
+                                # the grace period is already running while
+                                # this hook executes. A ConnectionRefused
                                 # (job-controller already gone, a common,
                                 # benign teardown case) or any other error
                                 # here must not fail this hook -- the pod
@@ -920,7 +957,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                             ).format(
                                 JOB_CONTROLLER_CONTAINER_PORT,
                                 JOB_CONTROLLER_SHUTDOWN_ENDPOINT,
-                                REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
+                                _pre_stop_shutdown_timeout(
+                                    REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD
+                                ),
                             ),
                         ]
                     )
