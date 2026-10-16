@@ -7,6 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller module tests."""
 
+import datetime
 import io
 import json
 import os
@@ -221,6 +222,39 @@ def test_get_workflows_shared_by(
         assert len(response_data) == 1
         assert response_data[0]["id"] == str(workflow.id_)
         assert response_data[0]["owner_email"] == user1.email
+
+
+@pytest.mark.parametrize("valid_until_days, is_listed", [(0, True), (-1, False)])
+def test_get_workflows_shared_with_me_ignores_expired_shares(
+    app,
+    session,
+    user1,
+    user2,
+    sample_yadage_workflow_in_db_owned_by_user1,
+    valid_until_days,
+    is_listed,
+):
+    """A recipient lists a shared workflow until the share expires."""
+    workflow = sample_yadage_workflow_in_db_owned_by_user1
+    today = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    session.add(
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=user2.id_,
+            valid_until=today + datetime.timedelta(days=valid_until_days),
+        )
+    )
+    session.commit()
+
+    with app.test_client() as client:
+        for query_string in ({"shared": True}, {"shared_by": "anybody"}):
+            res = client.get(
+                url_for("workflows.get_workflows"),
+                query_string={"user": user2.id_, "type": "batch", **query_string},
+            )
+            assert res.status_code == 200
+            listed_ids = [item["id"] for item in res.json["items"]]
+            assert listed_ids == ([str(workflow.id_)] if is_listed else [])
 
 
 def test_get_workflows_shared_with(
