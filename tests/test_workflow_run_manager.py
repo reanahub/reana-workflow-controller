@@ -35,6 +35,7 @@ from reana_workflow_controller.config import (
 )
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import (
+    INVALID_CERN_USER_MESSAGE,
     KubernetesWorkflowRunManager,
     _container_image_aliases,
 )
@@ -569,17 +570,19 @@ def test_create_job_spec_keeps_user_secrets_out_of_job_controller_env(
     ]
 
 
+@pytest.mark.parametrize("logs", [None, "earlier entry\n"])
 @pytest.mark.parametrize(
     "cern_user",
     ["bad:user", "bad\nroot:x:0:0::/:/bin/sh", "alice\n", "", "-rf", "a" * 33, "$(id)"],
 )
 def test_create_job_spec_ignores_invalid_cern_user(
-    sample_serial_workflow_in_db, monkeypatch, cern_user
+    sample_serial_workflow_in_db, monkeypatch, cern_user, logs
 ):
     """Test that a malformed CERN_USER secret cannot reach passwd or HTCondor."""
     _user_secrets_with(
         monkeypatch, [Secret(name="CERN_USER", type_="env", value=cern_user)]
     )
+    sample_serial_workflow_in_db.logs = logs
     kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
     job = kwrm._create_job_spec("run-batch-test")
 
@@ -589,6 +592,25 @@ def test_create_job_spec_ignores_invalid_cern_user(
     }
     assert env_vars["CERN_USER"] == "reana"
     assert env_vars["USER"] == "reana"
+    # The user is told why, without the value of the secret.
+    assert sample_serial_workflow_in_db.logs == (
+        (logs or "") + INVALID_CERN_USER_MESSAGE + "\n"
+    )
+
+
+@pytest.mark.parametrize("logs", ["", "earlier entry\n"])
+def test_create_job_spec_accepts_valid_cern_user_silently(
+    sample_serial_workflow_in_db, monkeypatch, logs
+):
+    """Test that a valid CERN_USER secret adds nothing to the workflow logs."""
+    _user_secrets_with(
+        monkeypatch, [Secret(name="CERN_USER", type_="env", value="alice")]
+    )
+    sample_serial_workflow_in_db.logs = logs
+    kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+    kwrm._create_job_spec("run-batch-test")
+
+    assert sample_serial_workflow_in_db.logs == logs
 
 
 def test_interactive_session_uses_per_session_secret(sample_serial_workflow_in_db):
