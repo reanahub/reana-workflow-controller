@@ -330,7 +330,7 @@ def get_workflows(args, paginate=None):  # noqa
         shared_with_me = (
             Session.query(Workflow)
             .join(UserWorkflow, UserWorkflow.workflow_id == Workflow.id_)
-            .filter(UserWorkflow.user_id == user.id_)
+            .filter(UserWorkflow.user_id == user.id_, UserWorkflow.is_active)
         )
 
         # default case: retrieve owned workflows
