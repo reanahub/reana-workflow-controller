@@ -16,6 +16,8 @@ from reana_commons.config import (
     MQ_CONNECTION_STRING,
     REANA_COMPONENT_PREFIX,
     SHARED_VOLUME_PATH,
+    WORKFLOW_RUNTIME_GROUP_NAME,
+    WORKFLOW_RUNTIME_USER_NAME,
 )
 from reana_db.models import JobStatus, RunStatus
 from distutils.util import strtobool
@@ -251,6 +253,28 @@ pod environment.
 Please see the following URL for possible values
 https://kubernetes.io/docs/concepts/storage/volumes/#emptydir.
 """
+
+_RUNTIME_NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}")
+"""Accepted format of the runtime user and group names.
+
+A name starts with a letter or ``_``, contains only letters, digits, ``_``,
+``.`` and ``-``, and has a maximum of 32 characters. The job controller applies
+the same check before it starts in each workflow batch pod.
+"""
+
+
+def _check_runtime_name(setting: str, value: str) -> None:
+    """Check the runtime user or group name configuration."""
+    if not _RUNTIME_NAME_PATTERN.fullmatch(value):
+        raise ValueError(
+            f"Invalid {setting} value: {value!r}. A name must start with a "
+            "letter or _, contain only letters, digits, _, . and -, and have "
+            "a maximum of 32 characters."
+        )
+
+
+_check_runtime_name("WORKFLOW_RUNTIME_USER_NAME", WORKFLOW_RUNTIME_USER_NAME)
+_check_runtime_name("WORKFLOW_RUNTIME_GROUP_NAME", WORKFLOW_RUNTIME_GROUP_NAME)
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [
     {"name": "SHARED_VOLUME_PATH", "value": SHARED_VOLUME_PATH},
