@@ -11,7 +11,6 @@ import copy
 import json
 import logging
 import os
-import re
 import secrets
 from typing import List, Optional
 
@@ -102,6 +101,7 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
     REANA_WORKFLOW_ENGINE_IMAGE_SNAKEMAKE,
     REANA_WORKFLOW_ENGINE_IMAGE_YADAGE,
+    RUNTIME_NAME_PATTERN,
     WORKFLOW_ENGINE_COMMON_ENV_VARS,
     DEBUG_ENV_VARS,
     WORKFLOW_ENGINE_CWL_ENV_VARS,
@@ -153,9 +153,6 @@ specification from the secret store and not from its own environment.
 ``CERN_USER`` is not in this list, because the controller sets it itself.
 """
 
-CERN_USER_NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}")
-"""Accepted format of the ``CERN_USER`` secret (a POSIX user name)."""
-
 
 def _filter_job_controller_user_secrets(env_secrets, managed_env_vars):
     """Keep only the user env secrets that the job controller consumes."""
@@ -174,7 +171,7 @@ def _get_runtime_user_name(user_secrets):
     if not user_secret:
         return WORKFLOW_RUNTIME_USER_NAME
     user_name = user_secret.value_str
-    if not CERN_USER_NAME_PATTERN.fullmatch(user_name):
+    if not RUNTIME_NAME_PATTERN.fullmatch(user_name):
         LOGGER.warning(
             "Ignoring the CERN_USER secret because it is not a valid user name."
         )

@@ -196,3 +196,34 @@ def test_scratch_volume_size_limit_rejects_invalid_values(monkeypatch, value):
             _reload_config()
 
     _reload_config()
+
+
+@pytest.mark.parametrize("name", ["reana", "root", "_reana", "reana.user-1", "a" * 32])
+def test_check_runtime_name_accepts_valid_names(name):
+    """Valid runtime user and group names are accepted."""
+    config._check_runtime_name("WORKFLOW_RUNTIME_GROUP_NAME", name)
+
+
+@pytest.mark.parametrize(
+    "name", ["", "1000", "-reana", "reana user", "reana:x", "reana\n", "a" * 33]
+)
+def test_check_runtime_name_rejects_invalid_names(name):
+    """Invalid runtime user and group names are refused with the setting name."""
+    with pytest.raises(ValueError, match="Invalid WORKFLOW_RUNTIME_GROUP_NAME value"):
+        config._check_runtime_name("WORKFLOW_RUNTIME_GROUP_NAME", name)
+
+
+@pytest.mark.parametrize(
+    "setting", ["WORKFLOW_RUNTIME_USER_NAME", "WORKFLOW_RUNTIME_GROUP_NAME"]
+)
+def test_invalid_runtime_name_stops_config_loading(monkeypatch, setting):
+    """The configuration does not load with an invalid runtime name."""
+    import reana_commons.config
+
+    monkeypatch.setattr(reana_commons.config, setting, "1000")
+    try:
+        with pytest.raises(ValueError, match=f"Invalid {setting} value: '1000'"):
+            _reload_config()
+    finally:
+        monkeypatch.undo()
+        _reload_config()
