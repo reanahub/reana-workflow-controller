@@ -69,7 +69,9 @@ from reana_workflow_controller.k8s import (
     delete_k8s_ingress_object,
     delete_k8s_objects_if_exist,
     get_compatible_kerberos_k8s_config,
+    get_scratch_volume,
     instantiate_chained_k8s_objects,
+    limit_credential_cache_volumes,
 )
 
 from reana_workflow_controller.config import (  # isort:skip
@@ -93,6 +95,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MIN_USER_UID,
+    REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM,
+    REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT,
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_WORKFLOW_ENGINE_IMAGE_CWL,
     REANA_WORKFLOW_ENGINE_IMAGE_SERIAL,
@@ -471,6 +475,34 @@ class WorkflowRunManager:
         )
 
 
+def _add_read_only_root_filesystem(container: client.V1Container) -> List[dict]:
+    """Make the root filesystem of the workflow engine container read-only.
+
+    With a read-only root filesystem the workflow engine cannot write to the
+    scratch and cache paths baked into its image (e.g. Snakemake's
+    ``XDG_CACHE_HOME=/.cache``). Mount ephemeral ``emptyDir`` volumes at
+    ``/tmp`` and ``/.cache`` so the engines keep working without any writable
+    surface that persists or escapes onto the workspace volume.
+
+    :param container: Workflow engine container to change in place.
+    :returns: Scratch volumes that have to be added to the pod.
+    """
+    if container.security_context is None:
+        container.security_context = client.V1SecurityContext()
+    container.security_context.read_only_root_filesystem = True
+
+    scratch_volumes = []
+    for scratch_name, scratch_path in (
+        ("reana-engine-tmp", "/tmp"),
+        ("reana-engine-cache", "/.cache"),
+    ):
+        container.volume_mounts.append(
+            {"name": scratch_name, "mountPath": scratch_path}
+        )
+        scratch_volumes.append(get_scratch_volume(scratch_name))
+    return scratch_volumes
+
+
 class KubernetesWorkflowRunManager(WorkflowRunManager):
     """Implementation of WorkflowRunManager for Kubernetes."""
 
@@ -774,6 +806,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 user_secrets,
                 kubernetes_uid=WORKFLOW_RUNTIME_USER_UID,
             )
+            limit_credential_cache_volumes(kerberos.volumes)
 
         job = client.V1Job()
         job.api_version = "batch/v1"
@@ -825,6 +858,12 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                 WORKFLOW_RUNTIME_USER_GID,
             )
         workflow_engine_container.volume_mounts = [workspace_mount]
+
+        read_only_scratch_volumes = []
+        if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+            read_only_scratch_volumes = _add_read_only_root_filesystem(
+                workflow_engine_container
+            )
 
         if kerberos:
             workflow_engine_container.volume_mounts += kerberos.volume_mounts
@@ -1000,6 +1039,14 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "name": "REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT",
                     "value": REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
                 },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+                    "value": str(REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM),
+                },
+                {
+                    "name": "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
+                    "value": REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT,
+                },
                 {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
             ]
         )
@@ -1138,6 +1185,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             service_account_volume,
             uwsgi_config_volume,
         ]
+        volumes += read_only_scratch_volumes
 
         if kerberos:
             volumes += kerberos.volumes

@@ -514,6 +514,16 @@ def test_create_job_spec_keeps_user_secrets_out_of_job_controller_env(
             Secret(name="dummy.keytab", type_="file", value=b"dummy"),
         ],
     )
+    monkeypatch.setattr(
+        "reana_workflow_controller.workflow_run_manager."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.workflow_run_manager."
+        "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
+        "2Gi",
+    )
     kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
     job = kwrm._create_job_spec("run-batch-test")
 
@@ -539,11 +549,15 @@ def test_create_job_spec_keeps_user_secrets_out_of_job_controller_env(
         "REANA_JOB_HOSTPATH_MOUNTS",
         "K8S_USE_SECURITY_CONTEXT",
         "REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT",
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
         "CERN_USER",
     ):
         assert env_names.count(name) == 1
     assert env_vars["REANA_USER_ID"] == str(sample_serial_workflow_in_db.owner_id)
     assert env_vars["K8S_USE_SECURITY_CONTEXT"] == "True"
+    assert env_vars["REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM"] == "True"
+    assert env_vars["REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT"] == "2Gi"
     assert env_vars["CERN_USER"] == "dummyuser"
     assert env_vars["USER"] == "dummyuser"
     # The workflow engine never receives user secrets.
@@ -611,3 +625,85 @@ def test_interactive_session_uses_per_session_secret(sample_serial_workflow_in_d
         assert token_env.value is None
         assert token_env.value_from.secret_key_ref.name == secret_object.metadata.name
         assert token_env.value_from.secret_key_ref.key == "notebook_args"
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_create_job_spec_read_only_root_filesystem(
+    sample_serial_workflow_in_db, mock_user_secrets, monkeypatch, read_only
+):
+    """Test that the read-only flag shapes the workflow-engine container."""
+    monkeypatch.setattr(
+        "reana_workflow_controller.workflow_run_manager."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        read_only,
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.workflow_run_manager."
+        "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
+        "2Gi",
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s."
+        "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
+        "2Gi",
+    )
+    kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+    job = kwrm._create_job_spec("run-batch-test")
+
+    pod_spec = job.spec.template.spec
+    engine, sidecar = pod_spec.containers
+    sidecar_env = {env["name"]: env["value"] for env in sidecar.env if "value" in env}
+    engine_mounts = {vm["name"]: vm for vm in engine.volume_mounts}
+    pod_volumes = {v["name"]: v for v in pod_spec.volumes}
+
+    # the flag and the size limit are always forwarded to the job-controller
+    # sidecar so the wfc -> r-j-c hop cannot silently break
+    assert sidecar_env["REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM"] == str(
+        read_only
+    )
+    assert sidecar_env["REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT"] == "2Gi"
+    # the restricted security context is kept in both cases
+    assert engine.security_context.run_as_non_root is True
+    assert engine.security_context.capabilities.drop == ["ALL"]
+
+    if read_only:
+        assert engine.security_context.read_only_root_filesystem is True
+        # the engine command is left untouched; scratch is provided as
+        # size-limited emptyDir mounts at the standard locations
+        assert engine_mounts["reana-engine-tmp"]["mountPath"] == "/tmp"
+        assert engine_mounts["reana-engine-cache"]["mountPath"] == "/.cache"
+        assert pod_volumes["reana-engine-tmp"]["emptyDir"] == {"sizeLimit": "2Gi"}
+        assert pod_volumes["reana-engine-cache"]["emptyDir"] == {"sizeLimit": "2Gi"}
+        # the job-controller sidecar is deliberately left writable and does
+        # not receive the scratch mounts
+        assert sidecar.security_context.read_only_root_filesystem is None
+        sidecar_mounts = {vm["name"] for vm in sidecar.volume_mounts}
+        assert "reana-engine-tmp" not in sidecar_mounts
+    else:
+        assert engine.security_context.read_only_root_filesystem is None
+        assert "reana-engine-tmp" not in engine_mounts
+        assert "reana-engine-cache" not in engine_mounts
+        assert "reana-engine-tmp" not in pod_volumes
+
+
+def test_create_job_spec_read_only_without_security_context(
+    sample_serial_workflow_in_db, mock_user_secrets, monkeypatch
+):
+    """The read-only flag still applies when security contexts are disabled."""
+    monkeypatch.setattr(
+        "reana_workflow_controller.workflow_run_manager.K8S_USE_SECURITY_CONTEXT",
+        False,
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.workflow_run_manager."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    )
+    kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+    job = kwrm._create_job_spec("run-batch-test")
+
+    engine, sidecar = job.spec.template.spec.containers
+
+    assert engine.security_context.read_only_root_filesystem is True
+    assert engine.security_context.run_as_user is None
+    assert sidecar.security_context is None

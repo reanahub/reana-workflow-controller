@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2024 CERN.
+# Copyright (C) 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -19,9 +19,11 @@ from reana_workflow_controller.config import (
 from reana_workflow_controller.errors import ReservedEnvironmentVariableError
 from reana_workflow_controller.k8s import (
     InteractiveDeploymentK8sBuilder,
+    build_interactive_jupyter_deployment_k8s_objects,
     delete_k8s_objects_if_exist,
     get_compatible_kerberos_k8s_config,
     instantiate_chained_k8s_objects,
+    limit_credential_cache_volumes,
 )
 
 
@@ -259,3 +261,103 @@ def test_get_compatible_kerberos_k8s_config_backfills_partial_security_context(
     assert (
         kerberos_config.renew_container["securityContext"] == expected_security_context
     )
+
+
+def _build_jupyter_session(monkeypatch, read_only, size_limit="5Gi"):
+    """Build a Jupyter interactive session pod spec with the given flag."""
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        read_only,
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s."
+        "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
+        size_limit,
+    )
+    objs = build_interactive_jupyter_deployment_k8s_objects(
+        "session-name",
+        "/workspace",
+        "/access-path",
+        "docker.io/jupyter/scipy-notebook",
+        "notebook-session-secret",
+        owner_id=str(uuid4()),
+        workflow_id=str(uuid4()),
+        expose_secrets=False,
+    )
+    return objs["deployment"].spec.template.spec
+
+
+@pytest.mark.parametrize(
+    "size_limit, expected_empty_dir",
+    [("5Gi", {"sizeLimit": "5Gi"}), ("", {})],
+)
+def test_interactive_session_read_only_root_filesystem_enabled(
+    monkeypatch, size_limit, expected_empty_dir
+):
+    """Jupyter session gets ephemeral scratch and a writable home."""
+    pod_spec = _build_jupyter_session(
+        monkeypatch, read_only=True, size_limit=size_limit
+    )
+    container = pod_spec.containers[0]
+    env = {e.name: e.value for e in container.env}
+    mounts = {vm["name"]: vm for vm in container.volume_mounts}
+    volumes = {v["name"]: v for v in pod_spec.volumes}
+
+    assert container.security_context.read_only_root_filesystem is True
+    # the read-only flag must not replace the restricted security context
+    assert container.security_context.run_as_non_root is True
+    assert container.security_context.capabilities.drop == ["ALL"]
+    # HOME points at a writable emptyDir, from which Jupyter/ipython/pip
+    # derive their cache, runtime and config directories
+    assert env["HOME"] == "/home/reana"
+    assert mounts["reana-session-home"]["mountPath"] == "/home/reana"
+    assert mounts["reana-session-tmp"]["mountPath"] == "/tmp"
+    assert volumes["reana-session-home"]["emptyDir"] == expected_empty_dir
+    assert volumes["reana-session-tmp"]["emptyDir"] == expected_empty_dir
+    # the default startup command is preserved (no wrapper)
+    assert container.args[0] == "start-notebook.sh"
+
+
+def test_interactive_session_read_only_root_filesystem_disabled(monkeypatch):
+    """Without the flag the session keeps its default home and no scratch."""
+    pod_spec = _build_jupyter_session(monkeypatch, read_only=False)
+    container = pod_spec.containers[0]
+    env = {e.name: e.value for e in container.env}
+    mount_names = {vm["name"] for vm in container.volume_mounts}
+
+    assert container.security_context.read_only_root_filesystem is None
+    assert "HOME" not in env
+    assert "reana-session-tmp" not in mount_names
+    assert "reana-session-home" not in mount_names
+    assert container.args[0] == "start-notebook.sh"
+
+
+def test_interactive_session_read_only_without_security_context(monkeypatch):
+    """The read-only flag still applies when security contexts are disabled."""
+    monkeypatch.setattr("reana_workflow_controller.k8s.K8S_USE_SECURITY_CONTEXT", False)
+    pod_spec = _build_jupyter_session(monkeypatch, read_only=True)
+    security_context = pod_spec.containers[0].security_context
+
+    assert security_context.read_only_root_filesystem is True
+    assert security_context.run_as_user is None
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_limit_credential_cache_volumes(monkeypatch, read_only):
+    """Credential caches are size-limited only in read-only root pods."""
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        read_only,
+    )
+    volumes = [
+        {"name": "krb5-cache", "emptyDir": {}},
+        {"name": "krb5-conf", "configMap": {"name": "krb5-conf"}},
+    ]
+
+    limit_credential_cache_volumes(volumes)
+
+    expected_empty_dir = {"sizeLimit": "10Mi"} if read_only else {}
+    assert volumes[0]["emptyDir"] == expected_empty_dir
+    # volumes that are not emptyDir volumes are not changed
+    assert volumes[1] == {"name": "krb5-conf", "configMap": {"name": "krb5-conf"}}

@@ -44,11 +44,16 @@ from reana_workflow_controller.config import (
     REANA_INGRESS_HOST,
     REANA_INGRESS_CLASS_NAME,
     REANA_INGRESS_ANNOTATIONS,
+    REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM,
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     TRAEFIK_ENABLED,
     TRAEFIK_EXTERNAL,
 )
-from reana_workflow_controller.k8s import get_compatible_kerberos_k8s_config
+from reana_workflow_controller.k8s import (
+    get_compatible_kerberos_k8s_config,
+    get_scratch_volume,
+    limit_credential_cache_volumes,
+)
 
 
 def _restricted_pod_security_context(kubernetes_uid: int) -> dict:
@@ -270,6 +275,9 @@ class DaskResourceManager:
             self.secrets_store.get_file_secrets_volume_as_k8s_specs()
         )
 
+        if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+            self._add_read_only_root_filesystem()
+
         if self.kerberos:
             self._add_krb5_containers()
         if self.voms_proxy:
@@ -343,11 +351,44 @@ class DaskResourceManager:
             volume_mount = {
                 "name": mount["name"],
                 "mountPath": mount.get("mountPath", mount["hostPath"]),
+                "readOnly": mount.get(
+                    "readOnly", REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM
+                ),
             }
             volume = {"name": mount["name"], "hostPath": {"path": mount["hostPath"]}}
             volumes_to_mount.append((volume_mount, volume))
 
         self._add_volumes(volumes_to_mount)
+
+    def _add_read_only_root_filesystem(self):
+        """Enforce a read-only root filesystem on Dask scheduler and worker pods.
+
+        Ephemeral ``emptyDir`` scratch volumes are mounted at ``/tmp`` and
+        ``/.cache`` on both the worker and the scheduler, so no writable
+        surface persists or escapes onto the workspace volume. On the workers,
+        a host-path mount configured at the same path replaces the scratch
+        volume.
+        """
+        hostpath_mount_paths = {
+            mount.get("mountPath", mount["hostPath"])
+            for mount in REANA_JOB_HOSTPATH_MOUNTS
+        }
+        for component in ("worker", "scheduler"):
+            component_spec = self.cluster_body["spec"][component]["spec"]
+            container = component_spec["containers"][0]
+            container.setdefault("securityContext", {})["readOnlyRootFilesystem"] = True
+            container.setdefault("volumeMounts", [])
+            component_spec.setdefault("volumes", [])
+            for name, mount_path in (
+                (f"dask-{component}-tmp", "/tmp"),
+                (f"dask-{component}-cache", "/.cache"),
+            ):
+                if component == "worker" and mount_path in hostpath_mount_paths:
+                    continue
+                container["volumeMounts"].append(
+                    {"name": name, "mountPath": mount_path}
+                )
+                component_spec["volumes"].append(get_scratch_volume(name))
 
     def _add_volumes(self, volumes):
         """Add provided volumes to Dask cluster body."""
@@ -364,6 +405,7 @@ class DaskResourceManager:
             kubernetes_uid=self.kubernetes_uid,
         )
 
+        limit_credential_cache_volumes(krb5_config.volumes)
         self.cluster_body["spec"]["worker"]["spec"]["volumes"].extend(
             krb5_config.volumes
         )
@@ -420,6 +462,7 @@ class DaskResourceManager:
     def _add_voms_proxy_init_container(self):
         """Add sidecar container for Dask workers."""
         ticket_cache_volume = {"name": "voms-proxy-cache", "emptyDir": {}}
+        limit_credential_cache_volumes([ticket_cache_volume])
         volume_mounts = [
             {
                 "name": ticket_cache_volume["name"],
@@ -569,6 +612,7 @@ class DaskResourceManager:
     def _add_rucio_init_container(self):
         """Add sidecar container for Dask workers."""
         ticket_cache_volume = {"name": "rucio-cache", "emptyDir": {}}
+        limit_credential_cache_volumes([ticket_cache_volume])
         volume_mounts = [
             {
                 "name": ticket_cache_volume["name"],

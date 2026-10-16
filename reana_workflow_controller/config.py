@@ -10,6 +10,7 @@
 
 import os
 import json
+import re
 
 from reana_commons.config import (
     MQ_CONNECTION_STRING,
@@ -199,6 +200,56 @@ REANA_KUBERNETES_JOBS_MIN_USER_UID = os.getenv("REANA_KUBERNETES_JOBS_MIN_USER_U
 containers via ``kubernetes_uid`` in ``reana.yaml``. Jobs requesting a smaller
 UID are refused at submission time with a clear error message. Forwarded to
 reana-job-controller via the job batch pod environment.
+"""
+
+REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM = bool(
+    strtobool(os.getenv("REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM", "false"))
+)
+"""Whether to mount a read-only root filesystem in user workflow pods.
+
+When enabled, writes to paths inside the container image are rejected while
+mounted workspace volumes remain writable. Applies to the workflow engine,
+user jobs, interactive sessions and Dask scheduler/worker pods. Ephemeral
+``emptyDir`` scratch volumes are mounted at ``/tmp``, at ``/.cache`` and, for
+interactive sessions, at the session home directory, so that software using
+these paths keeps working; writes there are per-pod and discarded when the
+pod stops. Host-path mounts default to read-only unless a mount sets
+``readOnly: false``. The REANA job controller and authentication helper
+containers keep a writable root filesystem.
+"""
+
+_SCRATCH_VOLUME_SIZE_LIMIT_PATTERN = re.compile(
+    r"(?P<number>[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[KMGTPE]i|[kMGTPE]|[eE]\+?[0-9]+)?"
+)
+"""Accepted format of the scratch volume size limit (a Kubernetes quantity)."""
+
+
+def _parse_scratch_volume_size_limit(value: str) -> str:
+    """Parse the scratch volume size limit configuration."""
+    match = _SCRATCH_VOLUME_SIZE_LIMIT_PATTERN.fullmatch(value)
+    if value and (not match or float(match.group("number")) == 0):
+        raise ValueError(
+            "Invalid REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT value: "
+            f"{value}. Use a positive size such as 5Gi, or an empty value "
+            "for no limit."
+        )
+    return value
+
+
+REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT = _parse_scratch_volume_size_limit(
+    os.getenv("REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT", "5Gi")
+)
+"""Size limit of each scratch volume mounted in read-only root filesystem pods.
+
+The limit applies to each scratch volume separately. Kubernetes measures the
+usage periodically and evicts a pod that goes over the limit. This reduces
+the risk that a pod fills the local disk of its node, but it is not a hard
+quota: a pod can write more than the limit before the eviction. An empty
+value disables the limit. Forwarded to reana-job-controller via the job batch
+pod environment.
+
+Please see the following URL for possible values
+https://kubernetes.io/docs/concepts/storage/volumes/#emptydir.
 """
 
 WORKFLOW_ENGINE_COMMON_ENV_VARS = [

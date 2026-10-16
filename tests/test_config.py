@@ -170,3 +170,29 @@ def test_runtime_sessions_supplemental_groups_reject_invalid_values(monkeypatch)
         )
 
     _reload_config()
+
+
+@pytest.mark.parametrize(
+    "value", ["5Gi", "512Mi", "1.5G", "1e9", "1e+09", "5.36870912e+09", ""]
+)
+def test_scratch_volume_size_limit_accepts_valid_values(monkeypatch, value):
+    """Test scratch volume size limit accepts positive sizes and no limit."""
+    with monkeypatch.context() as m:
+        m.setenv("REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT", value)
+        reloaded_config = _reload_config()
+        assert reloaded_config.REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT == value
+
+    _reload_config()
+
+
+@pytest.mark.parametrize(
+    "value", ["0", "0Gi", "-5Gi", "Infinity", "1_000", "5GB", "5Gi\n", "1e++9"]
+)
+def test_scratch_volume_size_limit_rejects_invalid_values(monkeypatch, value):
+    """Test scratch volume size limit rejects values that are not positive sizes."""
+    with monkeypatch.context() as m:
+        m.setenv("REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT", value)
+        with pytest.raises(ValueError, match="SCRATCH_VOLUME_SIZE_LIMIT"):
+            _reload_config()
+
+    _reload_config()

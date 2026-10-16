@@ -137,10 +137,15 @@ def test_add_hostpath_volumes_with_mounts(
 
         # Assert
         expected_volume_mounts = [
-            {"name": "volume1", "mountPath": "/container/path/volume1"},
+            {
+                "name": "volume1",
+                "mountPath": "/container/path/volume1",
+                "readOnly": False,
+            },
             {
                 "name": "volume2",
                 "mountPath": "/host/path/volume2",
+                "readOnly": False,
             },
         ]
         expected_volumes = [
@@ -625,3 +630,186 @@ def test_create_dask_dashboard_ingress_sets_middleware_when_none_configured(
     ]
     assert "," not in middlewares
     assert middlewares.endswith("@kubernetescrd")
+
+
+def test_add_hostpath_volumes_read_only_root_filesystem(dask_resource_manager):
+    """Test that hostPath mounts default to read-only when the flag is on."""
+    hostpath_mounts = [
+        {"name": "data", "hostPath": "/host/data"},
+        {"name": "scratch", "hostPath": "/host/scratch", "readOnly": False},
+    ]
+    with patch(
+        "reana_workflow_controller.dask.REANA_JOB_HOSTPATH_MOUNTS", hostpath_mounts
+    ), patch(
+        "reana_workflow_controller.dask."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    ):
+        dask_resource_manager.cluster_body = {
+            "spec": {
+                "worker": {
+                    "spec": {"containers": [{"volumeMounts": []}], "volumes": []}
+                },
+            }
+        }
+        dask_resource_manager._add_hostpath_volumes()
+
+    volume_mounts = {
+        volume_mount["name"]: volume_mount
+        for volume_mount in dask_resource_manager.cluster_body["spec"]["worker"][
+            "spec"
+        ]["containers"][0]["volumeMounts"]
+    }
+    # the default follows the flag, an explicit per-mount setting wins
+    assert volume_mounts["data"]["readOnly"] is True
+    assert volume_mounts["scratch"]["readOnly"] is False
+
+
+def _minimal_cluster_body():
+    """Return a cluster body shaped like the loaded Dask template."""
+    return {
+        "spec": {
+            "worker": {
+                "spec": {
+                    "containers": [
+                        {"args": ["exec dask-worker"], "env": [], "volumeMounts": []}
+                    ],
+                    "volumes": [],
+                }
+            },
+            "scheduler": {
+                "spec": {"containers": [{"args": ["dask-scheduler"]}]},
+                "service": {"selector": {}},
+            },
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "size_limit, expected_empty_dir",
+    [("5Gi", {"sizeLimit": "5Gi"}), ("", {})],
+)
+def test_add_read_only_root_filesystem(
+    dask_resource_manager, size_limit, expected_empty_dir
+):
+    """Test that the read-only flag hardens both Dask worker and scheduler."""
+    dask_resource_manager.cluster_body = _minimal_cluster_body()
+    with patch(
+        "reana_workflow_controller.k8s."
+        "REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT",
+        size_limit,
+    ):
+        dask_resource_manager._add_read_only_root_filesystem()
+
+    for component in ("worker", "scheduler"):
+        component_spec = dask_resource_manager.cluster_body["spec"][component]["spec"]
+        container = component_spec["containers"][0]
+        mounts = {vm["name"]: vm for vm in container["volumeMounts"]}
+        volumes = {v["name"]: v for v in component_spec["volumes"]}
+
+        # both containers get a read-only root filesystem
+        assert container["securityContext"]["readOnlyRootFilesystem"] is True
+
+        # ephemeral scratch is provided as size-limited emptyDir mounts at
+        # the standard scratch and cache locations
+        assert mounts[f"dask-{component}-tmp"]["mountPath"] == "/tmp"
+        assert mounts[f"dask-{component}-cache"]["mountPath"] == "/.cache"
+        assert volumes[f"dask-{component}-tmp"]["emptyDir"] == expected_empty_dir
+        assert volumes[f"dask-{component}-cache"]["emptyDir"] == expected_empty_dir
+
+    # the worker command is left untouched
+    worker = dask_resource_manager.cluster_body["spec"]["worker"]["spec"]["containers"][
+        0
+    ]
+    assert worker["args"] == ["exec dask-worker"]
+
+
+@pytest.mark.parametrize(
+    "read_only_setting, expected_read_only",
+    [({}, True), ({"readOnly": False}, False)],
+)
+def test_add_read_only_root_filesystem_hostpath_replaces_worker_scratch(
+    dask_resource_manager, read_only_setting, expected_read_only
+):
+    """Test that a host-path mount at /tmp replaces the worker /tmp scratch.
+
+    The replacing mount is read-only unless it sets ``readOnly`` to false.
+    """
+    hostpath_mounts = [
+        {
+            "name": "site-tmp",
+            "hostPath": "/mnt/job-tmp",
+            "mountPath": "/tmp",
+            **read_only_setting,
+        },
+    ]
+    dask_resource_manager.cluster_body = _minimal_cluster_body()
+    with patch(
+        "reana_workflow_controller.dask.REANA_JOB_HOSTPATH_MOUNTS", hostpath_mounts
+    ), patch(
+        "reana_workflow_controller.dask."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    ):
+        dask_resource_manager._add_read_only_root_filesystem()
+        dask_resource_manager._add_hostpath_volumes()
+
+    worker_spec = dask_resource_manager.cluster_body["spec"]["worker"]["spec"]
+    worker_mounts = worker_spec["containers"][0]["volumeMounts"]
+    worker_volumes = {v["name"] for v in worker_spec["volumes"]}
+    scheduler_spec = dask_resource_manager.cluster_body["spec"]["scheduler"]["spec"]
+    scheduler_volumes = {v["name"] for v in scheduler_spec["volumes"]}
+
+    # Kubernetes refuses a pod with two mounts at the same path
+    tmp_mounts = [vm for vm in worker_mounts if vm["mountPath"] == "/tmp"]
+    assert [vm["name"] for vm in tmp_mounts] == ["site-tmp"]
+    assert tmp_mounts[0]["readOnly"] is expected_read_only
+    assert "dask-worker-tmp" not in worker_volumes
+    assert "dask-worker-cache" in worker_volumes
+    # host-path mounts are not added to the scheduler, so it keeps its scratch
+    assert "dask-scheduler-tmp" in scheduler_volumes
+
+
+@pytest.mark.parametrize("use_security_context", [True, False])
+def test_prepare_cluster_applies_read_only_root_filesystem(
+    dask_resource_manager, use_security_context
+):
+    """Test that _prepare_cluster keeps the read-only flag next to PSA fields."""
+    with patch(
+        "reana_workflow_controller.dask."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    ), patch(
+        "reana_workflow_controller.dask.K8S_USE_SECURITY_CONTEXT",
+        use_security_context,
+    ), patch.object(
+        dask_resource_manager, "_add_image_pull_secrets"
+    ), patch.object(
+        dask_resource_manager, "_add_hostpath_volumes"
+    ), patch.object(
+        dask_resource_manager, "_add_workspace_volume"
+    ), patch.object(
+        dask_resource_manager, "_add_shared_volume"
+    ), patch.object(
+        dask_resource_manager, "_add_eos_volume"
+    ), patch.object(
+        dask_resource_manager.secrets_store,
+        "get_file_secrets_volume_as_k8s_specs",
+        return_value={"name": "secrets-volume"},
+    ):
+        dask_resource_manager.cluster_body = _minimal_cluster_body()
+        dask_resource_manager.autoscaler_body = {"spec": {}}
+
+        dask_resource_manager._prepare_cluster()
+
+    for component in ("worker", "scheduler"):
+        security_context = dask_resource_manager.cluster_body["spec"][component][
+            "spec"
+        ]["containers"][0]["securityContext"]
+        assert security_context["readOnlyRootFilesystem"] is True
+        # the read-only flag must not replace the restricted security context
+        if use_security_context:
+            assert security_context["allowPrivilegeEscalation"] is False
+            assert security_context["capabilities"] == {"drop": ["ALL"]}
+        else:
+            assert security_context == {"readOnlyRootFilesystem": True}

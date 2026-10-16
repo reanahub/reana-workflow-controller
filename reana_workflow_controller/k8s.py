@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -35,6 +35,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_INGRESS_ANNOTATIONS,
     REANA_INGRESS_CLASS_NAME,
     REANA_INGRESS_HOST,
+    REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM,
+    REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT,
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS,
 )
@@ -81,6 +83,39 @@ def _filter_reserved_session_env_var_collisions(env_vars):
             "conflicting secret(s) and try again."
         )
     return env_vars
+
+
+CREDENTIAL_CACHE_VOLUME_SIZE_LIMIT = "10Mi"
+"""Size limit of the Kerberos, VOMS and Rucio cache volumes of read-only root pods."""
+
+
+def get_scratch_volume(name: str) -> dict:
+    """Return an ephemeral scratch volume for read-only root filesystem pods.
+
+    The volume is an ``emptyDir``: it lives on the local disk of the node, is
+    private to the pod and is deleted when the pod stops. Kubernetes evicts
+    the pod when the volume goes over the configured size limit.
+
+    :param name: Name of the volume.
+    """
+    empty_dir = {}
+    if REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT:
+        empty_dir["sizeLimit"] = REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT
+    return {"name": name, "emptyDir": empty_dir}
+
+
+def limit_credential_cache_volumes(volumes: list) -> None:
+    """Limit the size of credential cache volumes of read-only root pods.
+
+    The user container can write to these volumes, so without a limit they
+    would bypass the size limit of the scratch volumes.
+
+    :param volumes: Kubernetes volume specs to change in place.
+    """
+    if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+        for volume in volumes:
+            if "emptyDir" in volume:
+                volume["emptyDir"]["sizeLimit"] = CREDENTIAL_CACHE_VOLUME_SIZE_LIMIT
 
 
 def _restricted_session_pod_security_context() -> client.V1PodSecurityContext | None:
@@ -376,6 +411,20 @@ class InteractiveDeploymentK8sBuilder(object):
             )
         )
 
+    def add_scratch_volume(self, name, mount_path):
+        """Mount an ephemeral writable scratch volume at the given path.
+
+        Used to provide scratch space (and a writable home) when the session
+        runs with a read-only root filesystem.
+
+        :param name: Name of the volume.
+        :param mount_path: Path where the volume is mounted in the container.
+        """
+        self._pod_spec.volumes.append(get_scratch_volume(name))
+        self._session_container.volume_mounts.append(
+            {"name": name, "mountPath": mount_path}
+        )
+
     def add_session_secret(self, session_secret):
         """Expose a notebook token through a per-session Kubernetes Secret."""
         secret_name = "{}-auth".format(self.deployment_name)
@@ -416,9 +465,11 @@ class InteractiveDeploymentK8sBuilder(object):
 
     def add_run_with_runtime_user_permissions(self):
         """Run interactive session with the default non-root REANA user."""
-        self._session_container.security_context = (
-            _restricted_session_container_security_context()
-        )
+        security_context = _restricted_session_container_security_context()
+        if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+            security_context = security_context or client.V1SecurityContext()
+            security_context.read_only_root_filesystem = True
+        self._session_container.security_context = security_context
 
     def add_user_secrets(self):
         """Mount the "file" secrets and set the "env" secrets in the container."""
@@ -490,6 +541,18 @@ def build_interactive_jupyter_deployment_k8s_objects(
         "--notebook-dir='{workflow_workspace}'".format(workflow_workspace=workspace),
         f'--NotebookApp.terminado_settings={{"shell_command": ["/usr/bin/bash", "-c", "cd \'{workspace}\' && bash"]}}',
     ]
+    if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+        # With a read-only root filesystem Jupyter cannot write to its default
+        # home, runtime and cache directories inside the container image.
+        # Mount ephemeral writable scratch and a writable home so that Jupyter
+        # (and pip/ipython, which derive their paths from $HOME) keep working;
+        # XDG_CACHE_HOME and the Jupyter runtime/data dirs all fall back to
+        # paths under $HOME, which is now writable.
+        session_home = "/home/reana"
+        deployment_builder.add_scratch_volume("reana-session-tmp", "/tmp")
+        deployment_builder.add_scratch_volume("reana-session-home", session_home)
+        deployment_builder.add_environment_variable("HOME", session_home)
+
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_session_secret(session_secret)
     deployment_builder.add_reana_shared_storage()
