@@ -330,7 +330,7 @@ def get_workflows(args, paginate=None):  # noqa
         shared_with_me = (
             Session.query(Workflow)
             .join(UserWorkflow, UserWorkflow.workflow_id == Workflow.id_)
-            .filter(UserWorkflow.user_id == user.id_)
+            .filter(UserWorkflow.user_id == user.id_, UserWorkflow.is_active)
         )
 
         # default case: retrieve owned workflows
@@ -1252,14 +1252,21 @@ def share_workflow(
             Session.commit()
         except IntegrityError:
             Session.rollback()
-            return (
-                jsonify(
-                    {
-                        "message": f"{workflow.get_full_workflow_name()} is already shared with {user_email_to_share_with}."
-                    }
-                ),
-                409,
+            workflow_name = workflow.get_full_workflow_name()
+            share = (
+                Session.query(UserWorkflow)
+                .filter_by(workflow_id=workflow.id_, user_id=user_to_share_with.id_)
+                .one_or_none()
             )
+            if share and not share.is_active:
+                message = (
+                    f"{workflow_name} was shared with {user_email_to_share_with} "
+                    f"until {share.valid_until:%Y-%m-%d}. That share has expired. "
+                    "Remove it before you share the workflow again."
+                )
+            else:
+                message = f"{workflow_name} is already shared with {user_email_to_share_with}."
+            return jsonify({"message": message}), 409
 
         response = {
             "message": "The workflow has been shared with the user.",

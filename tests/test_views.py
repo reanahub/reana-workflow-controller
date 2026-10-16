@@ -7,6 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Workflow-Controller module tests."""
 
+import datetime
 import io
 import json
 import os
@@ -221,6 +222,89 @@ def test_get_workflows_shared_by(
         assert len(response_data) == 1
         assert response_data[0]["id"] == str(workflow.id_)
         assert response_data[0]["owner_email"] == user1.email
+
+
+@pytest.mark.parametrize("valid_until_days, is_listed", [(0, True), (-1, False)])
+def test_get_workflows_shared_with_me_ignores_expired_shares(
+    app,
+    session,
+    user1,
+    user2,
+    sample_yadage_workflow_in_db_owned_by_user1,
+    valid_until_days,
+    is_listed,
+):
+    """A recipient lists a shared workflow until the share expires."""
+    workflow = sample_yadage_workflow_in_db_owned_by_user1
+    today = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    session.add(
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=user2.id_,
+            valid_until=today + datetime.timedelta(days=valid_until_days),
+        )
+    )
+    session.commit()
+
+    with app.test_client() as client:
+        for query_string in ({"shared": True}, {"shared_by": "anybody"}):
+            res = client.get(
+                url_for("workflows.get_workflows"),
+                query_string={"user": user2.id_, "type": "batch", **query_string},
+            )
+            assert res.status_code == 200
+            listed_ids = [item["id"] for item in res.json["items"]]
+            assert listed_ids == ([str(workflow.id_)] if is_listed else [])
+
+
+@pytest.mark.parametrize("valid_until_days, has_access", [(1, True), (-1, False)])
+def test_workflow_endpoints_apply_share_expiry(
+    app,
+    session,
+    user0,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+    valid_until_days,
+    has_access,
+):
+    """A recipient reads a shared workflow until the share expires."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    today = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    session.add_all(
+        [
+            UserWorkflow(
+                workflow_id=workflow.id_,
+                user_id=user2.id_,
+                valid_until=today + datetime.timedelta(days=valid_until_days),
+            ),
+            # The active share of another user must not give access to user2.
+            UserWorkflow(workflow_id=workflow.id_, user_id=user0.id_),
+        ]
+    )
+    session.commit()
+    with open(os.path.join(workflow.workspace_path, "result.txt"), "w") as f:
+        f.write("result")
+
+    endpoints = [
+        ("statuses.get_workflow_status", {}),
+        ("statuses.get_workflow_logs", {}),
+        ("workspaces.get_files", {}),
+        ("workspaces.download_file", {"file_name": "result.txt"}),
+    ]
+    with app.test_client() as client:
+        for endpoint, kwargs in endpoints:
+            for user, expected_status in (
+                (user1, 200),
+                (user2, 200 if has_access else 404),
+            ):
+                res = client.get(
+                    url_for(endpoint, workflow_id_or_name=str(workflow.id_), **kwargs),
+                    query_string={"user": str(user.id_)},
+                )
+                assert res.status_code == expected_status, endpoint
+
+    session.query(UserWorkflow).filter_by(workflow_id=workflow.id_).delete()
 
 
 def test_get_workflows_shared_with(
@@ -2577,6 +2661,37 @@ def test_share_workflow_already_shared(
         assert (
             response_data["message"]
             == f"{workflow.get_full_workflow_name()} is already shared with {user2.email}."
+        )
+
+    session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
+
+
+def test_share_workflow_already_shared_expired(
+    app, session, user1, user2, sample_serial_workflow_in_db_owned_by_user1
+):
+    """Test sharing a workflow again after the earlier share has expired."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    session.add(
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=user2.id_,
+            valid_until=datetime.datetime(2026, 10, 15),
+        )
+    )
+    session.commit()
+
+    with app.test_client() as client:
+        res = client.post(
+            url_for("workflows.share_workflow", workflow_id_or_name=str(workflow.id_)),
+            query_string={"user": str(user1.id_)},
+            content_type="application/json",
+            data=json.dumps({"user_email_to_share_with": user2.email}),
+        )
+        assert res.status_code == 409
+        assert res.get_json()["message"] == (
+            f"{workflow.get_full_workflow_name()} was shared with {user2.email} "
+            "until 2026-10-15. That share has expired. "
+            "Remove it before you share the workflow again."
         )
 
     session.query(UserWorkflow).filter_by(user_id=user2.id_).delete()
