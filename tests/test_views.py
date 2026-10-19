@@ -2033,7 +2033,11 @@ def test_get_workspace_diff(
 
 
 def test_create_interactive_session(
-    app, user0, sample_serial_workflow_in_db, interactive_session_environments
+    app,
+    user0,
+    sample_serial_workflow_in_db,
+    interactive_session_environments,
+    k8s_networking_api_client,
 ):
     """Test create interactive session."""
     wrm = WorkflowRunManager(sample_serial_workflow_in_db)
@@ -2043,7 +2047,7 @@ def test_create_interactive_session(
         with mock.patch.multiple(
             "reana_workflow_controller.k8s",
             current_k8s_corev1_api_client=mock.DEFAULT,
-            current_k8s_networking_api_client=mock.DEFAULT,
+            current_k8s_networking_api_client=k8s_networking_api_client,
             current_k8s_appsv1_api_client=mock.DEFAULT,
             UserSecretsStore=mock.DEFAULT,
         ) as mocks:
@@ -2119,6 +2123,7 @@ def test_create_interactive_session_skips_security_context_when_disabled(
     sample_serial_workflow_in_db,
     interactive_session_environments,
     monkeypatch,
+    k8s_networking_api_client,
 ):
     """Test create interactive session without explicit security contexts."""
     wrm = WorkflowRunManager(sample_serial_workflow_in_db)
@@ -2129,7 +2134,7 @@ def test_create_interactive_session_skips_security_context_when_disabled(
         with mock.patch.multiple(
             "reana_workflow_controller.k8s",
             current_k8s_corev1_api_client=mock.DEFAULT,
-            current_k8s_networking_api_client=mock.DEFAULT,
+            current_k8s_networking_api_client=k8s_networking_api_client,
             current_k8s_appsv1_api_client=mock.DEFAULT,
             UserSecretsStore=mock.DEFAULT,
         ) as mocks:
@@ -2169,7 +2174,11 @@ def test_create_interactive_session_unknown_type(
 
 
 def test_create_interactive_session_custom_image(
-    app, user0, sample_serial_workflow_in_db, interactive_session_environments
+    app,
+    user0,
+    sample_serial_workflow_in_db,
+    interactive_session_environments,
+    k8s_networking_api_client,
 ):
     """Create an interactive session with custom image."""
     custom_image = "docker_image_2"
@@ -2179,7 +2188,7 @@ def test_create_interactive_session_custom_image(
         with mock.patch.multiple(
             "reana_workflow_controller.k8s",
             current_k8s_corev1_api_client=mock.DEFAULT,
-            current_k8s_networking_api_client=mock.DEFAULT,
+            current_k8s_networking_api_client=k8s_networking_api_client,
             current_k8s_appsv1_api_client=mock.DEFAULT,
             UserSecretsStore=mock.DEFAULT,
         ) as mocks:

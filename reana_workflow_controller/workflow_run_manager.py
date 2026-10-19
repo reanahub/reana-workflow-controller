@@ -1198,7 +1198,9 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             code_volume_name = "reana-code"
             code_mount_path = "/code"
             k8s_code_volume = client.V1Volume(name=code_volume_name)
-            k8s_code_volume.host_path = client.V1HostPathVolumeSource(code_mount_path)
+            k8s_code_volume.host_path = client.V1HostPathVolumeSource(
+                path=code_mount_path
+            )
             spec.template.spec.volumes.append(k8s_code_volume)
 
             for container in spec.template.spec.containers:

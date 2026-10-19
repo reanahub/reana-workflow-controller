@@ -10,6 +10,7 @@
 
 from __future__ import absolute_import, print_function
 
+import copy
 import logging
 import os
 import shutil
@@ -18,7 +19,7 @@ import yaml
 
 from flask import current_app
 import pytest
-from mock import patch
+from mock import MagicMock, patch
 from reana_db.models import (
     Base,
     Job,
@@ -222,3 +223,17 @@ def mock_k8s_client():
     ) as mock_client:
         mock_client.create_namespaced_custom_object.return_value = None
         yield mock_client
+
+
+@pytest.fixture
+def k8s_networking_api_client():
+    """Mock networking API client that returns created ingresses with a UID."""
+
+    def create_namespaced_ingress(namespace, body):
+        created = copy.deepcopy(body)
+        created.metadata.uid = str(uuid.uuid4())
+        return created
+
+    mock_client = MagicMock()
+    mock_client.create_namespaced_ingress.side_effect = create_namespaced_ingress
+    return mock_client
