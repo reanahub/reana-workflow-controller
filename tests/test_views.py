@@ -1432,6 +1432,48 @@ def test_get_created_workflow_logs(
             assert mock_method.call_count == 2
 
 
+@pytest.mark.parametrize(
+    "status, expected_logs",
+    [
+        (
+            RunStatus.running,
+            "The Dask pod worker-1 was evicted: Pod ephemeral local storage "
+            "usage exceeds the total limit of containers 5Gi.\n",
+        ),
+        (RunStatus.finished, ""),
+    ],
+)
+def test_get_workflow_logs_with_evicted_dask_pod(
+    app, session, sample_serial_workflow_in_db_with_dask, status, expected_logs
+):
+    """Test that the logs show the evicted pods of a running Dask cluster."""
+    workflow = sample_serial_workflow_in_db_with_dask
+    workflow.status = status
+    session.commit()
+    evicted_pod = mock.Mock()
+    evicted_pod.metadata.name = "worker-1"
+    evicted_pod.status.phase = "Failed"
+    evicted_pod.status.reason = "Evicted"
+    evicted_pod.status.message = (
+        "Pod ephemeral local storage usage exceeds the total limit of "
+        "containers 5Gi. "
+    )
+    corev1 = mock.Mock()
+    corev1.list_namespaced_event.return_value = mock.Mock(items=[])
+    corev1.list_namespaced_pod.return_value = mock.Mock(items=[evicted_pod])
+    with mock.patch(
+        "reana_workflow_controller.k8s.current_k8s_corev1_api_client", corev1
+    ), app.test_client() as client:
+        res = client.get(
+            url_for("statuses.get_workflow_logs", workflow_id_or_name=workflow.id_),
+            query_string={"user": workflow.owner_id},
+        )
+    assert res.status_code == 200
+    logs = json.loads(json.loads(res.get_data(as_text=True))["logs"])
+    assert logs["workflow_logs"] == expected_logs
+    assert corev1.list_namespaced_pod.called == (status == RunStatus.running)
+
+
 def test_get_created_workflow_logs_by_steps(
     app,
     user0,

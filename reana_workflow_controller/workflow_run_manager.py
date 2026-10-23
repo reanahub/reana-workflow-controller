@@ -65,6 +65,7 @@ from reana_workflow_controller.dask import (
 )
 
 from reana_workflow_controller.k8s import (
+    add_pod_eviction_messages,
     build_interactive_k8s_objects,
     delete_k8s_ingress_object,
     delete_k8s_objects_if_exist,
@@ -695,6 +696,10 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     self.workflow.name
                 )
             )
+        # Keep the eviction reasons, as deleting the session deletes its pods.
+        self.workflow.logs = add_pod_eviction_messages(
+            self.workflow.logs, self.workflow
+        )
         action_completed = True
         try:
             delete_k8s_ingress_object(

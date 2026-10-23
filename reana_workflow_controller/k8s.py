@@ -29,6 +29,7 @@ from reana_commons.k8s.volumes import (
     get_k8s_cvmfs_volumes,
     get_workspace_volume,
 )
+from reana_commons.utils import build_unique_component_name, get_dask_component_name
 
 from reana_workflow_controller.config import (  # isort:skip
     JUPYTER_INTERACTIVE_SESSION_DEFAULT_PORT,
@@ -698,3 +699,64 @@ def check_pod_status_by_prefix(
         return "Not Found"
     except ApiException as e:
         return f"Error: {e.reason}"
+
+
+def add_pod_eviction_messages(logs, workflow, dask=False):
+    """Add a line to the logs for each stopped session or Dask pod of a workflow.
+
+    A session or Dask pod stops while its owner exists, for example when
+    Kubernetes evicts it because it writes too much data to a scratch volume.
+    The eviction reason is taken from the pod status. When the container exits
+    cleanly, Kubernetes does not keep the reason in the pod status, and the Dask
+    autoscaler can delete an evicted worker pod. The reason is then taken from
+    the eviction event, which Kubernetes keeps for one hour by default. Pods
+    that are already in the logs are skipped.
+
+    :param logs: Logs to add the lines to.
+    :param workflow: Workflow that owns the pods.
+    :param dask: Whether to check the Dask pods instead of the session pods.
+    :return: The logs with the new lines.
+    """
+    if dask:
+        component, label = "Dask", "reana-run-dask-workflow-uuid"
+        pod_name_prefix = get_dask_component_name(workflow.id_, "cluster") + "-"
+    else:
+        component, label = "interactive session", "reana-run-session-workflow-uuid"
+        pod_name_prefix = build_unique_component_name("run-session", workflow.id_) + "-"
+
+    # A failed lookup must not stop the deletion of the pods.
+    try:
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            label_selector=f"{label}={workflow.id_}",
+        ).items
+    except Exception as e:
+        LOGGER.error(f"Could not list {component} pods of workflow {workflow.id_}: {e}")
+        return logs
+    try:
+        events = current_k8s_corev1_api_client.list_namespaced_event(
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            field_selector="involvedObject.kind=Pod,reason=Evicted",
+        ).items
+    except Exception as e:
+        LOGGER.error(f"Could not list eviction events: {e}")
+        events = []
+
+    reasons = {
+        event.involved_object.name: event.message
+        for event in events
+        if event.involved_object.name.startswith(pod_name_prefix)
+    }
+    for pod in pods:
+        if pod.status.reason == "Evicted":
+            reasons[pod.metadata.name] = pod.status.message
+        elif pod.status.phase in ("Succeeded", "Failed"):
+            reasons.setdefault(pod.metadata.name, None)
+
+    for name, reason in sorted(reasons.items()):
+        line = f"The {component} pod {name} "
+        if line in (logs or ""):
+            continue
+        line += f"was evicted: {reason.strip()}" if reason else "stopped."
+        logs = f"{logs or ''}{line}\n"
+    return logs
