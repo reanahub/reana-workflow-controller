@@ -37,6 +37,7 @@ from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import (
     KubernetesWorkflowRunManager,
     _container_image_aliases,
+    _pre_stop_shutdown_timeout,
 )
 
 
@@ -294,6 +295,27 @@ def test_create_job_spec_kerberos(
     assert "krb5-conf" in volumes
 
 
+@pytest.mark.parametrize(
+    "grace_period, expected_timeout",
+    [
+        (0, 1),
+        (1, 1),
+        (5, 1),
+        (10, 5),
+        (30, 23),
+        (120, 90),
+        (600, 570),
+    ],
+)
+def test_pre_stop_shutdown_timeout(grace_period, expected_timeout):
+    """Test that the preStop request leaves time for the pod termination."""
+    timeout = _pre_stop_shutdown_timeout(grace_period)
+    assert timeout == expected_timeout
+    assert timeout > 0
+    if grace_period > 5:
+        assert grace_period - timeout >= 5
+
+
 def test_create_job_spec_job_controller_runs_as_runtime_user(
     sample_serial_workflow_in_db,
     mock_user_secrets,
@@ -347,12 +369,16 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
     # empty ProxyHandler, not the bare (proxy-aware) urlopen default.
     assert "urllib.request.ProxyHandler({})" in shutdown_command[2]
     assert "urllib.request.urlopen(" not in shutdown_command[2]
-    # The timeout must match the pod's own termination grace period, not a
-    # shorter hardcoded value that could cut /shutdown off before it
-    # finished stopping every job.
+    # The timeout must be derived from the pod's own termination grace
+    # period, leaving a margin for the containers to terminate afterwards.
+    shutdown_timeout = _pre_stop_shutdown_timeout(
+        REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD
+    )
+    assert f"timeout={shutdown_timeout})" in shutdown_command[2]
+    assert 0 < shutdown_timeout < REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD
     assert (
-        f"timeout={REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD})"
-        in shutdown_command[2]
+        job.spec.template.spec.termination_grace_period_seconds
+        == REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD
     )
     # A failure here (e.g. job-controller already gone, a common, benign
     # teardown case) must not fail the hook -- the pod deletion it guards
