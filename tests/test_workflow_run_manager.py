@@ -35,6 +35,7 @@ from reana_workflow_controller.config import (
 )
 from reana_workflow_controller.errors import REANAInteractiveSessionError
 from reana_workflow_controller.workflow_run_manager import (
+    INVALID_CERN_USER_MESSAGE,
     KubernetesWorkflowRunManager,
     _container_image_aliases,
 )
@@ -589,6 +590,23 @@ def test_create_job_spec_ignores_invalid_cern_user(
     }
     assert env_vars["CERN_USER"] == "reana"
     assert env_vars["USER"] == "reana"
+    # The user is told why, without the value of the secret.
+    assert INVALID_CERN_USER_MESSAGE in sample_serial_workflow_in_db.logs
+    if cern_user:
+        assert cern_user not in sample_serial_workflow_in_db.logs
+
+
+def test_create_job_spec_accepts_valid_cern_user_silently(
+    sample_serial_workflow_in_db, monkeypatch
+):
+    """Test that a valid CERN_USER secret adds nothing to the workflow logs."""
+    _user_secrets_with(
+        monkeypatch, [Secret(name="CERN_USER", type_="env", value="alice")]
+    )
+    kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
+    kwrm._create_job_spec("run-batch-test")
+
+    assert INVALID_CERN_USER_MESSAGE not in (sample_serial_workflow_in_db.logs or "")
 
 
 def test_interactive_session_uses_per_session_secret(sample_serial_workflow_in_db):

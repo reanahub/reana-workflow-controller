@@ -168,8 +168,20 @@ def _filter_job_controller_user_secrets(env_secrets, managed_env_vars):
     ]
 
 
-def _get_runtime_user_name(user_secrets):
-    """Return the runtime user name, from a valid ``CERN_USER`` secret if set."""
+INVALID_CERN_USER_MESSAGE = (
+    "The CERN_USER secret is not a valid user name, so it was not used. "
+    "The default user name {} is used instead, also for Kerberos "
+    "authentication. Set CERN_USER to a user name without the domain, "
+    "for example 'alice' and not 'alice@cern.ch'."
+).format(WORKFLOW_RUNTIME_USER_NAME)
+"""Workflow log message for a ``CERN_USER`` secret that is not accepted."""
+
+
+def _get_runtime_user_name(user_secrets, workflow):
+    """Return the runtime user name, from a valid ``CERN_USER`` secret if set.
+
+    An invalid secret is reported in the workflow logs, without its value.
+    """
     user_secret = user_secrets.get_secret("CERN_USER")
     if not user_secret:
         return WORKFLOW_RUNTIME_USER_NAME
@@ -178,6 +190,7 @@ def _get_runtime_user_name(user_secrets):
         LOGGER.warning(
             "Ignoring the CERN_USER secret because it is not a valid user name."
         )
+        workflow.logs = (workflow.logs or "") + INVALID_CERN_USER_MESSAGE + "\n"
         return WORKFLOW_RUNTIME_USER_NAME
     return user_name
 
@@ -871,7 +884,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
 
         job_controller_env_secrets = user_secrets.get_env_secrets_as_k8s_spec()
 
-        user = _get_runtime_user_name(user_secrets)
+        user = _get_runtime_user_name(user_secrets, self.workflow)
 
         job_controller_container = client.V1Container(
             name=current_app.config["JOB_CONTROLLER_NAME"],
