@@ -21,6 +21,7 @@ from reana_workflow_controller.consumer import (
     JobStatusConsumer,
     _get_workflow_engine_pod_logs,
     _update_commit_status,
+    _update_workflow_status,
 )
 
 
@@ -150,3 +151,31 @@ def test_update_commit_status_without_token(session, sample_serial_workflow_in_d
         _update_commit_status(workflow, RunStatus.finished)
         fetch_mock.assert_called_once_with(workflow.owner_id)
         post_mock.assert_not_called()
+
+
+def test_workflow_end_keeps_dask_eviction_reasons(sample_serial_workflow_in_db):
+    """The reasons of evicted Dask pods are kept before the cluster is deleted."""
+    workflow = sample_serial_workflow_in_db
+    workflow.status = RunStatus.running
+    workflow.logs = ""
+    calls = []
+
+    def add_evictions(logs, workflow, dask=False):
+        calls.append("add")
+        assert dask
+        return logs + "The Dask pod worker-1 was evicted: Out of space.\n"
+
+    with patch.multiple(
+        "reana_workflow_controller.consumer",
+        requires_dask=Mock(return_value=True),
+        delete_dask_cluster=Mock(side_effect=lambda *_: calls.append("delete")),
+        add_pod_eviction_messages=add_evictions,
+        _get_workflow_engine_pod_logs=Mock(return_value="Engine logs."),
+        _delete_workflow_job=Mock(),
+    ), patch("reana_workflow_controller.consumer.Workflow.update_workflow_status"):
+        _update_workflow_status(workflow, RunStatus.failed, "")
+
+    assert calls == ["add", "delete"]
+    assert workflow.logs == (
+        "Engine logs.\nThe Dask pod worker-1 was evicted: Out of space.\n"
+    )

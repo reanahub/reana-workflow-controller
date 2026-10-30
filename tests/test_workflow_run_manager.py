@@ -178,6 +178,37 @@ def test_interactive_session_closure(sample_serial_workflow_in_db, session):
             assert not workflow.sessions
 
 
+def test_interactive_session_closure_keeps_eviction_reason(
+    sample_serial_workflow_in_db, session
+):
+    """Test that closing a session keeps the reasons of its evicted pods."""
+    workflow = sample_serial_workflow_in_db
+    corev1 = Mock()
+    corev1.list_namespaced_event.return_value = Mock(items=[])
+    evicted_pod = Mock()
+    evicted_pod.metadata.name = "run-session-abc"
+    evicted_pod.status.phase = "Failed"
+    evicted_pod.status.reason = "Evicted"
+    evicted_pod.status.message = "Pod ephemeral local storage usage exceeds."
+    corev1.list_namespaced_pod.return_value = Mock(items=[evicted_pod])
+    with patch.multiple(
+        "reana_workflow_controller.k8s",
+        current_k8s_appsv1_api_client=DEFAULT,
+        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_corev1_api_client=corev1,
+    ):
+        kwrm = KubernetesWorkflowRunManager(workflow)
+        kwrm.start_interactive_session(
+            InteractiveSessionType(0).name, expose_secrets=False
+        )
+        kwrm.stop_interactive_session(workflow.sessions[0].id_)
+        assert not workflow.sessions
+        assert workflow.logs.endswith(
+            "The interactive session pod run-session-abc was evicted: "
+            "Pod ephemeral local storage usage exceeds.\n"
+        )
+
+
 def test_container_image_aliases():
     """Test generation of docker image aliases."""
     image = "foo/bar"

@@ -19,6 +19,7 @@ from reana_workflow_controller.config import (
 from reana_workflow_controller.errors import ReservedEnvironmentVariableError
 from reana_workflow_controller.k8s import (
     InteractiveDeploymentK8sBuilder,
+    add_pod_eviction_messages,
     build_interactive_jupyter_deployment_k8s_objects,
     delete_k8s_objects_if_exist,
     get_compatible_kerberos_k8s_config,
@@ -361,3 +362,97 @@ def test_limit_credential_cache_volumes(monkeypatch, read_only):
     assert volumes[0]["emptyDir"] == expected_empty_dir
     # volumes that are not emptyDir volumes are not changed
     assert volumes[1] == {"name": "krb5-conf", "configMap": {"name": "krb5-conf"}}
+
+
+def _pod(name, phase="Running", reason=None, message=None):
+    return SimpleNamespace(
+        metadata=SimpleNamespace(name=name),
+        status=SimpleNamespace(phase=phase, reason=reason, message=message),
+    )
+
+
+def _event(pod_name, message):
+    return SimpleNamespace(
+        involved_object=SimpleNamespace(name=pod_name), message=message
+    )
+
+
+def test_add_pod_eviction_messages(monkeypatch):
+    """Stopped and deleted pods that are not yet in the logs are added."""
+    workflow = SimpleNamespace(id_=uuid4())
+    prefix = f"reana-run-session-{workflow.id_}-"
+    corev1 = Mock()
+    corev1.list_namespaced_pod.return_value = SimpleNamespace(
+        items=[
+            _pod(prefix + "a", "Failed", "Evicted", 'Usage of EmptyDir volume "a". '),
+            _pod(prefix + "b", "Succeeded"),
+            _pod(prefix + "c", "Succeeded"),
+            _pod(prefix + "d"),
+            _pod(prefix + "e", "Failed", "Evicted", "Old eviction."),
+        ]
+    )
+    corev1.list_namespaced_event.return_value = SimpleNamespace(
+        items=[
+            _event(prefix + "b", 'Usage of EmptyDir volume "b". '),
+            _event(prefix + "f", 'Usage of EmptyDir volume "f". '),
+            _event("reana-run-session-other-workflow-g", "Other workflow."),
+        ]
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.current_k8s_corev1_api_client", corev1
+    )
+    logs = f"Engine logs.\nThe interactive session pod {prefix}e was evicted: x\n"
+
+    new_logs = add_pod_eviction_messages(logs, workflow)
+
+    assert new_logs == logs + (
+        f"The interactive session pod {prefix}a was evicted: "
+        'Usage of EmptyDir volume "a".\n'
+        f"The interactive session pod {prefix}b was evicted: "
+        'Usage of EmptyDir volume "b".\n'
+        f"The interactive session pod {prefix}c stopped.\n"
+        f"The interactive session pod {prefix}f was evicted: "
+        'Usage of EmptyDir volume "f".\n'
+    )
+    assert corev1.list_namespaced_pod.call_args.kwargs["label_selector"] == (
+        f"reana-run-session-workflow-uuid={workflow.id_}"
+    )
+
+
+def test_add_pod_eviction_messages_dask(monkeypatch):
+    """Dask pods are found by their label and by the Dask cluster name."""
+    workflow = SimpleNamespace(id_=uuid4())
+    prefix = f"reana-run-dask-{str(workflow.id_)[:8]}-"
+    corev1 = Mock()
+    corev1.list_namespaced_pod.return_value = SimpleNamespace(items=[])
+    corev1.list_namespaced_event.return_value = SimpleNamespace(
+        items=[_event(prefix + "default-worker-1", "Out of space.")]
+    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.current_k8s_corev1_api_client", corev1
+    )
+    assert add_pod_eviction_messages(None, workflow, dask=True) == (
+        f"The Dask pod {prefix}default-worker-1 was evicted: Out of space.\n"
+    )
+    assert corev1.list_namespaced_pod.call_args.kwargs["label_selector"] == (
+        f"reana-run-dask-workflow-uuid={workflow.id_}"
+    )
+
+
+def test_add_pod_eviction_messages_kubernetes_errors(monkeypatch):
+    """Kubernetes errors do not stop the caller."""
+    workflow = SimpleNamespace(id_=uuid4())
+    corev1 = Mock()
+    corev1.list_namespaced_pod.return_value = SimpleNamespace(
+        items=[_pod("pod-a", "Failed", "Evicted", "Out of space.")]
+    )
+    corev1.list_namespaced_event.side_effect = Exception("Forbidden.")
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.current_k8s_corev1_api_client", corev1
+    )
+    assert add_pod_eviction_messages("", workflow, dask=True) == (
+        "The Dask pod pod-a was evicted: Out of space.\n"
+    )
+
+    corev1.list_namespaced_pod.side_effect = Exception("Kubernetes is down.")
+    assert add_pod_eviction_messages(None, workflow) is None
