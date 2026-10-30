@@ -11,6 +11,7 @@
 from __future__ import absolute_import, print_function
 
 import pytest
+from kubernetes.client import ApiClient
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
 
@@ -40,17 +41,24 @@ from reana_workflow_controller.workflow_run_manager import (
 )
 
 
+def serialize(k8s_object):
+    """Serialize Kubernetes objects to the dictionaries that are sent to the API."""
+    return ApiClient().sanitize_for_serialization(k8s_object)
+
+
 @pytest.fixture(autouse=True)
 def interactive_session_environments_autouse(interactive_session_environments):
     pass
 
 
-def test_start_interactive_session(sample_serial_workflow_in_db):
+def test_start_interactive_session(
+    sample_serial_workflow_in_db, k8s_networking_api_client
+):
     """Test interactive workflow run deployment."""
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_corev1_api_client=DEFAULT,
-        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_networking_api_client=k8s_networking_api_client,
         current_k8s_appsv1_api_client=DEFAULT,
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
@@ -64,12 +72,12 @@ def test_start_interactive_session(sample_serial_workflow_in_db):
         mocks[
             "current_k8s_corev1_api_client"
         ].create_namespaced_service.assert_called_once()
-        mocks[
-            "current_k8s_networking_api_client"
-        ].create_namespaced_ingress.assert_called_once()
+        k8s_networking_api_client.create_namespaced_ingress.assert_called_once()
 
 
-def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
+def test_start_interactive_workflow_k8s_failure(
+    sample_serial_workflow_in_db, k8s_networking_api_client
+):
     """Test failure of an interactive workflow run deployment because of ."""
     mocked_k8s_client = Mock()
     mocked_k8s_client.create_namespaced_deployment = Mock(
@@ -79,7 +87,7 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=mocked_k8s_client,
         current_k8s_corev1_api_client=DEFAULT,
-        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_networking_api_client=k8s_networking_api_client,
     ):
         with pytest.raises(
             REANAInteractiveSessionError, match=r".*Kubernetes has failed.*"
@@ -91,7 +99,9 @@ def test_start_interactive_workflow_k8s_failure(sample_serial_workflow_in_db):
                 )
 
 
-def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
+def test_atomic_creation_of_interactive_session(
+    sample_serial_workflow_in_db, k8s_networking_api_client
+):
     """Test atomic creation of interactive sessions.
 
     All interactive session should be created as well as writing the state
@@ -108,7 +118,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=mocked_k8s_client,
-        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_networking_api_client=k8s_networking_api_client,
         current_k8s_corev1_api_client=DEFAULT,
     ) as mocks:
         try:
@@ -121,9 +131,7 @@ def test_atomic_creation_of_interactive_session(sample_serial_workflow_in_db):
             mocks[
                 "current_k8s_corev1_api_client"
             ].delete_namespaced_service.assert_called_once()
-            mocks[
-                "current_k8s_networking_api_client"
-            ].delete_namespaced_ingress.assert_called_once()
+            k8s_networking_api_client.delete_namespaced_ingress.assert_called_once()
             mocked_k8s_client.delete_namespaced_deployment.assert_called_once()
             assert not sample_serial_workflow_in_db.sessions
 
@@ -149,14 +157,16 @@ def test_stop_workflow_backend_only_kubernetes(
         )
 
 
-def test_interactive_session_closure(sample_serial_workflow_in_db, session):
+def test_interactive_session_closure(
+    sample_serial_workflow_in_db, session, k8s_networking_api_client
+):
     """Test closure of an interactive sessions."""
     mocked_k8s_client = Mock()
     workflow = sample_serial_workflow_in_db
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=mocked_k8s_client,
-        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_networking_api_client=k8s_networking_api_client,
         current_k8s_corev1_api_client=DEFAULT,
     ):
         kwrm = KubernetesWorkflowRunManager(workflow)
@@ -217,7 +227,9 @@ def test_interactive_session_not_allowed_image(sample_serial_workflow_in_db):
                 )
 
 
-def test_interactive_session_custom_image(sample_serial_workflow_in_db, monkeypatch):
+def test_interactive_session_custom_image(
+    sample_serial_workflow_in_db, monkeypatch, k8s_networking_api_client
+):
     """Test interactive workflow run deployment with custom image."""
     monkeypatch.setitem(
         REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS["jupyter"], "allow_custom", True
@@ -226,7 +238,7 @@ def test_interactive_session_custom_image(sample_serial_workflow_in_db, monkeypa
         "reana_workflow_controller.k8s",
         current_k8s_appsv1_api_client=DEFAULT,
         current_k8s_corev1_api_client=DEFAULT,
-        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_networking_api_client=k8s_networking_api_client,
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
         if len(InteractiveSessionType):
@@ -241,9 +253,7 @@ def test_interactive_session_custom_image(sample_serial_workflow_in_db, monkeypa
         mocks[
             "current_k8s_corev1_api_client"
         ].create_namespaced_service.assert_called_once()
-        mocks[
-            "current_k8s_networking_api_client"
-        ].create_namespaced_ingress.assert_called_once()
+        k8s_networking_api_client.create_namespaced_ingress.assert_called_once()
 
 
 def test_create_job_spec_kerberos(
@@ -287,7 +297,7 @@ def test_create_job_spec_kerberos(
         "seccompProfile": {"type": "RuntimeDefault"},
     }
 
-    volumes = [volume["name"] for volume in job.spec.template.spec.volumes]
+    volumes = [volume["name"] for volume in serialize(job.spec.template.spec.volumes)]
     assert len(set(volumes)) == len(volumes)  # volumes have unique names
     assert any(volume.startswith("reana-secretsstore") for volume in volumes)
     assert "krb5-cache" in volumes
@@ -303,13 +313,17 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
     job = kwrm._create_job_spec("run-batch-test")
 
     workflow_engine, job_controller = job.spec.template.spec.containers
-    volumes = {volume["name"]: volume for volume in job.spec.template.spec.volumes}
+    volumes = {
+        volume["name"]: volume for volume in serialize(job.spec.template.spec.volumes)
+    }
     env_vars = {
-        env["name"]: env["value"] for env in job_controller.env if "value" in env
+        env["name"]: env["value"]
+        for env in serialize(job_controller.env)
+        if "value" in env
     }
     volume_mounts = {
         volume_mount["name"]: volume_mount["mountPath"]
-        for volume_mount in job_controller.volume_mounts
+        for volume_mount in serialize(job_controller.volume_mounts)
     }
 
     assert job.spec.template.spec.security_context.fs_group == int(
@@ -373,7 +387,7 @@ def test_create_job_spec_job_controller_runs_as_runtime_user(
     assert "uwsgi-config-reana-job-controller" in volumes
     assert job.spec.template.spec.automount_service_account_token is False
     assert "job-controller-service-account" not in {
-        mount["name"] for mount in workflow_engine.volume_mounts
+        mount["name"] for mount in serialize(workflow_engine.volume_mounts)
     }
     assert volume_mounts["job-controller-service-account"] == (
         "/var/run/secrets/kubernetes.io/serviceaccount"
@@ -407,13 +421,17 @@ def test_create_job_spec_skips_security_context_when_disabled(
 
     workflow_engine, job_controller = job.spec.template.spec.containers
     env_vars = {
-        env["name"]: env["value"] for env in job_controller.env if "value" in env
+        env["name"]: env["value"]
+        for env in serialize(job_controller.env)
+        if "value" in env
     }
     volume_mounts = {
         volume_mount["name"]: volume_mount["mountPath"]
-        for volume_mount in job_controller.volume_mounts
+        for volume_mount in serialize(job_controller.volume_mounts)
     }
-    volumes = {volume["name"]: volume for volume in job.spec.template.spec.volumes}
+    volumes = {
+        volume["name"]: volume for volume in serialize(job.spec.template.spec.volumes)
+    }
 
     assert job.spec.template.spec.security_context is None
     assert workflow_engine.security_context is None
@@ -448,9 +466,11 @@ def test_create_job_spec_drops_colliding_job_controller_env_vars(
     job = kwrm._create_job_spec("run-batch-test")
 
     _, job_controller = job.spec.template.spec.containers
-    env_names = [env["name"] for env in job_controller.env]
+    env_names = [env["name"] for env in serialize(job_controller.env)]
     env_vars = {
-        env["name"]: env["value"] for env in job_controller.env if "value" in env
+        env["name"]: env["value"]
+        for env in serialize(job_controller.env)
+        if "value" in env
     }
 
     assert env_names.count("WORKFLOW_RUNTIME_USER_UID") == 1
@@ -528,11 +548,15 @@ def test_create_job_spec_keeps_user_secrets_out_of_job_controller_env(
     job = kwrm._create_job_spec("run-batch-test")
 
     workflow_engine, job_controller = job.spec.template.spec.containers
-    env_names = [env["name"] for env in job_controller.env]
+    env_names = [env["name"] for env in serialize(job_controller.env)]
     env_vars = {
-        env["name"]: env["value"] for env in job_controller.env if "value" in env
+        env["name"]: env["value"]
+        for env in serialize(job_controller.env)
+        if "value" in env
     }
-    secret_env_names = {env["name"] for env in job_controller.env if "valueFrom" in env}
+    secret_env_names = {
+        env["name"] for env in serialize(job_controller.env) if "valueFrom" in env
+    }
 
     # Provenance, not only names: only allowed names come from the secret store.
     assert secret_env_names == {"VONAME", "CERN_KEYTAB"}
@@ -561,9 +585,11 @@ def test_create_job_spec_keeps_user_secrets_out_of_job_controller_env(
     assert env_vars["CERN_USER"] == "dummyuser"
     assert env_vars["USER"] == "dummyuser"
     # The workflow engine never receives user secrets.
-    assert not any("valueFrom" in env for env in workflow_engine.env)
+    assert not any("valueFrom" in env for env in serialize(workflow_engine.env))
     # File secrets are still mounted for the job controller.
-    volumes = {volume["name"]: volume for volume in job.spec.template.spec.volumes}
+    volumes = {
+        volume["name"]: volume for volume in serialize(job.spec.template.spec.volumes)
+    }
     assert volumes["k8s-secret"]["secret"]["items"] == [
         {"key": "dummy.keytab", "path": "dummy.keytab"}
     ]
@@ -585,18 +611,22 @@ def test_create_job_spec_ignores_invalid_cern_user(
 
     _, job_controller = job.spec.template.spec.containers
     env_vars = {
-        env["name"]: env["value"] for env in job_controller.env if "value" in env
+        env["name"]: env["value"]
+        for env in serialize(job_controller.env)
+        if "value" in env
     }
     assert env_vars["CERN_USER"] == "reana"
     assert env_vars["USER"] == "reana"
 
 
-def test_interactive_session_uses_per_session_secret(sample_serial_workflow_in_db):
+def test_interactive_session_uses_per_session_secret(
+    sample_serial_workflow_in_db, k8s_networking_api_client
+):
     """Per-session token is stored in a Secret, not in the pod arguments."""
     with patch.multiple(
         "reana_workflow_controller.k8s",
         current_k8s_corev1_api_client=DEFAULT,
-        current_k8s_networking_api_client=DEFAULT,
+        current_k8s_networking_api_client=k8s_networking_api_client,
         current_k8s_appsv1_api_client=DEFAULT,
     ) as mocks:
         kwrm = KubernetesWorkflowRunManager(sample_serial_workflow_in_db)
@@ -652,9 +682,11 @@ def test_create_job_spec_read_only_root_filesystem(
 
     pod_spec = job.spec.template.spec
     engine, sidecar = pod_spec.containers
-    sidecar_env = {env["name"]: env["value"] for env in sidecar.env if "value" in env}
-    engine_mounts = {vm["name"]: vm for vm in engine.volume_mounts}
-    pod_volumes = {v["name"]: v for v in pod_spec.volumes}
+    sidecar_env = {
+        env["name"]: env["value"] for env in serialize(sidecar.env) if "value" in env
+    }
+    engine_mounts = {vm["name"]: vm for vm in serialize(engine.volume_mounts)}
+    pod_volumes = {v["name"]: v for v in serialize(pod_spec.volumes)}
 
     # the flag and the size limit are always forwarded to the job-controller
     # sidecar so the wfc -> r-j-c hop cannot silently break
@@ -677,7 +709,7 @@ def test_create_job_spec_read_only_root_filesystem(
         # the job-controller sidecar is deliberately left writable and does
         # not receive the scratch mounts
         assert sidecar.security_context.read_only_root_filesystem is None
-        sidecar_mounts = {vm["name"] for vm in sidecar.volume_mounts}
+        sidecar_mounts = {vm["name"] for vm in serialize(sidecar.volume_mounts)}
         assert "reana-engine-tmp" not in sidecar_mounts
     else:
         assert engine.security_context.read_only_root_filesystem is None
