@@ -102,7 +102,8 @@ def test_interactive_deployment_k8s_builder_user_secrets(monkeypatch):
     pod = deployment.spec.template.spec
     assert len(pod.containers) == 1
     assert any(v["name"] == "k8s-secret" for v in pod.volumes)
-    assert any(vm["name"] == "k8s-secret" for vm in pod.containers[0].volume_mounts)
+    assert any(
+        vm["name"] == "k8s-secret" for vm in pod.containers[0].volume_mounts)
     assert any(e["name"] == "third_env" for e in pod.containers[0].env)
     assert pod.security_context.fs_group == int(WORKFLOW_RUNTIME_USER_GID)
     assert (
@@ -158,11 +159,8 @@ def test_interactive_deployment_k8s_builder_skips_security_context_when_disabled
     monkeypatch,
 ):
     """Do not force interactive-session UID/GID when disabled."""
-    monkeypatch.setattr("reana_workflow_controller.k8s.K8S_USE_SECURITY_CONTEXT", False)
-
-    builder = InteractiveDeploymentK8sBuilder(
-        "name", "workflow_id", "owner_id", "workspace", "docker_image", "port", "path"
-    )
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.K8S_USE_SECURITY_CONTEXT", False)
 
     builder.add_run_with_runtime_user_permissions()
 
@@ -335,7 +333,8 @@ def test_interactive_session_read_only_root_filesystem_disabled(monkeypatch):
 
 def test_interactive_session_read_only_without_security_context(monkeypatch):
     """The read-only flag still applies when security contexts are disabled."""
-    monkeypatch.setattr("reana_workflow_controller.k8s.K8S_USE_SECURITY_CONTEXT", False)
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.K8S_USE_SECURITY_CONTEXT", False)
     pod_spec = _build_jupyter_session(monkeypatch, read_only=True)
     security_context = pod_spec.containers[0].security_context
 
@@ -360,4 +359,48 @@ def test_limit_credential_cache_volumes(monkeypatch, read_only):
     expected_empty_dir = {"sizeLimit": "10Mi"} if read_only else {}
     assert volumes[0]["emptyDir"] == expected_empty_dir
     # volumes that are not emptyDir volumes are not changed
-    assert volumes[1] == {"name": "krb5-conf", "configMap": {"name": "krb5-conf"}}
+    assert volumes[1] == {"name": "krb5-conf",
+                          "configMap": {"name": "krb5-conf"}}
+
+
+def test_s3_integration(monkeypatch):
+    """Checks datastore sidecar creation and env variables allocation between pods."""
+    user_id = uuid4()
+    user_secrets = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="k8s-secret",
+        secrets=[
+            Secret(name="main_env", type_="env", value="3"),
+            Secret(name="S3_TO_LOCAL_TEST_ALIAS", type_="env", value="TEST"),
+            Secret(name="S3_TO_LOCAL_TEST_ACCESS_KEY", type_="env", value="-"),
+            Secret(name="S3_TO_LOCAL_TEST_BUCKET", type_="env", value="-"),
+            Secret(name="S3_TO_LOCAL_TEST_HOST", type_="env", value="-"),
+            Secret(name="S3_TO_LOCAL_TEST_SECRET_KEY", type_="env", value="-"),
+            Secret(name="S3_TO_LOCAL_TEST_REGION", type_="env", value="-"),
+        ],
+    )
+    monkeypatch.setattr(
+        UserSecretsStore,
+        "fetch",
+        lambda _: user_secrets,
+    )
+
+    monkeypatch.setattr(
+        "reana_workflow_controller.k8s.REANA_DATASTORE_ENABLED", True)
+
+    builder = InteractiveDeploymentK8sBuilder(
+        "name", "workflow_id", "owner_id", "workspace", "docker_image", "port", "path"
+    )
+    builder.add_user_secrets()
+    builder.add_run_with_root_permissions()
+    builder.setup_s3_sidecar()
+    builder.setup_s3_storage()
+    objs = builder.get_deployment_objects()
+
+    deployment = objs["deployment"]
+    pod = deployment.spec.template.spec
+    assert len(pod.containers) == 2
+    assert any(e["name"] == "main_env" for e in pod.containers[0].env)
+    assert any(
+        e["name"] == "S3_TO_LOCAL_TEST_ALIAS" for e in pod.containers[1].env)
+    assert len(pod.containers[1].env) == 6
