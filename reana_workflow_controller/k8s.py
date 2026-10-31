@@ -39,6 +39,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT,
     REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_RUNTIME_SESSIONS_SUPPLEMENTAL_GROUPS,
+    REANA_DATASTORE_IMAGE,
+    REANA_DATASTORE_ENABLED,
 )
 from reana_workflow_controller.errors import (
     REANAInteractiveSessionError,
@@ -248,16 +250,41 @@ class InteractiveDeploymentK8sBuilder(object):
         self.image = image
         self.port = port
         self.path = path
-        self.cvmfs_repos = cvmfs_repos or []
+        self.cvmfs_repos = (cvmfs_repos or [],)
+        self.datastore_enabled = False
         metadata = client.V1ObjectMeta(
             name=deployment_name,
             labels={"reana_workflow_mode": "session"},
         )
         self._session_container = client.V1Container(
-            name=self.deployment_name, image=self.image, env=[], volume_mounts=[]
+            name=self.deployment_name,
+            image=self.image,
+            env=[],
+            volume_mounts=[],
+            ports=[client.V1ContainerPort(container_port=self.port)],
         )
+        containers = [self._session_container]
+        if REANA_DATASTORE_ENABLED:
+            user_secrets = UserSecretsStore.fetch(self.owner_id)
+            all_env = user_secrets.get_env_secrets_as_k8s_spec()
+            s3_env = [
+                s for s in all_env if s.get("name", "").startswith("S3_TO_LOCAL_")
+            ]
+            if s3_env:
+                self.datastore_enabled = True
+            if self.datastore_enabled:
+                self.datastore = client.V1Container(
+                    name="datastore",
+                    image=REANA_DATASTORE_IMAGE,
+                    env=[],
+                    volume_mounts=[],
+                    ports=[],
+                    image_pull_policy="IfNotPresent",
+                )
+                containers.append(self.datastore)
+
         self._pod_spec = client.V1PodSpec(
-            containers=[self._session_container],
+            containers=containers,
             volumes=[],
             node_selector=REANA_RUNTIME_SESSIONS_KUBERNETES_NODE_LABEL,
             # Disable service discovery with env variables, so that the environment is
@@ -321,9 +348,15 @@ class InteractiveDeploymentK8sBuilder(object):
             type="ClusterIP",
             ports=[
                 client.V1ServicePort(
+                    name="interactive-session",
                     port=InteractiveDeploymentK8sBuilder.internal_service_port,
                     target_port=self.port,
-                )
+                ),
+                client.V1ServicePort(
+                    name="datastore",
+                    port=5000,
+                    target_port=5000,
+                ),
             ],
             selector={"app": self.deployment_name},
         )
@@ -378,6 +411,62 @@ class InteractiveDeploymentK8sBuilder(object):
         volume_mount, volume = get_workspace_volume(self.workspace)
         self._session_container.volume_mounts.append(volume_mount)
         self._pod_spec.volumes.append(volume)
+
+    def setup_s3_storage(self):
+        """Configure memory-backed empty_dir volume for S3 sidecar with mount propagation."""
+        volume_name = "s3-mounts"
+
+        # Use memory-backed emptyDir as per K8s recommendations for mount propagation
+        volume = client.V1Volume(
+            name=volume_name,
+            empty_dir=client.V1EmptyDirVolumeSource(medium="Memory", size_limit="1Gi"),
+        )
+
+        volume_mount = client.V1VolumeMount(
+            name=volume_name,
+            mount_path="/data/s3/",
+            mount_propagation="HostToContainer",
+        )
+
+        self._session_container.volume_mounts.append(volume_mount)
+
+        volume_mount = client.V1VolumeMount(
+            name=volume_name, mount_path="/s3-data", mount_propagation="Bidirectional"
+        )
+
+        self.datastore.volume_mounts.append(volume_mount)
+
+        self._pod_spec.volumes.append(volume)
+
+    def setup_s3_sidecar(self):
+        """Add the sidecar for s3 mounts with minimal required privileges."""
+        # Define the volume mount for /dev/fuse
+        fuse_volume_mount = client.V1VolumeMount(
+            name="fuse-device", mount_path="/dev/fuse"
+        )
+
+        # Define the volume for /dev/fuse
+        fuse_volume = client.V1HostPathVolumeSource(path="/dev/fuse")
+
+        # Append the volume mount and volume to the sidecar container and pod spec
+        self.datastore.volume_mounts.append(fuse_volume_mount)
+        self._pod_spec.volumes.append(
+            client.V1Volume(name="fuse-device", host_path=fuse_volume)
+        )
+
+        # Security context for FUSE - privileged required for bidirectional mounting
+        # Note: allowPrivilegeEscalation must be true when privileged=true per K8s rules
+        security_context = client.V1SecurityContext(
+            run_as_user=0,
+            allow_privilege_escalation=True,  # Required when privileged=True
+            capabilities=client.V1Capabilities(
+                drop=["ALL"]  # Drop all other capabilities
+            ),
+            privileged=True,  # Required by K8s for bidirectional mount propagation
+            seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
+            read_only_root_filesystem=False,
+        )
+        self.datastore.security_context = security_context
 
     def add_cvmfs_repo_mounts(self, cvmfs_repos):
         """Add mounts for the provided CVMFS repositories to the deployment.
@@ -484,8 +573,26 @@ class InteractiveDeploymentK8sBuilder(object):
         self._pod_spec.volumes.append(secrets_volume)
         self._session_container.volume_mounts.append(secrets_volume_mount)
 
-        # set environment secrets
-        self._session_container.env += environment_secrets
+        # build env arrays for different containers
+        # sorting s3 variables to only be mounted in sidecar
+        all_env = environment_secrets
+        s3_env = []
+        session_env = []
+
+        if self.datastore_enabled:
+            for secret in all_env:
+                secret_name = secret.get("name", "")
+                if secret_name.startswith("S3_TO_LOCAL_"):
+                    s3_env.append(secret)
+                else:
+                    session_env.append(secret)
+            # set environment secrets without s3 secrets
+            self._session_container.env += session_env
+            # mount s3 secretes
+            if REANA_DATASTORE_ENABLED:
+                self.datastore.env += s3_env
+        else:
+            self._session_container.env += all_env
 
     def get_deployment_objects(self):
         """Return the alrady built Kubernetes objects."""
@@ -556,6 +663,9 @@ def build_interactive_jupyter_deployment_k8s_objects(
     deployment_builder.add_command_arguments(command_args)
     deployment_builder.add_session_secret(session_secret)
     deployment_builder.add_reana_shared_storage()
+    if REANA_DATASTORE_ENABLED and deployment_builder.datastore_enabled:
+        deployment_builder.setup_s3_sidecar()
+        deployment_builder.setup_s3_storage()
     if cvmfs_repos:
         deployment_builder.add_cvmfs_repo_mounts(cvmfs_repos)
     if expose_secrets:

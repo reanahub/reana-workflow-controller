@@ -380,7 +380,6 @@ JOB_CONTROLLER_IMAGE = os.getenv(
 )
 """Default image for REANA Job Controller sidecar."""
 
-
 JOB_CONTROLLER_ENV_VARS = _env_vars_dict_to_k8s_list(
     json.loads(os.getenv("REANA_JOB_CONTROLLER_ENV_VARS", "{}"))
 )
@@ -778,3 +777,13 @@ if _invalid_gc:
         "Invalid FORCE_GARBAGE_COLLECTION values: "
         f"{invalid_gc_values}. Valid values: {valid_gc_values}"
     )
+
+REANA_DATASTORE_ENABLED = os.getenv("REANA_DATASTORE_ENABLED") == "true"
+"""Set datastore (s3) sidecar for interactive sessions enabled or disabled"""
+
+if REANA_DATASTORE_ENABLED:
+    REANA_DATASTORE_IMAGE = os.getenv("REANA_DATASTORE_IMAGE")
+    """Optional Image for datastore (s3) sidecar for interactive sessions"""
+
+else:
+    REANA_DATASTORE_IMAGE = ""

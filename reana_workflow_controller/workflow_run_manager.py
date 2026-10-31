@@ -14,6 +14,7 @@ import os
 import re
 import secrets
 from typing import List, Optional
+import requests
 
 from flask import current_app
 from kubernetes import client
@@ -113,6 +114,8 @@ from reana_workflow_controller.config import (  # isort:skip
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     KUEUE_ENABLED,
     KUEUE_LOCAL_QUEUE_NAME,
+    REANA_DATASTORE_IMAGE,
+    REANA_DATASTORE_ENABLED,
 )
 
 NSS_WRAPPER_VOLUME_NAME = "nss-wrapper"
@@ -695,7 +698,16 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     self.workflow.name
                 )
             )
+
         action_completed = True
+        try:
+            requests.post(
+                f"http://{int_session.name}.{REANA_RUNTIME_KUBERNETES_NAMESPACE}:5000/shutdown",
+                timeout=5,
+            )
+        except Exception as e:
+            print(f"Sidecar already down or unreachable: {e}")
+
         try:
             delete_k8s_ingress_object(
                 ingress_name=int_session.name,
@@ -1048,6 +1060,14 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
                     "value": REANA_KUBERNETES_JOBS_SCRATCH_VOLUME_SIZE_LIMIT,
                 },
                 {"name": "WORKSPACE_PATHS", "value": json.dumps(WORKSPACE_PATHS)},
+                {
+                    "name": "REANA_DATASTORE_IMAGE",
+                    "value": json.dumps(REANA_DATASTORE_IMAGE).replace('"', ""),
+                },
+                {
+                    "name": "REANA_DATASTORE_ENABLED",
+                    "value": json.dumps(REANA_DATASTORE_ENABLED),
+                },
             ]
         )
         if REANA_KUBERNETES_JOBS_MIN_USER_UID:
@@ -1108,13 +1128,14 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
         job_controller_container.ports = [
             {"containerPort": current_app.config["JOB_CONTROLLER_CONTAINER_PORT"]}
         ]
-        containers = [workflow_engine_container, job_controller_container]
         pod_security_context = None
         if K8S_USE_SECURITY_CONTEXT:
             pod_security_context = client.V1PodSecurityContext(
                 fs_group=int(WORKFLOW_RUNTIME_USER_GID),
                 fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
             )
+
+        containers = [workflow_engine_container, job_controller_container]
         spec.template.spec = client.V1PodSpec(
             # The workflow-engine container executes user-supplied workflow
             # code. Never let Kubernetes inject the pod ServiceAccount token
@@ -1127,6 +1148,7 @@ class KubernetesWorkflowRunManager(WorkflowRunManager):
             security_context=pod_security_context,
             termination_grace_period_seconds=REANA_RUNTIME_BATCH_TERMINATION_GRACE_PERIOD,
         )
+
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
