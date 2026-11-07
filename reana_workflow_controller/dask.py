@@ -203,6 +203,7 @@ class DaskResourceManager:
             "labels": {
                 "user-uuid": self.user_id,
                 "reana-run-dask-workflow-uuid": self.workflow_id,
+                "workflow-uuid": self.workflow_id,
             },
         }
 
@@ -293,6 +294,7 @@ class DaskResourceManager:
             "labels": {
                 "user-uuid": self.user_id,
                 "reana-run-dask-workflow-uuid": self.workflow_id,
+                "workflow-uuid": self.workflow_id,
             },
         }
 
@@ -810,6 +812,7 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
             "labels": {
                 "user-uuid": user_id,
                 "reana-run-dask-workflow-uuid": workflow_id,
+                "workflow-uuid": workflow_id,
             },
             "namespace": REANA_RUNTIME_KUBERNETES_NAMESPACE,
         },
@@ -848,6 +851,7 @@ def create_dask_dashboard_ingress(workflow_id, user_id):
             labels={
                 "user-uuid": user_id,
                 "reana-run-dask-workflow-uuid": workflow_id,
+                "workflow-uuid": workflow_id,
             },
         ),
         spec=client.V1IngressSpec(
