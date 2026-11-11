@@ -13,6 +13,7 @@ import json
 import pytest
 from kubernetes.client.rest import ApiException
 from mock import DEFAULT, Mock, patch
+from reana_commons.k8s.volumes import REANA_SHARED_VOLUME_NAME, get_reana_shared_volume
 
 from reana_workflow_controller import spec_validation
 from reana_workflow_controller.spec_validation import (
@@ -203,6 +204,39 @@ def test_build_job_is_hardened():
     # A hung loader is killed immediately when the deadline is exceeded (no grace
     # period added on top of activeDeadlineSeconds).
     assert pod_spec.termination_grace_period_seconds == 0
+
+
+def _shared_volume(pod_spec):
+    """Return the shared volume (a plain dict) of a validator pod spec."""
+    return next(
+        volume
+        for volume in pod_spec.volumes
+        if isinstance(volume, dict) and volume["name"] == REANA_SHARED_VOLUME_NAME
+    )
+
+
+def test_build_job_mounts_shared_claim_read_only(monkeypatch):
+    """The shared claim is read-only, so the kubelet never walks the volume."""
+    monkeypatch.setattr("reana_commons.k8s.volumes.REANA_STORAGE_BACKEND", "network")
+    pod_spec = _build_job("job-1", VALID_BUNDLE_PATH, timeout=15).spec.template.spec
+
+    assert _shared_volume(pod_spec)["persistentVolumeClaim"]["readOnly"] is True
+    assert (
+        pod_spec.security_context.fs_group_change_policy
+        == spec_validation.REANA_RUNTIME_FS_GROUP_CHANGE_POLICY
+    )
+    # Other users of the shared volume, such as Dask, keep a writable claim.
+    assert "readOnly" not in get_reana_shared_volume()["persistentVolumeClaim"]
+
+
+def test_build_job_keeps_host_path_shared_volume(monkeypatch):
+    """A host-path shared volume is left as is (no claim to mark read-only)."""
+    monkeypatch.setattr("reana_commons.k8s.volumes.REANA_STORAGE_BACKEND", "local")
+    pod_spec = _build_job("job-1", VALID_BUNDLE_PATH, timeout=15).spec.template.spec
+
+    shared_volume = _shared_volume(pod_spec)
+    assert "persistentVolumeClaim" not in shared_volume
+    assert "hostPath" in shared_volume
 
 
 def test_build_job_adds_configured_validator_environment(monkeypatch):

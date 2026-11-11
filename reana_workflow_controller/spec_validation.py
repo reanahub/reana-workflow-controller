@@ -58,6 +58,7 @@ from reana_commons.k8s.volumes import REANA_SHARED_VOLUME_NAME, get_reana_shared
 from reana_commons.validation.sandbox import REPORT_END, REPORT_START
 
 from reana_workflow_controller.config import (
+    REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
     REANA_WORKFLOW_VALIDATOR_ENV_VARS,
     REANA_WORKFLOW_VALIDATOR_IMAGE,
     SPEC_VALIDATION_ALLOW_EGRESS,
@@ -169,6 +170,12 @@ def _build_job(job_name, bundle_path, timeout):
     # writable paths are ephemeral emptyDirs, so nothing the sandbox does can
     # touch persistent storage.
     shared_volume = get_reana_shared_volume()
+    if "persistentVolumeClaim" in shared_volume:
+        # Mark the claim itself read-only, not only the container mount: the
+        # kubelet does not apply the pod ``fs_group`` to a read-only volume, so
+        # it never recursively changes the ownership of every file on the whole
+        # shared volume before the validator can start.
+        shared_volume["persistentVolumeClaim"]["readOnly"] = True
     scratch_volume = client.V1Volume(
         name="spec-validation-scratch",
         empty_dir=client.V1EmptyDirVolumeSource(
@@ -264,12 +271,15 @@ def _build_job(job_name, bundle_path, timeout):
         termination_grace_period_seconds=0,
         # Pod-level hardening complements the container security context above
         # (defense in depth) and sets ``fs_group`` so the non-root user owns the
-        # writable ``emptyDir`` scratch volumes.
+        # writable ``emptyDir`` scratch volumes. The ``fs_group`` change policy
+        # matches the runtime pods as a safeguard, so that ``fs_group`` can never
+        # make every validation walk a large volume again.
         security_context=client.V1PodSecurityContext(
             run_as_user=int(WORKFLOW_RUNTIME_USER_UID),
             run_as_group=int(WORKFLOW_RUNTIME_USER_GID),
             run_as_non_root=True,
             fs_group=int(WORKFLOW_RUNTIME_USER_GID),
+            fs_group_change_policy=REANA_RUNTIME_FS_GROUP_CHANGE_POLICY,
             seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
         ),
         volumes=[shared_volume, scratch_volume],
