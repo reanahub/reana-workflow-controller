@@ -27,6 +27,9 @@ module runs that step inside a defense-in-depth Kubernetes Job:
   ``$import``/yadage ``toplevel`` references can be resolved) but an operator can
   request a policy with no egress allow rules -- see
   ``REANA_SPEC_VALIDATION_ALLOW_EGRESS``;
+* scheduling on the runtime batch nodes when
+  ``REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL`` is set, away from the
+  infrastructure nodes;
 * a hard ``activeDeadlineSeconds`` and CPU/memory limits.
 
 The only things read back from the sandbox are the container **exit code** and
@@ -45,6 +48,7 @@ from kubernetes.client.rest import ApiException
 
 from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
+    REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_UID,
@@ -269,6 +273,10 @@ def _build_job(job_name, bundle_path, timeout):
         # otherwise the default 30s grace period is added on top of the deadline
         # before the pod (and hence the timeout) is observed.
         termination_grace_period_seconds=0,
+        # Loading a specification executes untrusted user code, much like the
+        # batch workflow engine pods do, so run on the same runtime batch nodes
+        # and keep away from the infrastructure nodes.
+        node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
         # Pod-level hardening complements the container security context above
         # (defense in depth) and sets ``fs_group`` so the non-root user owns the
         # writable ``emptyDir`` scratch volumes. The ``fs_group`` change policy

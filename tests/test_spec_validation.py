@@ -239,6 +239,21 @@ def test_build_job_keeps_host_path_shared_volume(monkeypatch):
     assert "hostPath" in shared_volume
 
 
+@pytest.mark.parametrize(
+    "node_label",
+    [{}, {"reana.io/system": "runtimebatch"}],
+    ids=["unset", "runtimebatch"],
+)
+def test_build_job_uses_runtime_batch_node_label(monkeypatch, node_label):
+    """The validator pod is scheduled like the runtime batch workflow pods."""
+    monkeypatch.setattr(
+        spec_validation, "REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL", node_label
+    )
+    pod_spec = _build_job("job-1", VALID_BUNDLE_PATH, timeout=15).spec.template.spec
+
+    assert pod_spec.node_selector == node_label
+
+
 def test_build_job_adds_configured_validator_environment(monkeypatch):
     """Operator validator environment is added after the fixed loader contract."""
     monkeypatch.setattr(
