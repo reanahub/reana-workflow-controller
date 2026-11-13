@@ -3240,3 +3240,45 @@ def test_get_workflow_share_status_valid_until_set(
         response_data = res.get_json()
         shared_with = response_data["shared_with"][0]
         assert shared_with["valid_until"] == valid_until + "T00:00:00"
+
+
+@pytest.mark.parametrize(
+    "valid_until_days, expired", [(None, False), (0, False), (-1, True)]
+)
+def test_get_workflow_share_status_marks_expired_shares(
+    app,
+    session,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+    valid_until_days,
+    expired,
+):
+    """The owner sees whether each share of the workflow has expired."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    today = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    session.add(
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=user2.id_,
+            valid_until=(
+                None
+                if valid_until_days is None
+                else today + datetime.timedelta(days=valid_until_days)
+            ),
+        )
+    )
+    session.commit()
+
+    with app.test_client() as client:
+        res = client.get(
+            url_for(
+                "workflows.get_workflow_share_status",
+                workflow_id_or_name=str(workflow.id_),
+            ),
+            query_string={"user": str(user1.id_)},
+        )
+        assert res.status_code == 200
+        assert res.json["shared_with"][0]["expired"] is expired
+
+    session.query(UserWorkflow).filter_by(workflow_id=workflow.id_).delete()
