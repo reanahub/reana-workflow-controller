@@ -1154,7 +1154,7 @@ def share_workflow(
                 description: Optional. Message to include when sharing the workflow.
               valid_until:
                 type: string
-                description: Optional. Date when access to the workflow will expire (format YYYY-MM-DD).
+                description: Optional. Last day of access to the workflow (format YYYY-MM-DD). Access ends at the end of this day (UTC).
             required: [user_email_to_share_with]
       responses:
         200:
@@ -1507,6 +1507,11 @@ def get_workflow_share_status(
                     valid_until:
                       type: string
                       x-nullable: true
+                    expired:
+                      type: boolean
+                      description: >-
+                        Whether the share has expired. The user has no access
+                        to the workflow after the end of the valid_until date (UTC).
           examples:
             application/json:
               {
@@ -1515,7 +1520,8 @@ def get_workflow_share_status(
                 "shared_with": [
                     {
                       "user_email": "bob@example.org",
-                      "valid_until": "2022-11-24T23:59:59"
+                      "valid_until": "2022-11-24T23:59:59",
+                      "expired": true
                     }
                 ]
               }
@@ -1553,7 +1559,11 @@ def get_workflow_share_status(
             Session.query(UserWorkflow)
             .filter_by(workflow_id=workflow.id_)
             .join(User, User.id_ == UserWorkflow.user_id)
-            .with_entities(User.email, UserWorkflow.valid_until)
+            .with_entities(
+                User.email,
+                UserWorkflow.valid_until,
+                UserWorkflow.is_active.label("is_active"),
+            )
             .all()
         )
 
@@ -1568,6 +1578,7 @@ def get_workflow_share_status(
                         if share.valid_until
                         else None
                     ),
+                    "expired": not share.is_active,
                 }
                 for share in shared_with
             ],
