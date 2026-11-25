@@ -24,14 +24,9 @@ from reana_commons.k8s.api_client import (
     current_k8s_corev1_api_client,
 )
 from reana_commons.k8s.secrets import UserSecretsStore
-from reana_commons.utils import (
-    calculate_file_access_time,
-    calculate_hash_of_dir,
-    calculate_job_input_hash,
-    build_unique_component_name,
-)
+from reana_commons.utils import build_unique_component_name
 from reana_db.database import Session
-from reana_db.models import Job, JobCache, Workflow, RunStatus, Service
+from reana_db.models import Job, Workflow, RunStatus, Service
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -109,9 +104,6 @@ class JobStatusConsumer(BaseConsumer):
                         msg = body_dict["message"]
                         if "progress" in msg:
                             _update_run_progress(workflow_uuid, msg)
-                        # Caching: calculate input hash and store in JobCache
-                        if "caching_info" in msg:
-                            _update_job_cache(msg)
                     Session.commit()
                 else:
                     logging.error(
@@ -215,10 +207,7 @@ def _update_commit_status(workflow, status):
 def _update_run_progress(workflow_uuid, msg):
     """Register succeeded Jobs to DB."""
     workflow = Session.query(Workflow).filter_by(id_=workflow_uuid).one_or_none()
-    cached_jobs = None
     job_progress = workflow.job_progress
-    if "cached" in msg["progress"]:
-        cached_jobs = msg["progress"]["cached"]  # noqa: F841
     for status, _ in PROGRESS_STATUSES:
         if status in msg["progress"]:
             previous_status = workflow.job_progress.get(status)
@@ -244,46 +233,6 @@ def _update_run_progress(workflow_uuid, msg):
     workflow.job_progress = job_progress
     flag_modified(workflow, "job_progress")
     Session.add(workflow)
-
-
-def _update_job_cache(msg):
-    """Update caching information for finished job."""
-    cached_job = (
-        Session.query(JobCache)
-        .filter_by(job_id=msg["caching_info"].get("job_id"))
-        .first()
-    )
-
-    input_files = []
-    if cached_job:
-        file_access_times = calculate_file_access_time(
-            msg["caching_info"].get("workflow_workspace")
-        )
-        for filename in cached_job.access_times:
-            if filename in file_access_times:
-                input_files.append(filename)
-    else:
-        return
-    cmd = msg["caching_info"]["job_spec"]["cmd"]
-    # removes cd to workspace, to be refactored
-    clean_cmd = ";".join(cmd.split(";")[1:])
-    msg["caching_info"]["job_spec"]["cmd"] = clean_cmd
-
-    if "workflow_workspace" in msg["caching_info"]["job_spec"]:
-        del msg["caching_info"]["job_spec"]["workflow_workspace"]
-    input_hash = calculate_job_input_hash(
-        msg["caching_info"]["job_spec"], msg["caching_info"]["workflow_json"]
-    )
-    workspace_hash = calculate_hash_of_dir(
-        msg["caching_info"].get("workflow_workspace"), input_files
-    )
-    if workspace_hash == -1:
-        return
-
-    cached_job.parameters = input_hash
-    cached_job.result_path = msg["caching_info"].get("result_path")
-    cached_job.workspace_hash = workspace_hash
-    Session.add(cached_job)
 
 
 def _delete_workflow_job(workflow: Workflow) -> None:
