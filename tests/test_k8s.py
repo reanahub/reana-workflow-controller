@@ -27,13 +27,18 @@ from reana_workflow_controller.k8s import (
 )
 
 
+def serialize(k8s_object):
+    """Serialize Kubernetes objects to the dictionaries that are sent to the API."""
+    return client.ApiClient().sanitize_for_serialization(k8s_object)
+
+
 def test_session_secret_is_supported_by_create_and_delete(monkeypatch):
     """Session lifecycle creates and deletes per-session Secret objects."""
     create_secret = Mock(
         return_value=SimpleNamespace(
-            _metadata=SimpleNamespace(uid="uid", name="session-auth"),
-            _kind="Secret",
-            _api_version="v1",
+            metadata=SimpleNamespace(uid="uid", name="session-auth"),
+            kind="Secret",
+            api_version="v1",
         )
     )
     delete_secret = Mock()
@@ -101,9 +106,11 @@ def test_interactive_deployment_k8s_builder_user_secrets(monkeypatch):
     deployment = objs["deployment"]
     pod = deployment.spec.template.spec
     assert len(pod.containers) == 1
-    assert any(v["name"] == "k8s-secret" for v in pod.volumes)
-    assert any(vm["name"] == "k8s-secret" for vm in pod.containers[0].volume_mounts)
-    assert any(e["name"] == "third_env" for e in pod.containers[0].env)
+    assert any(v["name"] == "k8s-secret" for v in serialize(pod.volumes))
+    assert any(
+        vm["name"] == "k8s-secret" for vm in serialize(pod.containers[0].volume_mounts)
+    )
+    assert any(e["name"] == "third_env" for e in serialize(pod.containers[0].env))
     assert pod.security_context.fs_group == int(WORKFLOW_RUNTIME_USER_GID)
     assert (
         pod.security_context.fs_group_change_policy
@@ -301,8 +308,8 @@ def test_interactive_session_read_only_root_filesystem_enabled(
     )
     container = pod_spec.containers[0]
     env = {e.name: e.value for e in container.env}
-    mounts = {vm["name"]: vm for vm in container.volume_mounts}
-    volumes = {v["name"]: v for v in pod_spec.volumes}
+    mounts = {vm["name"]: vm for vm in serialize(container.volume_mounts)}
+    volumes = {v["name"]: v for v in serialize(pod_spec.volumes)}
 
     assert container.security_context.read_only_root_filesystem is True
     # the read-only flag must not replace the restricted security context
@@ -324,7 +331,7 @@ def test_interactive_session_read_only_root_filesystem_disabled(monkeypatch):
     pod_spec = _build_jupyter_session(monkeypatch, read_only=False)
     container = pod_spec.containers[0]
     env = {e.name: e.value for e in container.env}
-    mount_names = {vm["name"] for vm in container.volume_mounts}
+    mount_names = {vm["name"] for vm in serialize(container.volume_mounts)}
 
     assert container.security_context.read_only_root_filesystem is None
     assert "HOME" not in env

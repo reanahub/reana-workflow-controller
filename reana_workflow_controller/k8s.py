@@ -287,7 +287,7 @@ class InteractiveDeploymentK8sBuilder(object):
         )
         ingress_backend = client.V1IngressBackend(service=ingress_service_backend)
         ingress_rule_value = client.V1HTTPIngressRuleValue(
-            [
+            paths=[
                 client.V1HTTPIngressPath(
                     path=self.path, backend=ingress_backend, path_type="Prefix"
                 )
@@ -327,7 +327,7 @@ class InteractiveDeploymentK8sBuilder(object):
             ],
             selector={"app": self.deployment_name},
         )
-        service = client.V1APIService(
+        service = client.V1Service(
             api_version="v1",
             kind="Service",
             spec=spec,
@@ -394,7 +394,7 @@ class InteractiveDeploymentK8sBuilder(object):
         :param name: Environment variable name.
         :param value: Environment variable value.
         """
-        env_var = client.V1EnvVar(name, str(value))
+        env_var = client.V1EnvVar(name=name, value=str(value))
         self._session_container.env.append(env_var)
 
     def add_secret_environment_variable(self, name, secret_name, secret_key):
@@ -597,10 +597,10 @@ def instantiate_chained_k8s_objects(kubernetes_objects, namespace):
                 result = instantiate_k8s_object[kind](namespace, k8s_object)
                 parent_k8s_object_references = [
                     {
-                        "uid": result._metadata.uid,
-                        "kind": result._kind,
-                        "name": result._metadata.name,
-                        "apiVersion": result._api_version,
+                        "uid": result.metadata.uid,
+                        "kind": result.kind,
+                        "name": result.metadata.name,
+                        "apiVersion": result.api_version,
                     }
                 ]
             else:
