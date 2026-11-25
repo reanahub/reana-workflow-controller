@@ -20,12 +20,14 @@ from reana_commons.config import WORKFLOW_TIME_FORMAT
 from reana_commons.errors import REANASecretDoesNotExist
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
-from reana_workflow_controller.config import REANA_OPENSEARCH_ENABLED
+from reana_workflow_controller.config import ALIVE_STATUSES, REANA_OPENSEARCH_ENABLED
+from reana_workflow_controller.dask import requires_dask
 from reana_workflow_controller.errors import (
     REANAExternalCallError,
     REANAWorkflowControllerError,
     REANAWorkflowStatusError,
 )
+from reana_workflow_controller.k8s import add_pod_eviction_messages
 from reana_workflow_controller.rest.utils import (
     build_workflow_logs,
     delete_workflow,
@@ -42,6 +44,15 @@ DELETED = "deleted"
 STATUSES = {START, STOP, DELETED}
 
 blueprint = Blueprint("statuses", __name__)
+
+
+def _add_live_eviction_messages(workflow, logs):
+    """Add the reasons of evicted session and Dask pods that still exist."""
+    if workflow.sessions:
+        logs = add_pod_eviction_messages(logs, workflow)
+    if requires_dask(workflow) and workflow.status in ALIVE_STATUSES:
+        logs = add_pod_eviction_messages(logs, workflow, dask=True)
+    return logs
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/logs", methods=["GET"])
@@ -172,7 +183,9 @@ def get_workflow_logs(workflow_id_or_name, paginate=None, **kwargs):  # noqa
             )
 
             workflow_logs = {
-                "workflow_logs": logs or workflow.logs,
+                "workflow_logs": _add_live_eviction_messages(
+                    workflow, logs or workflow.logs
+                ),
                 "job_logs": build_workflow_logs(workflow, paginate=paginate),
                 "service_logs": {
                     s.name: sorted(

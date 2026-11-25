@@ -45,6 +45,7 @@ from reana_workflow_controller.config import (
 from reana_workflow_controller.errors import REANAWorkflowControllerError
 
 from reana_workflow_controller.dask import requires_dask, delete_dask_cluster
+from reana_workflow_controller.k8s import add_pod_eviction_messages
 
 try:
     from urllib import parse as urlparse
@@ -164,6 +165,10 @@ def _update_workflow_status(workflow, status, logs):
                 workflow.logs += "Workflow engine logs could not be retrieved.\n"
 
             if requires_dask(workflow):
+                # Keep the eviction reasons, as deleting the cluster deletes its pods.
+                workflow.logs = add_pod_eviction_messages(
+                    workflow.logs, workflow, dask=True
+                )
                 delete_dask_cluster(workflow.id_, workflow.owner_id)
 
             if RunStatus.should_cleanup_job(status):
