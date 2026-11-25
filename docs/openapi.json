@@ -1134,7 +1134,7 @@
                   "type": "string"
                 },
                 "valid_until": {
-                  "description": "Optional. Date when access to the workflow will expire (format YYYY-MM-DD).",
+                  "description": "Optional. Last day of access to the workflow (format YYYY-MM-DD). Access ends at the end of this day (UTC).",
                   "type": "string"
                 }
               },
@@ -1234,6 +1234,7 @@
               "application/json": {
                 "shared_with": [
                   {
+                    "expired": true,
                     "user_email": "bob@example.org",
                     "valid_until": "2022-11-24T23:59:59"
                   }
@@ -1247,6 +1248,10 @@
                 "shared_with": {
                   "items": {
                     "properties": {
+                      "expired": {
+                        "description": "Whether the share has expired. The user has no access to the workflow after the end of the valid_until date (UTC).",
+                        "type": "boolean"
+                      },
                       "user_email": {
                         "type": "string"
                       },
